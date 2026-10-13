@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="360" viewBox="0 0 1200 360" role="img" aria-labelledby="title desc">
+  <title id="title">Chordnote's reviewed knowledge loop</title>
+  <desc id="desc">Raw learning material moves through an AI draft and a human review gate before becoming connected knowledge.</desc>
+  <rect width="1200" height="360" rx="26" fill="#F6F1E8"/>
+  <path d="M60 96H1140M60 282H1140" stroke="#D7D0C3" stroke-width="1"/>
+  <text x="60" y="58" fill="#172744" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="17" letter-spacing="2">THE CHORDNOTE LOOP / HUMAN-IN-THE-LOOP BY DESIGN</text>
+  <g transform="translate(60 136)">
+    <rect width="200" height="104" rx="18" fill="#E8EEF9" stroke="#4F8CFF" stroke-width="2"/>
+    <text x="24" y="38" fill="#172744" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="25" font-weight="700">01 · Raw</text>
+    <text x="24" y="70" fill="#52617A" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="17">Keep the original.</text>
+    <text x="24" y="92" fill="#52617A" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="17">No silent AI rewrites.</text>
+  </g>
+  <path d="M280 188H332" stroke="#FF8A65" stroke-width="3"/>
+  <path d="M322 178L337 188L322 198" fill="none" stroke="#FF8A65" stroke-width="3"/>
+  <g transform="translate(350 136)">
+    <rect width="200" height="104" rx="18" fill="#E4F3ED" stroke="#9EE6CF" stroke-width="2"/>
+    <text x="24" y="38" fill="#172744" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="25" font-weight="700">02 · Draft</text>
+    <text x="24" y="70" fill="#52617A" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="17">AI extracts structure.</text>
+    <text x="24" y="92" fill="#52617A" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="17">Claims stay reviewable.</text>
+  </g>
+  <path d="M570 188H622" stroke="#FF8A65" stroke-width="3"/>
+  <path d="M612 178L627 188L612 198" fill="none" stroke="#FF8A65" stroke-width="3"/>
+  <g transform="translate(640 136)">
+    <rect width="200" height="104" rx="18" fill="#FFF0EA" stroke="#FF8A65" stroke-width="2"/>
+    <text x="24" y="38" fill="#172744" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="25" font-weight="700">03 · Review</text>
+    <text x="24" y="70" fill="#52617A" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="17">Edit, accept, reject.</text>
+    <text x="24" y="92" fill="#52617A" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="17">The learner stays in control.</text>
+  </g>
+  <path d="M860 188H912" stroke="#FF8A65" stroke-width="3"/>
+  <path d="M902 178L917 188L902 198" fill="none" stroke="#FF8A65" stroke-width="3"/>
+  <g transform="translate(930 136)">
+    <rect width="210" height="104" rx="18" fill="#172744"/>
+    <text x="24" y="38" fill="#F6F1E8" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="25" font-weight="700">04 · Chord</text>
+    <text x="24" y="70" fill="#BAC5D9" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="17">Knowledge + relation.</text>
+    <text x="24" y="92" fill="#BAC5D9" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="17">Ready to revisit.</text>
+  </g>
+  <text x="60" y="316" fill="#52617A" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="18">The product's core promise is a safe transition from a moment of learning to a durable, connected memory.</text>
+</svg>
+
