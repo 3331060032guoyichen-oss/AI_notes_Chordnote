@@ -40,7 +40,7 @@ pnpm dev
 
 打开 http://localhost:3000。首次打开是空白状态（运行时数据不进 Git），从左侧「新建笔记」开始。
 
-没有配置 `DEEPSEEK_API_KEY` 时，除 AI 相关功能外的其余部分都可以正常使用。进入工作台右上角的“设置”，也可以为当前浏览器填写自己的 API Key 和模型；该配置只保存在本机浏览器，不写入数据库。详见 [`.env.example`](.env.example)。
+没有配置 `DEEPSEEK_API_KEY` 时，除 AI 相关功能外的其余部分都可以正常使用。详见 [`.env.example`](.env.example)。
 
 ## 未实现的规划功能
 

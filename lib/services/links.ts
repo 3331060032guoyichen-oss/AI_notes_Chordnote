@@ -11,7 +11,7 @@ import { links } from "../db/schema";
 // 读路径默认排除已软删除的关系（deleted_at is null）。
 //
 // 写路径：
-//   - createOrReviveLink —— 建立有向关系；同一 source → target 只保留一条 related 关系，
+//   - createOrReviveLink —— 建立关系；同一对知识页（**无序**）只保留一条 related 关系，
 //     已软删的会被"复活"而不是插入新行（links_pair_idx 不是部分索引，插入会撞唯一约束）
 //   - softDeleteLink     —— 普通"移除"= 软删除（写 deleted_at），不做物理删除
 
@@ -68,7 +68,9 @@ export type CreateLinkInput = {
 /**
  * 建立正式关系。
  *
- * 关系是有向的：A→B 与 B→A 是两条不同关系；同一方向重复提交不会产生第二条。
+ * 语义与旧实现保持一致：**同一对知识页（无序）只保留一条 `related` 关系**——
+ * 所以 A→B 与 B→A 被视为同一条，重复提交不会产生第二条。
+ * 返回的 `relation` 保留**首次建立时**的方向。
  *
  * 已软删除的关系会被复活（清空 `deleted_at`）并视为 `created: true`（用户视角是"重新建立"）。
  */
@@ -87,8 +89,10 @@ export async function createOrReviveLink(
           and(
             eq(links.userId, userId),
             eq(links.type, "related"),
-            eq(links.sourceNoteId, input.sourceId),
-            eq(links.targetNoteId, input.targetId),
+            or(
+              and(eq(links.sourceNoteId, input.sourceId), eq(links.targetNoteId, input.targetId)),
+              and(eq(links.sourceNoteId, input.targetId), eq(links.targetNoteId, input.sourceId)),
+            ),
           ),
         )
         .limit(1)

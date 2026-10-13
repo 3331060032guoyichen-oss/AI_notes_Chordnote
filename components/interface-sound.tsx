@@ -243,7 +243,7 @@ export function useInterfaceSound() {
 
 export function SoundToggle({ className = "" }: { className?: string }) {
   const { enabled, preference, toggle } = useInterfaceSound();
-  if (preference === "loading") return null;
+  if (preference === "loading" || preference === "unknown") return null;
 
   if (preference === "unsupported") {
     return <button className={`sound-toggle ${className}`.trim()} type="button" disabled>声音不可用</button>;
@@ -258,7 +258,7 @@ export function SoundToggle({ className = "" }: { className?: string }) {
       onClick={toggle}
     >
       <span>声音</span>
-      <strong>{enabled ? "开" : preference === "unknown" ? "开启" : "关"}</strong>
+      <strong>{enabled ? "开" : "关"}</strong>
     </button>
   );
 }

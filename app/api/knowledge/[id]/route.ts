@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { deleteNote, getNote, updateNote } from "../../../../lib/services/notes";
+import { getNote, updateNote } from "../../../../lib/services/notes";
 import type { UpdateNotePatch } from "../../../../lib/services/notes";
 import { getSource } from "../../../../lib/services/sources";
 
@@ -35,7 +35,7 @@ export async function GET(
 
     if (!knowledge) {
       return NextResponse.json(
-        { error: { code: "KNOWLEDGE_NOT_FOUND", message: "这条笔记已不存在，请刷新目录。" } },
+        { error: { code: "KNOWLEDGE_NOT_FOUND", message: "这张知识页已不存在，请刷新目录。" } },
         { status: 404 },
       );
     }
@@ -44,14 +44,14 @@ export async function GET(
     return NextResponse.json({ knowledge, raw });
   } catch {
     return NextResponse.json(
-      { error: { code: "KNOWLEDGE_STORAGE_READ_FAILED", message: "笔记暂时没有载入。已保存的内容没有改变，请稍后重试。" } },
+      { error: { code: "KNOWLEDGE_STORAGE_READ_FAILED", message: "知识页暂时没有载入。已收录的内容没有改变，请稍后重试。" } },
       { status: 500 },
     );
   }
 }
 
 /**
- * 更新笔记。
+ * 更新知识页。
  *
  * 版本检查：请求可带 `version`。带了就严格比对，不匹配返回 409 VERSION_CONFLICT 且不写入；
  * 不带则按 last-write-wins 处理（现有界面尚未发送 version，这样不会造成回归）。
@@ -136,12 +136,12 @@ export async function PATCH(
     const result = await updateNote(id, patch, expectedVersion);
 
     if (result.status === "not_found") {
-      return errorResponse("这条笔记已不存在，请刷新目录。", 404, "KNOWLEDGE_NOT_FOUND");
+      return errorResponse("这张知识页已不存在，请刷新目录。", 404, "KNOWLEDGE_NOT_FOUND");
     }
 
     if (result.status === "conflict") {
       return errorResponse(
-        "这条笔记在你编辑期间已经有了新的修订。请刷新后再改，避免覆盖别人的改动。",
+        "这张知识页在你编辑期间已经有了新的修订。请刷新后再改，避免覆盖别人的改动。",
         409,
         "VERSION_CONFLICT",
       );
@@ -150,31 +150,9 @@ export async function PATCH(
     return NextResponse.json({ knowledge: result.knowledge });
   } catch {
     return errorResponse(
-      "这次修订暂时没有保存。原有笔记没有改变，请稍后重试。",
+      "这次修订暂时没有保存。原有知识页没有改变，请稍后重试。",
       500,
       "KNOWLEDGE_STORAGE_WRITE_FAILED",
-    );
-  }
-}
-
-export async function DELETE(
-  _request: Request,
-  context: { params: Promise<{ id: string }> },
-) {
-  const { id } = await context.params;
-
-  try {
-    const deleted = await deleteNote(id);
-    if (!deleted) {
-      return errorResponse("这条笔记已不存在，请刷新目录。", 404, "KNOWLEDGE_NOT_FOUND");
-    }
-
-    return NextResponse.json({ deleted: true });
-  } catch {
-    return errorResponse(
-      "这条笔记暂时无法删除。原有内容没有改变，请稍后重试。",
-      500,
-      "KNOWLEDGE_DELETE_FAILED",
     );
   }
 }

@@ -12,13 +12,8 @@
 | typescript | https://www.typescriptlang.org | ^5.0.0 | Apache-2.0 | 类型系统（devDependency） | |
 | eslint | https://eslint.org | ^9.0.0 | MIT | 代码检查（devDependency） | |
 | eslint-config-next | https://nextjs.org | ^15.0.0 | MIT | Next 官方 lint 规则（devDependency） | |
-| drizzle-orm / drizzle-kit | https://orm.drizzle.team | 以 `package.json` 为准 | Apache-2.0 | PostgreSQL ORM 与迁移 | 迁移文件不得手改 |
-| 数据库驱动（Neon / pg） | https://neon.com | 以 `package.json` 为准 | 以所用包为准，**待回填** | 连接 Neon PostgreSQL | 池化串用于运行期，直连串用于迁移 |
-| three | https://threejs.org | 以 `package.json` 为准 | MIT | 落地页水晶场景（首屏已冻结，不再扩展） | 不使用 R3F / Drei |
-| d3-force | https://github.com/d3/d3-force | **计划引入（N7）** | ISC | 局部图谱的力学布局 | 仅布局计算；渲染用 SVG；引入时回填版本 |
 
 > **不存在**的依赖（历史文档曾误列，请勿据此写代码）：Tailwind CSS、shadcn/ui、react-force-graph-2d、GSAP。
-> 表中版本与许可证以仓库实际 `package.json` 和各包 `LICENSE` 为准，请项目所有者核对后回填。
 
 ## 二、参考项目 / 待引入
 
@@ -28,7 +23,7 @@
 |------|-----|---------|---------|------|------|
 | llm_wiki | https://github.com/nashsu/llm_wiki | 未引入 | **待确认** | 知识库结构参考 | 知识库和图谱线，阶段一参考 |
 | WeKnora | https://github.com/Tencent/WeKnora | 未引入 | **待确认** | 知识库结构参考 | 同上 |
-| MinerU | https://github.com/opendatalab/MinerU | 未引入 | **待确认**（许可证可能较严） | OCR：图片转 Markdown | 需要 Python 服务，放不进 Netlify 无服务器环境；先做 OCR 选型试验再决定 |
+| MinerU | https://github.com/opendatalab/MinerU | 未引入 | **待确认** | OCR：图片转 Markdown | Skills 线，阶段二 |
 | Obsidian Web Clipper | https://obsidian.md/clipper | 未引入 | **待确认** | 一键剪切网页内容 | Skills 线，阶段二 |
 | taste-skill | https://github.com/Leonxlnx/taste-skill | 未引入 | **待确认** | 优化 AI 生成 UI 的 skill | UI 线辅助工具，不进入产物 |
 | impeccable | https://github.com/pbakaus/impeccable | 未引入 | **待确认** | 同上 | UI 线辅助工具，不进入产物 |

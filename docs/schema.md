@@ -2,7 +2,6 @@
 
 > English identifiers are the stable contract. 中文注解用于解释业务语义与设计取舍。
 > 本文只描述**已实现**的状态；未实现的部分统一标注 `NOT IMPLEMENTED`，不要按本文当作已完成。
-> 产品重排后的 N1–N9 是后续规划，不代表本文列出的旧 API 已经被替换；实现新接口时必须同步更新本契约。
 > 数据库：PostgreSQL（Neon）· ORM：Drizzle · 迁移：`drizzle/`
 
 ---
@@ -22,8 +21,6 @@ Neon PostgreSQL
 **中文注解 · 为什么归属过滤必须在服务层**：路由只负责 HTTP 语义，MCP / 内置 Agent / 网页前端将来都调用同一套服务函数。把 `user_id` 条件写在服务层，任何新入口都自动继承隔离规则；写在路由里就会漏。
 
 `NOT IMPLEMENTED`：MCP server（本地 stdio / 远程 HTTP）、内置 Agent、自动写入白名单策略引擎、变更提议（proposals）流程。
-
-AI 配置支持两种来源：默认读取服务端 `DEEPSEEK_API_KEY` / `DEEPSEEK_MODEL`；用户也可以在工作台“设置”中保存本机配置。用户配置只保存在浏览器 `localStorage`，每次请求随 `/api/organize` 或 `/api/assistant` 发送，服务端不写入数据库。
 
 **已实现的一处审计写入**：修改原始记录正文（`PATCH /api/raw/:id`）会在同一事务里写一条 `audit_log`（`operation = 'raw.update'`，`detail = { before, after, version }`）作为修订记录。除此之外没有其他审计写入。
 
@@ -128,8 +125,8 @@ All business tables carry `user_id text NOT NULL`. 所有时间列为 `timestamp
 | `POST /api/relations` | `{ sourceId, targetId, type:"related", reason }` | `201 { relation, created: true }` | **无序对**去重；重复 → `200 created:false`；已软删则复活 |
 | `DELETE /api/relations/:id` | — | `204` | **软删除**；不存在 → 404 |
 | `GET /api/graph` | — | `200 { nodes, edges }` | 边仅保留两端都存在的笔记 |
-| `POST /api/organize` | `{ rawId, apiKey?, model? }` | `200 { draft }` | 优先使用请求中的用户配置，否则读取服务端环境变量；缺 Key → `503` |
-| `POST /api/assistant` | `{ question, contextType, contextId?, apiKey?, model? }` | `200 { answer }` | 同上；`contextType`: `knowledge \| raw \| draft \| none` |
+| `POST /api/organize` | `{ rawId }` | `200 { draft }` | 需 `DEEPSEEK_API_KEY`；缺 → `503` |
+| `POST /api/assistant` | `{ question, contextType, contextId? }` | `200 { answer }` | 同上；`contextType`: `knowledge \| raw \| draft \| none` |
 
 `Knowledge` 响应字段：`id, rawId, title, summary, content, keyPoints[], concepts[], keywords[], version?, createdAt, updatedAt`。
 
@@ -137,7 +134,7 @@ All business tables carry `user_id text NOT NULL`. 所有时间列为 `timestamp
 
 ## 5. Error Codes
 
-`INVALID_JSON` · `INVALID_BODY` · `TEXT_REQUIRED` · `TEXT_EMPTY` · `TEXT_TOO_LONG` · `RAW_ID_REQUIRED` · `RAW_NOT_FOUND` · `RAW_REFERENCED_BY_KNOWLEDGE` · `USE_PROPOSAL_FLOW` · `INVALID_DRAFT` · `INVALID_ORIGIN` · `INVALID_AI_CONFIG` · `INVALID_TITLE` / `INVALID_SUMMARY` / `INVALID_CONTENT` / `INVALID_KEY_POINTS` / `INVALID_CONCEPTS` / `INVALID_KEYWORDS` · `EMPTY_PATCH` · `INVALID_VERSION` · `VERSION_CONFLICT` · `KNOWLEDGE_NOT_FOUND` · `SOURCE_ID_REQUIRED` / `TARGET_ID_REQUIRED` · `SELF_RELATION` · `RELATION_TYPE_INVALID` · `RELATION_REASON_REQUIRED` · `RELATION_NOT_FOUND` · `*_STORAGE_READ_FAILED` / `*_STORAGE_WRITE_FAILED` / `*_STORAGE_DELETE_FAILED` · `DEEPSEEK_CONFIG_MISSING` / `DEEPSEEK_TIMEOUT` / `DEEPSEEK_UPSTREAM_ERROR`
+`INVALID_JSON` · `INVALID_BODY` · `TEXT_REQUIRED` · `TEXT_EMPTY` · `TEXT_TOO_LONG` · `RAW_ID_REQUIRED` · `RAW_NOT_FOUND` · `RAW_REFERENCED_BY_KNOWLEDGE` · `USE_PROPOSAL_FLOW` · `INVALID_DRAFT` · `INVALID_ORIGIN` · `INVALID_TITLE` / `INVALID_SUMMARY` / `INVALID_CONTENT` / `INVALID_KEY_POINTS` / `INVALID_CONCEPTS` / `INVALID_KEYWORDS` · `EMPTY_PATCH` · `INVALID_VERSION` · `VERSION_CONFLICT` · `KNOWLEDGE_NOT_FOUND` · `SOURCE_ID_REQUIRED` / `TARGET_ID_REQUIRED` · `SELF_RELATION` · `RELATION_TYPE_INVALID` · `RELATION_REASON_REQUIRED` · `RELATION_NOT_FOUND` · `*_STORAGE_READ_FAILED` / `*_STORAGE_WRITE_FAILED` / `*_STORAGE_DELETE_FAILED` · `DEEPSEEK_CONFIG_MISSING` / `DEEPSEEK_TIMEOUT` / `DEEPSEEK_UPSTREAM_ERROR`
 
 **中文注解**：错误消息面向用户（说明发生了什么、数据是否安全、下一步做什么），不暴露数据库原文、堆栈或凭据。
 

@@ -1,10 +1,6 @@
 import { NextResponse } from "next/server";
 
-import {
-  askAssistant,
-  DeepSeekError,
-  type DeepSeekRequestConfig,
-} from "../../../lib/deepseek";
+import { askAssistant, DeepSeekError } from "../../../lib/deepseek";
 import { getNote } from "../../../lib/services/notes";
 import { getSource } from "../../../lib/services/sources";
 
@@ -17,8 +13,6 @@ type AssistantRequestBody = {
   contextType?: unknown;
   contextId?: unknown;
   draftContext?: unknown;
-  apiKey?: unknown;
-  model?: unknown;
 };
 
 const CONTEXT_TYPES: ContextType[] = ["knowledge", "raw", "draft", "none"];
@@ -54,14 +48,6 @@ export async function POST(request: Request) {
     return errorResponse("无法识别引用材料的类型，请重新选择。", 400, "INVALID_CONTEXT_TYPE");
   }
 
-  if (body.apiKey !== undefined && typeof body.apiKey !== "string") {
-    return errorResponse("DeepSeek API Key 格式无法识别，请检查设置。", 400, "INVALID_AI_CONFIG");
-  }
-
-  if (body.model !== undefined && (typeof body.model !== "string" || !body.model.trim())) {
-    return errorResponse("模型名称不能为空，请检查设置。", 400, "INVALID_AI_CONFIG");
-  }
-
   let context = "";
 
   try {
@@ -95,19 +81,13 @@ export async function POST(request: Request) {
   }
 
   try {
-    const config: DeepSeekRequestConfig | undefined = body.apiKey !== undefined || body.model !== undefined
-      ? {
-          apiKey: body.apiKey as string | undefined,
-          model: body.model as string | undefined,
-        }
-      : undefined;
-    const answer = await askAssistant({ question: body.question, context, config });
+    const answer = await askAssistant({ question: body.question, context });
     return NextResponse.json({ answer });
   } catch (error) {
     if (error instanceof DeepSeekError) {
       const status = error.code === "CONFIG_MISSING" ? 503 : 502;
       const message = error.code === "CONFIG_MISSING"
-        ? "还没有配置 DeepSeek API Key。请打开设置填写，或联系维护者配置服务器 Key。你的内容仍然安全。"
+        ? "编辑助理尚未完成服务配置。你的内容仍然安全，请联系维护者。"
         : error.code === "TIMEOUT"
           ? "编辑助理这次没有按时返回。你的内容仍然安全，请稍后重试。"
           : error.code === "UPSTREAM_INVALID_JSON"

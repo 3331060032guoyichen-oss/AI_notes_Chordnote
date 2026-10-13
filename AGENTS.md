@@ -5,9 +5,9 @@
 
 ## 项目是什么
 
-AI Notes：面向大学生的生长式 AI 知识系统（校赛 Demo）。**目的：建立一颗自生长的知识库**——学生每写一条笔记，库就自己补摘要、找旧知识、提连接，学生只做"点一下"的决定（2026-10-12，详见 `docs/ROADMAP.md`）。
+AI Notes：面向大学生的生长式 AI 知识系统（校赛 Demo）。
 
-内部链路：`Raw（原始输入）→ Draft（AI 整理草稿）→ 用户确认 → Knowledge（知识页）→ Relation（关联）→ Graph（图谱）`。**用户面前只有「笔记」（Knowledge）一种对象**，Raw / Draft / Relation 是内部概念，不要把它们直接做成界面里的表单或导航分组。
+核心链路：`Raw（原始输入）→ Draft（AI 整理草稿）→ 用户确认 → Knowledge（知识页）→ Relation（关联）→ Graph（图谱）`。
 
 **产品原则**：AI 只能提议、用户确认后才写入知识网络；Raw 允许用户修改但 AI 不得改写（详见下文「决策记录」）。
 
@@ -18,15 +18,15 @@ AI Notes：面向大学生的生长式 AI 知识系统（校赛 Demo）。**目�
 | 仓库根 | 就是项目根目录，`package.json` / `app/` 等直接在这一层，**没有嵌套的子目录** |
 | clone 后的目录名 | `ai-notes_demo`（取自仓库名）。某些本地副本名为 `ai-notes_demo-local`（含下划线），是同一份代码，不要去找这两个名字之外的路径 |
 | 远端 | `https://github.com/3331060032guoyichen-oss/ai-notes_demo.git` |
-| 默认分支 | `main`（**部署分支**：Netlify 从它自动构建；改动必须推到 `main` 才生效。建议用 `feature/*` / `fix/*` 分支 + PR 合并）|
-| 历史集成分支 | `develop-guozechen`（2026-10-12 校正：按 `DEV_WORKFLOW.md` 与 2026-10-11 复盘，当前已直接在 `main` 上工作并部署，该分支不再作为日常集成线；**待所有者确认**）|
+| 默认分支 | `main`（稳定，基本不动） |
+| 当前开发分支 | `develop-guozechen`（日常集成，所有新工作在这里） |
 | 其他 | `feature/raw-storage` 是 Step 1 的历史分支。远端**没有** `develop` 分支 |
 
 远端分支已用 `git ls-remote` 核实，只有 `main`、`develop-guozechen`、`feature/raw-storage` 三个。若本地还残留 `origin/develop` 引用，那是过期的远程跟踪引用，`git fetch --prune` 清掉即可。
 
 ⚠️ **先确认这一条再动手**：上表描述的是**远端仓库**，本机的工作副本可能和它不一致。动手前先执行一次 `git rev-parse --is-inside-work-tree` 确认当前目录的状态；不是仓库就不要用任何 git 命令判断改动或回滚。
 
-**本机工作副本（2026-10-11 起）**：`C:\Users\郭泽辰\Desktop\ai-notes_demo-main` 已经是**真正的 git 克隆**（不是解压副本），`origin` 指向上面的仓库，跟踪 `main`，本地 `core.autocrlf=input`。改完**必须 `git push`**，否则线上一直跑旧代码（2026-10-11 就是这么掉线的，见决策记录）。
+**本机工作副本（2026-10-11 起）**：`C:\Users\guozechen\Desktop\ai-notes_demo-main` 已经是**真正的 git 克隆**（不是解压副本），`origin` 指向上面的仓库，跟踪 `main`，本地 `core.autocrlf=input`。改完**必须 `git push`**，否则线上一直跑旧代码（2026-10-11 就是这么掉线的，见决策记录）。
 
 **部署链路**：`main` 有新提交 → Netlify 自动构建并发布站点 `https://hilarious-kheer-89a440.netlify.app`。该站点运行时读 `DATABASE_URL`（指向 Neon `dev` 分支的池化连接串），生产分支未迁移、未连接。
 
@@ -34,19 +34,19 @@ AI Notes：面向大学生的生长式 AI 知识系统（校赛 Demo）。**目�
 
 ```bash
 pnpm install
-cp .env.example .env.local   # 填入 DATABASE_URL（Neon dev 分支池化串，由所有者私下提供）；DEEPSEEK_API_KEY 可选
+cp .env.example .env.local   # 填入 DEEPSEEK_API_KEY
 pnpm dev                     # http://localhost:3000
 ```
 
 - 包管理器是 **pnpm**（`package.json` 里 `packageManager: pnpm@11.25.0`），不要用 npm/yarn 装依赖，会破坏 lockfile 和 `node_modules` 的符号链接结构。
 - 没有 `DEEPSEEK_API_KEY` 时：新建笔记、浏览知识库、图谱全部正常，**只有「AI 整理」和右侧 AI 问答会报错**。这是预期行为，不是 bug。
-- 首次打开是空白状态（库里没有数据）。预置演示数据见 `seed/demo-notes.json`，由 `pnpm seed:demo` 载入（**待实现，HANDOVER 的 N1**）。
+- 首次打开是空白状态（`data/*.json` 不进 Git），需要自己新建笔记。
 
 可用命令：`pnpm dev` / `pnpm build` / `pnpm start` / `pnpm lint`。
 
 **验证与测试（2026-10-11 新增）**：
 
-- `pnpm test` —— 回归测试（**需先跑 `pnpm dev`**）：覆盖全部 10 个 API 路由 + 跨用户归属隔离，带 pass/fail 与退出码；当前 **60/60 通过**（2026-10-11 加入 Raw 修改后由 47 项扩到 60 项）。
+- `pnpm test` —— 回归测试（**需先跑 `pnpm dev`**）：覆盖全部 10 个 API 路由 + 跨用户归属隔离，带 pass/fail 与退出码；当前 **47/47 通过**。
 - `pnpm verify:db` —— 表 / 约束 / 外键删除行为 / 枚举 CHECK / RESTRICT 验证（写入测试全部在事务内回滚，不需要服务）。
 - `pnpm test:cleanup` —— 安全网：清理验证脚本可能遗留的测试数据。
 - 契约文档：[`docs/schema.md`](docs/schema.md) —— 英文契约 + 中文注解，**只描述已实现状态**，未实现的统一标注 `NOT IMPLEMENTED`。
@@ -55,7 +55,6 @@ pnpm dev                     # http://localhost:3000
 ## 实际技术栈（只列真实在用的）
 
 - **Next.js 15.5.26**（App Router）+ **React 19** + **TypeScript 5.9**
-- 数据：**Neon PostgreSQL + Drizzle ORM**（2026-10-11 起；迁移在 `drizzle/`，表与约束见 `docs/schema.md`）
 - 样式：**手写 CSS**，全部在 `app/globals.css`，用 CSS 自定义属性做设计令牌
 - **`three@0.186.0`** —— 已安装，**只用于首屏的碎裂水晶场景**（`components/landing-crystal-scene.tsx`）。不要把它用到知识图谱或别的地方，体积和复杂度都不划算
 
@@ -98,8 +97,10 @@ lib/
   auth/                 用户上下文与归属校验
   db/                   Drizzle schema / 枚举 / 连接工厂
 types/              raw / organize / knowledge / relation / graph
-drizzle/            迁移文件 0000–0003（不得手改）
-scripts/            db-verify / regression / b1–b4-verify / isolation-verify / cleanup
+data/
+  raw.json          ❌ gitignore（运行时数据，首次写入时自动创建）
+  knowledge.json    ❌ gitignore
+  relations.json    ❌ gitignore
 docs/               产品/设计/数据/流程文档，见下方"文档地图"
 ```
 
@@ -134,7 +135,7 @@ type Tab =
 | `/api/graph` | GET | 从 Knowledge + Relation 实时生成 nodes/edges |
 | `/api/assistant` | POST | AI 问答。服务端按 `contextType` + `contextId` 重新读取真实内容 |
 
-**存储已切到 PostgreSQL（Neon）+ Drizzle，所有读写都走 `lib/services/*`**（2026-10-11）。旧的 JSON 文件存储（`lib/*-storage.ts`、`data/*.json`）已删除，不要重建。
+**所有存储层在文件不存在时返回空数组/空对象（`ENOENT` 分支），不抛异常。** 所以部署到 Vercel 这种只读文件系统时，读取不会 500，但**写入会失败**。
 
 ## 当前已实现
 
@@ -144,8 +145,6 @@ type Tab =
 - Knowledge 内联编辑：标题右键改名、摘要/正文/概念点击编辑（`PATCH /api/knowledge/:id`）
 - AI 问答面板：输入 `@` 弹出候选列表，可把某条 Raw/Knowledge 作为提问上下文
 - 关系图谱（节点卡片 + 边列表，CSS grid，非力导向）
-
-> 2026-10-12 起按 `docs/ROADMAP.md` 的 N1–N9 改造：新建 / 编辑 / 删除统一成「笔记」、AI 建议改为「展示 → 点一下采用」、有向出链 / 反链、「可能相关」、⌘K 搜索与提问、局部图谱。
 
 ## 已删除的功能 —— 不要重建
 
@@ -166,8 +165,6 @@ type Tab =
 
 ### 2026-10-10：Raw 允许用户修改
 
-> 2026-10-12 补充：**界面不提供 Raw 编辑入口**——用户改的是「笔记」，原文天然保留为原始出处。`PATCH /api/raw/:id` 接口与修订记录保留。
-
 **决定**：Raw **允许用户修改**。原先"Raw 不可变"的写法不再准确。
 
 新的边界（两条要同时成立）：
@@ -182,8 +179,8 @@ type Tab =
 
 1. 入链 Backlinks
 2. 出链 Outgoing links
-3. 未链接提及 Unlinked mentions（2026-10-12 扩展为「**可能相关**」：凡未链接但相关的笔记——标题被提到、共享概念、AI 候选——合成一个列表，每行带理由；仍是第 3 块）
-4. 编辑助理（现有 AI 能力，保留 `@` 追加材料；2026-10-12 起 AI 的整理建议也展示在这一块，用户点一下"采用"才写入）
+3. 未链接提及 Unlinked mentions
+4. 编辑助理（现有 AI 能力，保留 `@` 追加材料）
 
 理由：产品定位是"AI 增强知识管理"，不是聊天机器人。占满一整栏的聊天框会把产品做成聊天机器人。
 
@@ -193,15 +190,11 @@ type Tab =
 
 ### 2026-10-10：不做「最近」列表
 
-> 2026-10-12 更新：左栏分组改为 **笔记 / 标签** 两组（不再有「原始记录」「参考库」）。「不做最近列表」继续有效；笔记列表默认按更新时间排序，这是排序方式，不是「最近」分组。
-
 **决定**：**不实现**"最近编辑 / 最近查看"列表。左栏**只有四个分组**：原始记录 / 知识页 / 标签 / 参考库。
 
 不要再提"最近"相关的方案或组件，左栏也不要为它预留位置。
 
 ### 2026-10-10：知识图谱对标 Obsidian
-
-> ⚠️ **2026-10-12 部分取代**：保留「力导向、节点大小随被引用数、缩放平移、悬停高亮、点击打开、**先局部后全库**、允许 `d3-force`」；**砍掉**时间轴回放、分组着色、四个力参数滑块、按搜索词 / 标签的复杂筛选；**渲染由 Canvas 改为 SVG**（局部图谱只有几十个节点，SVG 更容易做命中与样式，Canvas 没有收益）。理由：这些能力不服务"写完笔记就看见它长了一点"这个核心体验。
 
 **决定**：知识图谱不再用"规则网格卡片 + 文字边列表"，改为**力导向图**，对标 Obsidian 1.14.4 的 Graph view。
 
@@ -238,8 +231,6 @@ type Tab =
 7. `d3-force` 依赖已确认引入（见「知识图谱对标 Obsidian」一条），需要时登记到 `docs/THIRD_PARTY.md`。
 
 ### 2026-10-10：使用范围定为「校赛：小范围可信用户」
-
-> 2026-10-12 补充：① 实际数据库已带 `user_id`，但仍用单一 `DEFAULT_OWNER_ID`，**共享一个库**；② **口令门禁**（`ACCESS_PASSCODE`，保护 `/api/**`）与**预置演示数据**（`seed/demo-notes.json`）列为阶段一 P0（HANDOVER 的 N1）；③ 曾评估 **cookie 匿名身份（每人一个库）并否决**：评审每人看到空库，既看不到内容，也展示不了"旧知识重现"，与下文必须做到的第 3 条冲突。仓库与文档是公开的、站点网址在其中，所以门禁必须先于放出 `DEEPSEEK_API_KEY`。
 
 **决定**：使用范围是**我、同组同学、审查老师**（大致 3–15 人，彼此可信），**不是**公开网络多用户。
 
@@ -287,11 +278,15 @@ type Tab =
 
 ### 2026-10-10：数据库删除策略与枚举约束（批量决策）
 
-> 2026-10-12 补充：笔记删除前必须经过明确的二次确认。删除后的存储、恢复与永久清除方式不在本轮产品规则中展开。
-
 **删除与历史保留**
 
-此前关于归档、软删除、永久清除和外键策略的内容属于阶段性技术研究，不构成当前用户流程；实现删除接口时，以实际 schema 和代码为准，并只保留“删除前二次确认”这一产品规则。
+- `notes` 与 `raw_notes` 都进入**归档优先**治理；普通业务 API 只做 archive / restore，**不做物理删除**。
+- `note_revisions`、`proposals`、以及 `links` 两端对 `notes` 的外键一律 **RESTRICT**：任何删除都不会静默带走历史或正式关系。
+- `audit_log` **没有外键**，天然不受任何级联影响。
+- **必然结果（预期行为，不是 bug）**：每条笔记创建时都会写入 v1 修订，因此加了 RESTRICT 之后**笔记无法被物理删除**，除非先显式处理它的修订、提议与关系。
+- **历史保留采用墓碑式软删（已确认）**：`notes.deleted_at` 为墓碑标记，普通删除只打标记；**笔记行、修订、提议、正式关系、审计链全部保留**；常规查询排除 `deleted_at is not null`；**恢复 = 清空 `deleted_at`**。`archived_at`（收起）与 `deleted_at`（墓碑）是两个独立状态。
+- **永久清除（purge）另行设计**：必须走独立高风险流程（显式授权 + 单事务内按固定顺序显式删除 + 写审计），**不得靠外键级联静默完成**。接口形态与权限等级尚未设计。
+- 待改造：`DELETE /api/raw` 目前是**硬删除**（被知识页引用时 409）。**已决定暂不修改旧 JSON 存储层**，随数据库存储层重写一起改成归档 / 墓碑机制。
 
 **枚举与约束**
 
@@ -310,9 +305,17 @@ type Tab =
 - 新增 `drizzle/0003_lean_bloodscream.sql`：`links.deleted_at`（关系可恢复软删除）。
 - 三个迁移**都未执行**：未连接任何数据库、未触碰 production 分支。
 
-**删除规则（当前唯一产品规则）**
+**删除生命周期（2026-10-10 二次确认，共 7 条）**
 
-任何删除动作都必须先经过明确的二次确认。除此之外，不在本阶段预设回收站、永久清除、原因填写、级联策略或 Agent 删除权限；这些属于后续实现时再决定的技术细节。
+1. **两步走**：先 soft-delete / 移入回收站，再由用户**单独**执行 purge；**purge 只允许作用于已软删除的笔记**。
+2. **Agent 没有 purge 路径**：MVP **不新增 `proposals.kind`**；Agent 最多**建议归档**（以建议形式呈现，不落 proposals 表）；**永久清除只能由用户在 UI 手动发起**。
+3. **`links` 普通删除 = 可恢复软删除**（`deleted_at`），常规查询隐藏已删除关系。**关键约束**：`links_pair_idx` 是完整唯一索引、**不是部分索引**，所以重新建立同一关系时必须**复活已有行**（清空 `deleted_at`），不能插入新行。
+4. purge **必填简短原因**（写入 `audit_log.detail.reason`）。
+5. 确认方式：**明确的二次确认弹窗 + 永久删除按钮**，**不要求**输入标题。
+6. purge 笔记时 **`raw_notes` 不级联删除**，独立保留。
+7. 审计 manifest **允许保留标题快照**。
+
+完整设计见 `outputs/10-purge永久清除设计.md`（含事务顺序、manifest 字段、幂等与并发策略、13 条测试用例）。
 
 ### 2026-10-10：本轮实施范围、批次与基础设施口径
 
@@ -348,7 +351,7 @@ type Tab =
 
 - 使用 Neon 现有能力，**不自建备份系统**。
 - 实测：组织套餐 **`free`**；项目 `history_retention_seconds = 21600`（**6 小时**）；免费套餐历史窗口上限即 6 小时 / 1 GB（来源：Neon 官方 *History window* 文档，2026-10-10）。
-- **后果（必须知道）**：免费套餐历史窗口有限，不能把数据库历史窗口当作产品级恢复方案；这属于部署与运营注意事项，不改变当前删除交互规则。
+- **后果（必须知道）**：**超过 6 小时没有内容级恢复手段**。这正是 purge 必须有二次确认 + 必填原因 + 审计留痕的原因。升级套餐可延长（Launch 上限 7 天、Scale 上限 30 天），属成本决策。
 
 **迁移状态（2026-10-11 更新）**：
 
@@ -383,30 +386,17 @@ type Tab =
 
 **已修复**：把当前代码推到 `main`（`4bcf944`），Netlify 自动重建后线上回归 47/47 通过（10 个路由的真实读写 + 跨用户隔离）。
 
-**工作副本改造**：`C:\Users\郭泽辰\Desktop\ai-notes_demo-main` 现在是真正的 git 克隆（`origin` = 仓库，跟踪 `main`），本地 `core.autocrlf=input`。
+**工作副本改造**：`C:\Users\guozechen\Desktop\ai-notes_demo-main` 现在是真正的 git 克隆（`origin` = 仓库，跟踪 `main`），本地 `core.autocrlf=input`。
 
 **教训（改完必须推送）**：不推送 = 线上永远跑旧代码，而且表面上一切正常（首页 200、读取返回空列表，不像故障）。以后判断"线上是不是最新代码"，用"往 dev 库插一条行、看线上接口能否读到"这种交叉验证，不要只看页面能不能打开。
 
 **顺带修复**：`.gitignore` 从只忽略 `.env` / `.env.local` / `.env.*.local` 改成忽略所有 `.env*`（保留 `.env.example`），避免 `.env.production` 这类文件被误提交到公开仓库。
 
-### 2026-10-12：以「自生长的知识库」为目的重排产品与任务
-
-1. **目的与判据**：写完即有反馈（右栏出现旧知识线索）、接受即变大（笔记 / 链接数增加）、不越权（AI 不得在用户不知情时改正文或结构）。
-2. **用户只面对「笔记」**（Knowledge 层）。Raw 退到幕后，只作原始出处。新建笔记走新增的 `POST /api/notes`（同一事务创建 raw + notes；`notes.raw_id` 仍 `NOT NULL`，**不新增迁移**）。
-3. **AI 建议分级采用**：摘要 / 要点 / 概念 / 整理版正文只"展示"，用户点"采用"才写入（带 `version`）；建链接点一下；删除前必须二次确认。AI 建议第一版**不持久化**（`note_ai_metadata` 没有要点与整理版正文的列）。
-4. **链接有向**：出链 `source=当前`、反链 `target=当前`；服务层去重由无序对改为有序对，无需迁移；回归测试里"反向重复算同一条"的断言随之失效，属**预期变更**，改测试时在提交说明里写明。选中文字建链接时，选中片段写入 `reason`。
-5. **`/api/organize` 增加 `knowledgeId` 参数**（与 `rawId` 二选一），按笔记当前内容整理；提示词附已有概念名（近期前 50 个），鼓励复用。
-6. **检索**：不上向量库；"目录挑选 → 取全文回答 → 引用 id"。超过约 300 条再换方案。
-7. **访问控制**：共享口令门禁 + 预置演示数据（见上文「使用范围」补充）；不做账号、不做每人一个库。
-8. **不做**：四类节点体系、独立 Proposal 实体、复习 / 知识检查 / 今日学习页、Canvas 图谱、声音首次询问浮层、首屏新增视觉、Agent 工具循环、向量库、路由重构。声音默认静音，只移除 `SoundPrompt`。
-9. **主题**：浅 / 深两套，`[data-theme]` 手动切换，仅用 CSS 变量。
-10. **文档**：`docs/PROJECT_CONTEXT.md`、`docs/CODEX_AI_LEARNING_UI_BRIEF.md` 已过时，建议删除。
-
 ## 改动边界
 
 - **Raw 用户可改、AI 不可改**：用户可以通过 `PATCH /api/raw/:id` 直接修改（不需要提议），每次修改都在同一事务里写一条 `audit_log` 修订记录（含改前 / 改后原文）；Agent 主体调用会被 `requireUserActor()` 拒绝（`403 USE_PROPOSAL_FLOW`），永远不能改写 Raw 的正文。详见上文「决策记录」。
-- **AI 不自动写入**：AI 只生成草稿或回答，落库必须经过用户确认——确认 = 点一下"采用"，不是填一张表单。
-- **右栏是上下文面板**：入链 / 出链 / 可能相关 / 助手四块，跟随当前笔记。不要把它退回成全局聊天框，也不要为 AI 单独做一套视觉语言。
+- **AI 不自动写入**：AI 只生成草稿或回答，落库必须经过用户确认。
+- **右栏是上下文面板**：入链 / 出链 / 未链接提及 / 编辑助理四块，跟随当前标签。不要把它退回成全局聊天框，也不要为 AI 单独做一套视觉语言。
 - **不要再重建参考库 / Wiki 层**：它已按 2026-10-10 决策整层移除，`data/*.json` 三个文件都是运行时数据（不进 Git，不要提交）。将来若要做"Wiki 承载四类节点"，以新形态重新设计，不要恢复旧结构。
 - **API Key 只在服务端**：`DEEPSEEK_API_KEY` 从环境变量读，永远不要传到浏览器或写进代码。`.env.local` 已被 gitignore。
 - 改 Knowledge 的字段结构时，要同时改 `types/knowledge.ts`、`lib/services/notes.ts` 的映射、以及 `PATCH` 路由的校验。
@@ -416,16 +406,15 @@ type Tab =
 | 文件 | 状态 |
 |---|---|
 | `AGENTS.md`（本文件） | ✅ **权威**，冲突时以这里为准 |
-| `docs/ROADMAP.md` | ✅ 有效（目标 / 现状 / 差距对照，排期依据）（2026-10-12 已按新决策更新） |
-| `docs/PROJECT_RULES.md` | ✅ 有效（产品方向与四类节点的长期模型）（2026-10-12 已按新决策更新） |
-| `docs/DATA_MODEL.md` | ✅ 有效（区分长期模型 vs 当前实际 schema，注意别混）（2026-10-12 已按新决策更新） |
-| `docs/DESIGN_SYSTEM.md` | ✅ 有效（视觉规范，含与当前实现的差距说明）（2026-10-12 已按新决策更新） |
+| `docs/ROADMAP.md` | ✅ 有效（目标 / 现状 / 差距对照，排期依据） |
+| `docs/PROJECT_RULES.md` | ✅ 有效（产品方向与四类节点的长期模型） |
+| `docs/DATA_MODEL.md` | ✅ 有效（区分长期模型 vs 当前实际 schema，注意别混） |
+| `docs/DESIGN_SYSTEM.md` | ✅ 有效（视觉规范，含与当前实现的差距说明） |
 | `docs/DEV_WORKFLOW.md` | ✅ 有效（分支与提交规范） |
-| `docs/PROJECT_CONTEXT.md` | ❌ **已过时，建议删除**（仍描述 JSON 存储与 Wiki） |
-| `docs/THIRD_PARTY.md` | ✅ 有效（第三方依赖登记表）（2026-10-12 已按新决策更新） |
-| `docs/CODEX_AI_LEARNING_UI_BRIEF.md` | ❌ **历史 brief，已过时，建议删除**。文中 Study / Lint / 力导向图谱等要求已被推翻，**不要照着做** |
-| `docs/HANDOVER.md` | ✅ 有效（交接给协作者的操作说明：环境、红线、验证流程、任务清单、可直接粘贴给 AI 的提示词）（2026-10-12 已按新决策更新） |
-| `docs/schema.md` | ✅ 数据库契约（表 / 约束 / HTTP API / 错误码），只描述已实现状态 |
+| `docs/PROJECT_CONTEXT.md` | ⚠️ 阶段性状态记录，可能滞后于代码 |
+| `docs/THIRD_PARTY.md` | ✅ 有效（第三方依赖登记表） |
+| `docs/CODEX_AI_LEARNING_UI_BRIEF.md` | ⚠️ **历史 brief，已过时**。文中要求做 Study / Lint / 力导向图谱，这些已被推翻。仅作背景参考，**不要照着做** |
+| `docs/HANDOVER.md` | ✅ 有效（交接给协作者的操作说明：环境、红线、验证流程、任务清单、可直接粘贴给 AI 的提示词） |
 | `docs/reports/01`–`12` | ⚠️ 阶段性报告（竞品研究 / 审计 / 选型 / 架构 / 迁移复核 / 存储层切换），记录当时的判断与依据，**描述的是历史状态，不要当成当前代码说明** |
 | `docs/reports/13-界面走查问题清单与下一步.md` | ✅ 有效（2026-10-11 界面走查的问题清单与后续计划，配 `docs/screenshots/`） |
 | `README.md` | ✅ 面向人的简述 |

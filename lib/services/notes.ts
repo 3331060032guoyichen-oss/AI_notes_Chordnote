@@ -9,7 +9,7 @@ import { getDb } from "../db/client";
 import { noteRevisions, notes, rawNotes } from "../db/schema";
 
 // 知识页（notes）服务层。
-// 读路径默认只返回"未归档且未删除"的行。
+// 读路径默认只返回"未归档且未软删除"的行；按 id / rawId 单条读取不过滤（与旧存储行为一致）。
 //
 // 写路径：
 //   - promoteFromSource —— 从原始记录"手动提升"为知识页（按 rawId 幂等），并写入 v1 修订
@@ -57,7 +57,7 @@ export async function getNote(id: string): Promise<Knowledge | null> {
   const rows = await db
     .select()
     .from(notes)
-    .where(and(eq(notes.id, id), eq(notes.userId, userId), isNull(notes.archivedAt), isNull(notes.deletedAt)))
+    .where(and(eq(notes.id, id), eq(notes.userId, userId)))
     .limit(1);
   const [row] = rows;
 
@@ -70,24 +70,12 @@ export async function getNoteByRawId(rawId: string): Promise<Knowledge | null> {
   const rows = await db
     .select()
     .from(notes)
-    .where(and(eq(notes.rawId, rawId), eq(notes.userId, userId), isNull(notes.archivedAt), isNull(notes.deletedAt)))
+    .where(and(eq(notes.rawId, rawId), eq(notes.userId, userId)))
     .limit(1);
   const [row] = rows;
 
   return row ? toKnowledge(row) : null;
 }
-
-export type PromoteInput = {
-  rawId: string;
-  title: string;
-  summary: string;
-  content: string;
-  keyPoints: string[];
-  concepts: string[];
-  keywords: string[];
-  /** 内容来源：'ai'（来自 AI 整理稿）/ 'user'（手动撰写）。默认 'user'。 */
-  origin: "user" | "ai";
-};
 
 function titleFromText(text: string) {
   const firstLine = text.split(/\r?\n/).map((line) => line.trim()).find(Boolean) ?? "未命名笔记";
@@ -96,8 +84,8 @@ function titleFromText(text: string) {
 }
 
 /**
- * 创建一条用户可直接编辑的笔记，同时保留一份原始出处。
- * Raw 仍是内部出处，不再要求用户先理解 Raw → Knowledge 的产品流程。
+ * 创建一条笔记，同时保留一份不可替代的原始出处。
+ * 两张表在同一事务中写入，避免新建笔记只留下 Raw 或只留下 Knowledge。
  */
 export async function createNoteFromText(text: string): Promise<{ knowledge: Knowledge; raw: Raw }> {
   const { db } = await getDb();
@@ -157,6 +145,18 @@ export async function createNoteFromText(text: string): Promise<{ knowledge: Kno
     };
   });
 }
+
+export type PromoteInput = {
+  rawId: string;
+  title: string;
+  summary: string;
+  content: string;
+  keyPoints: string[];
+  concepts: string[];
+  keywords: string[];
+  /** 内容来源：'ai'（来自 AI 整理稿）/ 'user'（手动撰写）。默认 'user'。 */
+  origin: "user" | "ai";
+};
 
 /**
  * 从原始记录提升为知识页（决策 4：知识页只能这样创建）。
@@ -284,16 +284,4 @@ export async function updateNote(
 
     return { status: "ok" as const, knowledge: toKnowledge(updated) };
   });
-}
-
-export async function deleteNote(id: string): Promise<boolean> {
-  const { db } = await getDb();
-  const { userId } = getUserContext();
-  const rows = await db
-    .update(notes)
-    .set({ deletedAt: new Date(), updatedAt: new Date() })
-    .where(and(eq(notes.id, id), eq(notes.userId, userId), isNull(notes.deletedAt)))
-    .returning({ id: notes.id });
-
-  return rows.length > 0;
 }

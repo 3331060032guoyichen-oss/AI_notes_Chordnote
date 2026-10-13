@@ -9,7 +9,7 @@ import { getDb } from "../db/client";
 import { auditLog, rawNotes } from "../db/schema";
 
 // 原始记录（raw_notes）服务层。
-// 读路径默认只返回"未归档"的行；归档后的出处不再作为用户当前内容返回。
+// 读路径默认只返回"未归档"的行；按 id 单条读取不过滤（保持与旧存储一致的行为）。
 //
 // 注意：raw_notes 目前**只有 archived_at，没有 deleted_at**——raw 的墓碑机制
 // 尚未设计（按决策随存储层重写的写路径一起做）。因此这里只过滤归档。
@@ -50,7 +50,7 @@ export async function getSource(id: string): Promise<Raw | null> {
   const rows = await db
     .select()
     .from(rawNotes)
-    .where(and(eq(rawNotes.id, id), eq(rawNotes.userId, userId), isNull(rawNotes.archivedAt)))
+    .where(and(eq(rawNotes.id, id), eq(rawNotes.userId, userId)))
     .limit(1);
   const [row] = rows;
 

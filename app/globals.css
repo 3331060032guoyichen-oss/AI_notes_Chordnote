@@ -720,6 +720,7 @@ textarea:focus-visible {
   grid-template-columns: var(--sidebar-width) minmax(0, 1fr) var(--rail-width);
   min-height: 100dvh;
   background: var(--paper);
+  transition: grid-template-columns 180ms ease;
 }
 
 .workspace-sidebar {
@@ -732,6 +733,42 @@ textarea:focus-visible {
   padding: 22px 16px 18px;
   border-right: 1px solid var(--line);
   background: var(--surface);
+}
+
+.workspace-sidebar.is-collapsed {
+  align-items: center;
+  padding-right: 8px;
+  padding-left: 8px;
+}
+
+.workspace-sidebar.is-collapsed > *:not(.sidebar-toggle) {
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.sidebar-toggle {
+  position: absolute;
+  z-index: 6;
+  top: 76px;
+  right: -11px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: 0 8px 8px 0;
+  color: var(--muted);
+  background: var(--surface-raised);
+  box-shadow: 4px 5px 12px rgb(42 56 108 / 8%);
+  font-size: 18px;
+  line-height: 1;
+}
+
+.sidebar-toggle:hover {
+  color: var(--accent-strong);
+  background: var(--accent-soft);
 }
 
 .sidebar-top {
@@ -996,7 +1033,8 @@ textarea:focus-visible {
   font-size: 11px;
 }
 
-.tree-tools {
+.tree-tools,
+.tree-tools-section {
   display: grid;
   gap: 2px;
   padding-top: 14px;
@@ -1004,6 +1042,9 @@ textarea:focus-visible {
 }
 
 .tree-tool-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
   padding: 7px 10px;
   border: 0;
   border-radius: 7px;
@@ -1296,14 +1337,6 @@ textarea:focus-visible {
 
 .workspace-heading.compact-heading {
   align-items: flex-start;
-}
-
-.heading-actions {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 8px;
 }
 
 .eyebrow {
@@ -1734,75 +1767,6 @@ input::placeholder {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px rgb(74 90 200 / 12%);
   outline: 0;
-}
-
-.settings-surface {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(220px, 0.72fr);
-  gap: 42px;
-  max-width: 760px;
-  padding: 26px 0 10px;
-  border-top: 1px solid var(--line-strong);
-}
-
-.settings-form {
-  display: grid;
-  gap: 4px;
-}
-
-.settings-form .field-block {
-  margin: 0 0 12px;
-}
-
-.settings-select {
-  display: block;
-  width: 100%;
-  min-height: 42px;
-  padding: 0 12px;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-control);
-  color: var(--ink);
-  background: var(--surface-raised);
-  box-shadow: inset 0 1px 2px rgb(32 39 72 / 6%);
-}
-
-.settings-select:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgb(74 90 200 / 12%);
-  outline: 0;
-}
-
-.settings-custom-model {
-  margin-top: 8px;
-}
-
-.settings-help {
-  margin: 8px 0 0;
-  color: var(--muted);
-  font-size: 11px;
-  line-height: 1.6;
-}
-
-.settings-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 9px;
-  margin-top: 12px;
-}
-
-.settings-note {
-  align-self: start;
-  padding: 16px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-panel);
-  background: var(--surface-raised);
-}
-
-.settings-note p {
-  margin: 10px 0 0;
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.7;
 }
 
 .capture-footer {
@@ -2823,6 +2787,10 @@ input::placeholder {
     grid-template-columns: 216px minmax(0, 1fr) 280px;
   }
 
+  .app-shell.sidebar-collapsed {
+    grid-template-columns: 48px minmax(0, 1fr) 280px;
+  }
+
   .workspace-content,
   .workspace-topbar {
     padding-right: 28px;
@@ -2838,6 +2806,10 @@ input::placeholder {
 @media (max-width: 1020px) {
   .app-shell {
     grid-template-columns: 216px minmax(0, 1fr);
+  }
+
+  .app-shell.sidebar-collapsed {
+    grid-template-columns: 48px minmax(0, 1fr);
   }
 
   .ai-rail {
@@ -2858,9 +2830,8 @@ input::placeholder {
     padding-bottom: 67px;
   }
 
-  .settings-surface {
-    grid-template-columns: 1fr;
-    gap: 22px;
+  .app-shell.sidebar-collapsed {
+    display: block;
   }
 
   .mobile-topbar {
@@ -2904,6 +2875,22 @@ input::placeholder {
 
   .workspace-sidebar.is-open {
     display: flex;
+  }
+
+  .workspace-sidebar.is-collapsed {
+    align-items: stretch;
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+
+  .workspace-sidebar.is-collapsed > *:not(.sidebar-toggle) {
+    visibility: visible;
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .sidebar-toggle {
+    display: none;
   }
 
   .sidebar-top .app-logo {
