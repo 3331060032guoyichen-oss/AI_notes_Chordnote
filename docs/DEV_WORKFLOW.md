@@ -1,5 +1,7 @@
 # Development Workflow
 
+> **文档状态：** 本文保留历史 Step gate 和验证记录。当前任务顺序、实现边界和用户语言以根目录 `AGENTS.md`、`docs/ROADMAP.md` 与 `docs/HANDOVER.md` 为准。
+
 ## 当前事实（先读这段）
 
 | 项 | 现在是什么 |
