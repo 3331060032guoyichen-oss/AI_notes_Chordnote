@@ -3,34 +3,35 @@
 }
 
 :root {
-  --paper: #ecefeb;
-  --surface: #f5f7f4;
-  --surface-raised: #fcfdfb;
-  --ink: #20232b;
-  --muted: #626975;
-  --quiet: #858d99;
-  --line: #cbd1d3;
-  --line-strong: #aeb7bd;
-  --accent: #4a5ac8;
-  --accent-strong: #34439a;
-  --accent-soft: #e2e6fa;
-  --success: #56745e;
-  --success-soft: #e2ece4;
+  /* 暗色令牌 —— 与 Notipelago 落地页同一套冷色极光语言 */
+  --paper: #020617;
+  --surface: #0a1122;
+  --surface-raised: #101a30;
+  --ink: #e8edf7;
+  --muted: #94a3b8;
+  --quiet: #64748b;
+  --line: rgb(148 163 184 / 18%);
+  --line-strong: rgb(148 163 184 / 32%);
+  --accent: #7c3aed;
+  --accent-strong: #6d28d9;
+  --accent-soft: rgb(124 58 237 / 20%);
+  --success: #2dd4bf;
+  --success-soft: rgb(45 212 191 / 14%);
   --warning: #2dd4bf;
-  --warning-soft: #ccfbf1;
-  --danger: #9d574c;
-  --danger-soft: #ede9fe;
+  --warning-soft: rgb(45 212 191 / 14%);
+  --danger: #a78bfa;
+  --danger-soft: rgb(167 139 250 / 16%);
   --radius: 12px;
   --radius-panel: 12px;
   --radius-control: 8px;
   --radius-label: 6px;
-  --control-edge: #2f3c8c;
-  --control-text: #f8f9ff;
-  --control-shadow: 0 3px 8px rgb(35 48 117 / 18%);
-  --panel-shadow: inset 0 1px rgb(255 255 255 / 82%), 0 10px 30px rgb(42 56 108 / 7%);
-  --surface-highlight: rgb(255 255 255 / 82%);
-  --texture-dot: rgb(74 90 200 / 8%);
-  --shadow: 0 18px 50px rgb(42 56 108 / 10%);
+  --control-edge: #4f46e5;
+  --control-text: #f8faff;
+  --control-shadow: 0 3px 8px rgb(2 6 23 / 55%);
+  --panel-shadow: inset 0 1px rgb(255 255 255 / 8%), 0 10px 30px rgb(2 6 23 / 50%);
+  --surface-highlight: rgb(255 255 255 / 6%);
+  --texture-dot: rgb(148 163 184 / 9%);
+  --shadow: 0 18px 50px rgb(2 6 23 / 55%);
   --sidebar-width: 232px;
   --rail-width: 312px;
   color: var(--ink);
@@ -749,7 +750,7 @@ textarea:focus-visible {
 .new-source-button,
 .button-primary,
 .button-dark {
-  color: var(--surface-raised);
+  color: #f8faff;
   background: var(--accent-strong);
 }
 
@@ -1292,7 +1293,7 @@ textarea:focus-visible {
 }
 
 .button-secondary {
-  color: var(--accent-strong);
+  color: #c4b5fd;
   border: 1px solid var(--line-strong);
   background: transparent;
 }
@@ -3001,14 +3002,13 @@ input::placeholder {
   background-color: var(--paper);
   background-image:
     radial-gradient(circle, var(--texture-dot) 0.65px, transparent 0.75px),
-    linear-gradient(150deg, rgb(200 214 252 / 44%) 0%, rgb(238 236 246 / 18%) 46%, rgb(198 226 248 / 40%) 100%),
-    radial-gradient(960px 680px at 4% -14%, rgb(74 90 200 / 26%), transparent 66%),
-    radial-gradient(820px 620px at 98% 108%, rgb(122 78 190 / 20%), transparent 68%),
-    linear-gradient(rgb(238 240 236 / 26%), rgb(238 240 236 / 26%)),
-    url("/bg-workspace-paper.webp");
-  background-size: 9px 9px, auto, auto, auto, auto, cover;
-  background-position: 0 0, center, center, center, center, center top;
-  background-repeat: repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat;
+    radial-gradient(1100px 760px at 2% -16%, rgb(124 58 237 / 26%), transparent 64%),
+    radial-gradient(900px 700px at 100% 110%, rgb(45 212 191 / 20%), transparent 66%),
+    radial-gradient(760px 620px at 88% -10%, rgb(59 130 246 / 16%), transparent 68%),
+    radial-gradient(700px 560px at 12% 108%, rgb(190 24 93 / 10%), transparent 70%);
+  background-size: 9px 9px, auto, auto, auto, auto;
+  background-position: 0 0, center, center, center, center;
+  background-repeat: repeat, no-repeat, no-repeat, no-repeat, no-repeat;
 }
 
 .workspace-sidebar,
@@ -3180,10 +3180,10 @@ input::placeholder {
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-panel);
   color: var(--ink);
-  background-color: var(--surface-raised);
+  background-color: rgb(16 26 48 / 94%);
   background-image: radial-gradient(circle, var(--texture-dot) 0.65px, transparent 0.75px);
   background-size: 9px 9px;
-  box-shadow: var(--panel-shadow), 0 18px 54px rgb(28 36 80 / 18%);
+  box-shadow: var(--panel-shadow), 0 18px 54px rgb(2 6 23 / 60%);
 }
 
 .sound-prompt-close {
@@ -3493,14 +3493,14 @@ input::placeholder {
   padding: 0;
   gap: 0;
   border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.55);
-  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgb(148 163 184 / 26%);
+  background: rgb(16 26 48 / 72%);
   backdrop-filter: blur(16px) saturate(180%);
   -webkit-backdrop-filter: blur(16px) saturate(180%);
   box-shadow:
-    0 0 0 6px rgba(59, 130, 246, 0.18),
-    0 0 34px 6px rgba(124, 58, 237, 0.55),
-    0 8px 32px 0 rgba(31, 38, 135, 0.15);
+    0 0 0 6px rgb(124 58 237 / 12%),
+    0 0 28px 4px rgb(124 58 237 / 42%),
+    0 8px 32px rgb(2 6 23 / 60%);
   overflow: hidden;
   cursor: pointer;
   transition: transform 220ms ease, box-shadow 220ms ease, width 260ms ease, height 260ms ease;
@@ -3524,9 +3524,13 @@ input::placeholder {
   place-items: center;
   width: 100%;
   height: 100%;
-  color: #7c3aed;
+  /* <button> 默认带 buttonface 浅灰底，会把玻璃球照白 */
+  border: 0;
+  background: transparent;
+  color: #a78bfa;
   font-size: 24px;
   line-height: 1;
+  cursor: pointer;
 }
 
 .sound-prompt.is-open .sound-prompt-orb {
