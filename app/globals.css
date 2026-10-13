@@ -247,6 +247,7 @@ textarea:focus-visible {
 
 /* 首屏 */
 .landing-hero {
+  position: relative;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -3987,4 +3988,139 @@ input::placeholder {
 /* 标牌语之后紧跟的正文，间距收紧一档 */
 .landing-slogan + .landing-lede {
   margin-top: clamp(12px, 1.8vh, 20px);
+}
+/* ============================================================
+   3D 空间层 —— 流体琉璃体 / 透视网格地面 / 物理厚度 / 胶片颗粒
+   ============================================================ */
+
+/* 1) 3D 琉璃体：Hero 右侧焦点 */
+.landing-orb-slot {
+  position: absolute;
+  z-index: 0;
+  top: 44%;
+  right: clamp(-90px, -2vw, 10px);
+  width: clamp(220px, 24vw, 400px);
+  height: clamp(220px, 24vw, 400px);
+  transform: translateY(-50%);
+  opacity: 0.9;
+  pointer-events: none;
+}
+
+.landing-fluid-orb {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* 2) 无限延伸的透视网格地面 */
+.landing-grid {
+  position: fixed;
+  z-index: 0;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.landing-grid-plane {
+  position: absolute;
+  right: -60%;
+  bottom: 8%;
+  left: -60%;
+  height: 58%;
+  background-image:
+    linear-gradient(rgba(165, 243, 252, 0.16) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(165, 243, 252, 0.16) 1px, transparent 1px);
+  background-size: 40px 40px;
+  transform: perspective(500px) rotateX(60deg) translateY(0) scale(2);
+  transform-origin: center bottom;
+}
+
+.landing-grid-fade {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 52%;
+  background: linear-gradient(
+    to top,
+    #030712 0%,
+    rgba(3, 7, 18, 0.35) 46%,
+    rgba(3, 7, 18, 0.08) 76%,
+    transparent 100%
+  );
+}
+
+/* 3) 卡片物理厚度：多层投影 + 左上受光边 + 底部暗边 */
+.landing-card,
+.landing-step-card,
+.landing-closing-card,
+.shard {
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.2);
+  box-shadow:
+    inset 0 1px 1px 0 rgba(255, 255, 255, 0.28),
+    0 30px 60px -12px rgba(0, 0, 0, 0.5),
+    0 18px 36px -18px rgba(0, 0, 0, 0.3);
+}
+
+.landing-facts li,
+.landing-nav-inner,
+.landing-eyebrow,
+.landing-secondary {
+  box-shadow:
+    inset 0 1px 1px 0 rgba(255, 255, 255, 0.22),
+    0 18px 40px -14px rgba(0, 0, 0, 0.45);
+}
+
+/* 4) 全局胶片颗粒 */
+.landing-grain {
+  z-index: 40;
+  mix-blend-mode: overlay;
+  opacity: 0.03;
+}
+
+@media (max-width: 1024px) {
+  .landing-orb-slot {
+    right: -18vw;
+    width: 340px;
+    height: 340px;
+    opacity: 0.5;
+  }
+}
+
+@media (max-width: 720px) {
+  .landing-orb-slot {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-grid-plane {
+    transform: none;
+  }
+}
+/* Hero 内的文字与碎片压在 3D 体之上 */
+.landing-hero > .landing-eyebrow,
+.landing-hero > .landing-title,
+.landing-hero > .landing-slogan,
+.landing-hero > .landing-lede,
+.landing-hero > .landing-actions,
+.landing-hero > .landing-facts {
+  position: relative;
+  z-index: 3;
+}
+
+.landing-shards {
+  z-index: 4;
+}
+
+@media (max-width: 1024px) {
+  .landing-orb-slot {
+    right: -16vw;
+    width: 260px;
+    height: 260px;
+    opacity: 0.5;
+  }
 }

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { LandingConstellation } from "./landing-constellation";
+import { LandingFluidOrb } from "./landing-fluid-orb";
 
 type LandingPageProps = {
   onEnter: () => void;
@@ -68,6 +69,12 @@ export function LandingPage({ onEnter }: LandingPageProps) {
       <div className="landing-grain" aria-hidden="true" />
       <LandingConstellation />
 
+      {/* 无限延伸的透视网格地面 + 地平线渐隐 */}
+      <div className="landing-grid" aria-hidden="true">
+        <div className="landing-grid-plane" />
+        <div className="landing-grid-fade" />
+      </div>
+
       <div className="landing-content">
         <header className="landing-nav">
           <div className="landing-nav-inner">
@@ -86,6 +93,10 @@ export function LandingPage({ onEnter }: LandingPageProps) {
         </header>
 
         <section className="landing-hero" aria-label="Chordnote 简介">
+          {/* 3D 琉璃体：Hero 右侧的视觉焦点 */}
+          <div className="landing-orb-slot" aria-hidden="true">
+            <LandingFluidOrb />
+          </div>
           {/* 悬浮 UI 碎片：全息投影式装饰，pointer-events 关闭，不遮挡文字与按钮 */}
           <div className="landing-shards" aria-hidden="true">
             <div className="shard shard-note">
