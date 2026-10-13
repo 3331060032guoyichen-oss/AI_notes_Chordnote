@@ -56,7 +56,13 @@ export function LandingPage({ onEnter }: LandingPageProps) {
 
   return (
     <main ref={pageRef} className="landing">
-      <div className="landing-blobs" aria-hidden="true" />
+      <div className="landing-blobs" aria-hidden="true">
+        <span className="blob blob-1" />
+        <span className="blob blob-2" />
+        <span className="blob blob-3" />
+        <span className="blob blob-4" />
+        <span className="blob blob-5" />
+      </div>
       <div className="landing-grain" aria-hidden="true" />
 
       <div className="landing-content">

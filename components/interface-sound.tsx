@@ -243,27 +243,39 @@ export function useInterfaceSound() {
 
 export function SoundPreferencePrompt() {
   const { enable, mute, preference } = useInterfaceSound();
+  const [open, setOpen] = useState(false);
   if (preference !== "unknown") return null;
 
   return (
-    <section className="sound-prompt" aria-label="声音反馈设置">
+    <section className={`sound-prompt${open ? " is-open" : ""}`} aria-label="声音反馈设置">
       <button
-        className="sound-prompt-close"
+        className="sound-prompt-orb"
         type="button"
-        onClick={mute}
-        aria-label="不再询问，保持安静"
-        title="不再询问"
+        onClick={() => setOpen(true)}
+        aria-label="声音反馈设置"
+        aria-expanded={open}
       >
-        <span aria-hidden="true">×</span>
+        <span aria-hidden="true">♪</span>
       </button>
-      <div>
-        <span className="sound-prompt-kicker">声音反馈</span>
-        <strong>让操作多一点触感。</strong>
-        <p>试听轻柔的按键声。你可以随时关闭，也可以先跳过。</p>
-      </div>
-      <div className="sound-prompt-actions">
-        <button className="button-dark" type="button" onClick={enable}>试听并开启</button>
-        <button className="button-secondary" type="button" onClick={mute}>保持安静</button>
+      <div className="sound-prompt-body">
+        <button
+          className="sound-prompt-close"
+          type="button"
+          onClick={mute}
+          aria-label="不再询问，保持安静"
+          title="不再询问"
+        >
+          <span aria-hidden="true">×</span>
+        </button>
+        <div>
+          <span className="sound-prompt-kicker">声音反馈</span>
+          <strong>让操作多一点触感。</strong>
+          <p>试听轻柔的按键声。你可以随时关闭，也可以先跳过。</p>
+        </div>
+        <div className="sound-prompt-actions">
+          <button className="button-dark" type="button" onClick={enable}>试听并开启</button>
+          <button className="button-secondary" type="button" onClick={mute}>保持安静</button>
+        </div>
       </div>
     </section>
   );
