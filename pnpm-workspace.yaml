@@ -1,5 +1,5 @@
 allowBuilds:
-  '@tsparticles/engine': set this to true or false
+  '@tsparticles/engine': false
   bufferutil: true
   esbuild: true
   unrs-resolver: true
