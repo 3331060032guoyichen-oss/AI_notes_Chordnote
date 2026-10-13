@@ -1097,7 +1097,7 @@ textarea:focus-visible {
 
 .workspace-main {
   min-width: 0;
-  background: color-mix(in srgb, var(--paper) 46%, transparent);
+  background: color-mix(in srgb, var(--paper) 30%, transparent);
 }
 
 .workspace-topbar {
@@ -2972,7 +2972,7 @@ input::placeholder {
     linear-gradient(150deg, rgb(200 214 252 / 44%) 0%, rgb(238 236 246 / 18%) 46%, rgb(198 226 248 / 40%) 100%),
     radial-gradient(960px 680px at 4% -14%, rgb(74 90 200 / 26%), transparent 66%),
     radial-gradient(820px 620px at 98% 108%, rgb(122 78 190 / 20%), transparent 68%),
-    linear-gradient(rgb(238 240 236 / 58%), rgb(238 240 236 / 58%)),
+    linear-gradient(rgb(238 240 236 / 26%), rgb(238 240 236 / 26%)),
     url("/bg-workspace-paper.webp");
   background-size: 9px 9px, auto, auto, auto, auto, cover;
   background-position: 0 0, center, center, center, center, center top;
