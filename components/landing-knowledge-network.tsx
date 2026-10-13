@@ -46,6 +46,8 @@ export function LandingKnowledgeNetwork({ progressRef, className }: LandingKnowl
     host.appendChild(renderer.domElement);
 
     const scene = new THREE.Scene();
+    // 指数雾：远处节点自然淡出，做出纵深感（颜色与页面底色一致）
+    scene.fog = new THREE.FogExp2(0x05070f, 0.042);
     const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 100);
     camera.position.set(0, 0, 15.5);
 
@@ -89,6 +91,7 @@ export function LandingKnowledgeNetwork({ progressRef, className }: LandingKnowl
       transparent: true,
       opacity: 0.3,
       depthWrite: false,
+      blending: THREE.AdditiveBlending,
     });
     const links = new THREE.LineSegments(linkGeometry, linkMaterial);
     group.add(links);
@@ -102,6 +105,7 @@ export function LandingKnowledgeNetwork({ progressRef, className }: LandingKnowl
       transparent: true,
       opacity: 0.9,
       depthWrite: false,
+      blending: THREE.AdditiveBlending,
     });
     const nodes = new THREE.Points(nodeGeometry, nodeMaterial);
     group.add(nodes);
@@ -114,6 +118,7 @@ export function LandingKnowledgeNetwork({ progressRef, className }: LandingKnowl
       transparent: true,
       opacity: 0.5,
       depthWrite: false,
+      blending: THREE.AdditiveBlending,
     });
     group.add(new THREE.Points(haloGeometry, haloMaterial));
 
