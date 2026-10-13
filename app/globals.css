@@ -46,7 +46,7 @@ body {
 
 body {
   min-height: 100dvh;
-  background: #030712;
+  background: #020617;
 }
 
 button,
@@ -3332,7 +3332,7 @@ input::placeholder {
 
 /* 1) 梦幻流体渐变背景：多个绝对定位的模糊圆叠在极浅底色上 */
 .landing {
-  background: #030712;
+  background: #020617;
 }
 
 .landing-blobs {
@@ -3892,5 +3892,38 @@ input::placeholder {
   .landing-step-card .landing-step-order {
     right: 8px;
     font-size: 88px;
+  }
+}
+/* ============================================================
+   丝滑渐变 —— 加大模糊 + 洋红润滑层，消除紫蓝交界的脏灰
+   ============================================================ */
+
+/* 模糊半径 120px -> 160px，让色块过渡如丝 */
+.blob {
+  filter: blur(160px);
+}
+
+/* 润滑层：深洋红 (#BE185D @ 0.2)，落在靛蓝与极光青的交界处，
+   补上紫→青之间缺失的中间色，避免两色直接混合出灰 */
+.blob-6 {
+  width: 40vw;
+  height: 40vw;
+  top: 30vw;
+  left: -6vw;
+  background: #be185d;
+  opacity: 0.2;
+  filter: blur(160px);
+  animation: blob-f 26s ease-in-out infinite alternate;
+}
+
+@keyframes blob-f {
+  0% { transform: translate3d(0, 0, 0) scale(1); }
+  100% { transform: translate3d(5vw, -4vw, 0) scale(1.12); }
+}
+
+@media (max-width: 640px) {
+  .blob,
+  .blob-6 {
+    filter: blur(110px);
   }
 }

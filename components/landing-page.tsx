@@ -63,6 +63,7 @@ export function LandingPage({ onEnter }: LandingPageProps) {
         <span className="blob blob-3" />
         <span className="blob blob-4" />
         <span className="blob blob-5" />
+        <span className="blob blob-6" />
       </div>
       <div className="landing-grain" aria-hidden="true" />
       <LandingConstellation />
