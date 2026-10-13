@@ -15,8 +15,8 @@ import * as THREE from "three";
  * 全程 AdditiveBlending：在深色底上自然发光，不需要后处理。
  */
 
-const SHELL_COUNT = 3200;
-const RING_COUNT = 900;
+const SHELL_COUNT = 4200;
+const RING_COUNT = 1200;
 const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
 
 /** 球面均匀分布，避免两极堆积 */
@@ -54,7 +54,7 @@ export function LandingParticleField() {
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.2;
+    renderer.toneMappingExposure = 1.32;
 
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 100);
@@ -86,10 +86,10 @@ export function LandingParticleField() {
     shellGeometry.setAttribute("position", new THREE.BufferAttribute(shellPositions, 3));
     shellGeometry.setAttribute("color", new THREE.BufferAttribute(shellColors, 3));
     const shellMaterial = new THREE.PointsMaterial({
-      size: 0.035,
+      size: 0.058,
       vertexColors: true,
       transparent: true,
-      opacity: 0.95,
+      opacity: 1,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
       sizeAttenuation: true,
@@ -103,8 +103,9 @@ export function LandingParticleField() {
     const wireGeometries: THREE.BufferGeometry[] = [];
     const wireMaterials: THREE.LineBasicMaterial[] = [];
     const wireSpecs: Array<{ r: number; color: string; opacity: number }> = [
-      { r: 1.16, color: "#a5f3fc", opacity: 0.32 },
-      { r: 0.82, color: "#c4b5fd", opacity: 0.26 },
+      { r: 1.3, color: "#a5f3fc", opacity: 0.55 },
+      { r: 1.02, color: "#2dd4bf", opacity: 0.42 },
+      { r: 0.74, color: "#c4b5fd", opacity: 0.5 },
     ];
     for (const spec of wireSpecs) {
       const base = new THREE.IcosahedronGeometry(spec.r, 1);
@@ -123,28 +124,41 @@ export function LandingParticleField() {
       base.dispose();
     }
 
-    // ---- 3) 内核 + 光晕 ----
-    const coreGeometry = new THREE.SphereGeometry(0.34, 40, 28);
+    // ---- 3) 内核 + 双层光晕 + 外层辉光 ----
+    const coreGeometry = new THREE.SphereGeometry(0.36, 44, 30);
     const coreMaterial = new THREE.MeshBasicMaterial({
       color: new THREE.Color("#7c3aed"),
       transparent: true,
-      opacity: 0.85,
+      opacity: 0.8,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
     });
     const core = new THREE.Mesh(coreGeometry, coreMaterial);
     group.add(core);
 
-    const haloGeometry = new THREE.SphereGeometry(0.6, 32, 22);
+    const haloGeometry = new THREE.SphereGeometry(0.74, 36, 24);
     const haloMaterial = new THREE.MeshBasicMaterial({
-      color: new THREE.Color("#4f46e5"),
+      color: new THREE.Color("#6d28d9"),
       transparent: true,
-      opacity: 0.22,
+      opacity: 0.3,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
     });
     const halo = new THREE.Mesh(haloGeometry, haloMaterial);
     group.add(halo);
+
+    // 再套一层巨大的极淡辉光，把整个结构"点亮"，避免整体发灰
+    const glowGeometry = new THREE.SphereGeometry(1.9, 40, 28);
+    const glowMaterial = new THREE.MeshBasicMaterial({
+      color: new THREE.Color("#2dd4bf"),
+      transparent: true,
+      opacity: 0.1,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      side: THREE.BackSide,
+    });
+    const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+    group.add(glow);
 
     // ---- 4) 倾斜光环 ----
     const ringPositions = new Float32Array(RING_COUNT * 3);
@@ -164,10 +178,10 @@ export function LandingParticleField() {
     ringGeometry.setAttribute("position", new THREE.BufferAttribute(ringPositions, 3));
     ringGeometry.setAttribute("color", new THREE.BufferAttribute(ringColors, 3));
     const ringMaterial = new THREE.PointsMaterial({
-      size: 0.028,
+      size: 0.05,
       vertexColors: true,
       transparent: true,
-      opacity: 0.75,
+      opacity: 1,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
       sizeAttenuation: true,
@@ -203,6 +217,9 @@ export function LandingParticleField() {
         shell.scale.setScalar(breathe);
         core.scale.setScalar(1 + Math.sin(t * 1.5) * 0.09);
         halo.scale.setScalar(1 + Math.sin(t * 0.9 + 1) * 0.07);
+        glow.scale.setScalar(1 + Math.sin(t * 0.5 + 2) * 0.05);
+        haloMaterial.opacity = 0.26 + Math.sin(t * 0.9 + 1) * 0.1;
+        coreMaterial.opacity = 0.72 + Math.sin(t * 1.5) * 0.14;
 
         // 分批做轻微径向扰动，产生"呼吸的星云"感，避免每帧全量重算
         const step = 7;
@@ -237,6 +254,8 @@ export function LandingParticleField() {
       coreMaterial.dispose();
       haloGeometry.dispose();
       haloMaterial.dispose();
+      glowGeometry.dispose();
+      glowMaterial.dispose();
       for (const g of wireGeometries) g.dispose();
       for (const m of wireMaterials) m.dispose();
       renderer.dispose();
