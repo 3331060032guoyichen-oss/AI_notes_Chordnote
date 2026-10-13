@@ -4,31 +4,35 @@ import { useEffect, useRef } from "react";
 import * as THREE from "three";
 
 /**
- * 抽象 3D 流体琉璃体 —— Hero 右侧的视觉焦点
+ * 抽象流体体 —— Hero 右侧的视觉焦点
  *
- * 材质参数按规范：transmission 1 / roughness 0.1 / thickness 1.5 / ior 1.5
- * 光照不用白光：一盏极光青、一盏幻彩紫，让表面反射出页面现有的极光色。
- * 不引入 @react-three/fiber，直接用项目已有的 three@0.186.0。
+ * 形态：球面被多频噪声揉成不规则有机体（不是数学曲线，避免"水管打结"的廉价感）
+ * 材质：液态金属（metalness 1 / roughness 0.08），靠极光环境贴图反射出青与紫。
+ *       不用 transmission —— 单遍折射会有补丁感，金属反射反而更干净、更"高级实验室"。
+ * 光照：不用白光，环境与点光源全部取自页面的极光色。
  */
+
+/** 多频正弦叠加，够便宜的伪噪声；用于把球面揉出有机起伏 */
+function organicRadius(x: number, y: number, z: number): number {
+  return (
+    Math.sin(x * 1.15 + 0.7) * Math.cos(y * 1.35 - 0.4) * Math.sin(z * 1.05 + 1.1) * 0.58 +
+    Math.sin(x * 2.3 - 1.2) * Math.sin(y * 2.1 + 0.6) * 0.28 +
+    Math.cos(x * 3.7 + y * 3.1 - z * 2.9) * 0.14
+  );
+}
+
 export function LandingFluidOrb() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
     const canvas: HTMLCanvasElement | null = canvasRef.current;
     if (!canvas) return;
-    // 固定为不可空的别名，供闭包内使用（TS 不会把收窄带进闭包）
     const canvasEl: HTMLCanvasElement = canvas;
 
     let renderer: THREE.WebGLRenderer;
     try {
-      renderer = new THREE.WebGLRenderer({
-        canvas: canvasEl,
-        alpha: true,
-        antialias: true,
-        powerPreference: "high-performance",
-      });
+      renderer = new THREE.WebGLRenderer({ canvas: canvasEl, alpha: true, antialias: true });
     } catch {
-      // WebGL 不可用：静默降级，CSS 光斑仍然撑住画面
       return;
     }
 
@@ -36,87 +40,92 @@ export function LandingFluidOrb() {
 
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.15;
+    renderer.toneMappingExposure = 1.05;
 
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 100);
-    camera.position.set(0, 0, 7.2);
+    const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 100);
+    camera.position.set(0, 0, 6.4);
 
-    // ---- 环境贴图：transmission 靠采样环境做折射 ----
-    // 没有环境时，透明 canvas 会采样到空背景，玻璃边缘出现黑边/脏斑。
-    // 这里用一个自建的极光色小场景烘焙环境：青 + 紫 + 蓝三块发光面。
+    // ---- 环境贴图：连续渐变 ----
+    // 用纯色平面会让金属映出硬边色块、且未覆盖方向反射成死黑。
+    // 改成一张 equirect 渐变贴图（上青 / 中深紫 / 下淡紫白），反射才柔和连续。
     const pmrem = new THREE.PMREMGenerator(renderer);
-    const envScene = new THREE.Scene();
-    const envGeo = new THREE.PlaneGeometry(8, 8);
-    const envFaces: Array<[string, [number, number, number]]> = [
-      ["#2dd4bf", [5, 2, -3]],
-      ["#c4b5fd", [-5, -1, 2]],
-      ["#3b82f6", [0, 5, 1]],
-      ["#f8fafc", [0, -5, -1]],
-    ];
-    for (const [color, pos] of envFaces) {
-      const face = new THREE.Mesh(envGeo, new THREE.MeshBasicMaterial({ color: new THREE.Color(color) }));
-      face.position.set(pos[0], pos[1], pos[2]);
-      face.lookAt(0, 0, 0);
-      envScene.add(face);
+    const envCanvas = document.createElement("canvas");
+    envCanvas.width = 512;
+    envCanvas.height = 256;
+    const envCtx = envCanvas.getContext("2d");
+    if (envCtx) {
+      const grad = envCtx.createLinearGradient(0, 0, 0, 256);
+      grad.addColorStop(0, "#2dd4bf");
+      grad.addColorStop(0.28, "#1d4ed8");
+      grad.addColorStop(0.52, "#0b1120");
+      grad.addColorStop(0.76, "#6d28d9");
+      grad.addColorStop(1, "#c4b5fd");
+      envCtx.fillStyle = grad;
+      envCtx.fillRect(0, 0, 512, 256);
+      // 几道柔和高光带，模拟真实摄影棚的灯箱
+      const soft = envCtx.createLinearGradient(0, 0, 512, 0);
+      soft.addColorStop(0, "rgba(255,255,255,0)");
+      soft.addColorStop(0.46, "rgba(255,255,255,0.55)");
+      soft.addColorStop(0.54, "rgba(255,255,255,0.55)");
+      soft.addColorStop(1, "rgba(255,255,255,0)");
+      envCtx.fillStyle = soft;
+      envCtx.fillRect(0, 40, 512, 52);
     }
-    const envTexture = pmrem.fromScene(envScene, 0.02).texture;
+    const envSource = new THREE.CanvasTexture(envCanvas);
+    envSource.mapping = THREE.EquirectangularReflectionMapping;
+    envSource.colorSpace = THREE.SRGBColorSpace;
+    const envTexture = pmrem.fromEquirectangular(envSource).texture;
     scene.environment = envTexture;
-    envGeo.dispose();
-    envScene.traverse((obj) => {
-      if (obj instanceof THREE.Mesh) {
-        (obj.material as THREE.Material).dispose();
-      }
-    });
+    envSource.dispose();
+    pmrem.dispose();
 
-    // ---- 主体：扭曲环面（液态琉璃感）----
-    // 关键约束：TorusKnot(p=2,q=3) 在管半径 > 约 0.2×环半径 时会自交穿模。
-    // 上一版 0.34/1.34 = 0.254 仍超标，环管互相穿刺。
-    // 现在 0.26/1.5 = 0.173，稳在临界值以下；分段拉到 320×64 保证曲面光滑。
-    const geometry = new THREE.TorusKnotGeometry(1.5, 0.26, 320, 64, 2, 3);
+    // ---- 主体：被噪声揉过的球 ----
+    // 必须用 SphereGeometry 而不是 IcosahedronGeometry：
+    // 后者的顶点按面独立，computeVertexNormals 只能得到平面法线，会整片变成低多边形刻面。
+    const geometry = new THREE.SphereGeometry(1.42, 160, 110);
+    const position = geometry.attributes.position as THREE.BufferAttribute;
+    const vertex = new THREE.Vector3();
+    for (let i = 0; i < position.count; i += 1) {
+      vertex.fromBufferAttribute(position, i);
+      const n = organicRadius(vertex.x, vertex.y, vertex.z);
+      vertex.multiplyScalar(1 + n * 0.19);
+      position.setXYZ(i, vertex.x, vertex.y, vertex.z);
+    }
+    position.needsUpdate = true;
+    geometry.computeVertexNormals();
+
     const material = new THREE.MeshPhysicalMaterial({
-      transmission: 1,
-      roughness: 0.1,
-      thickness: 1.5,
-      ior: 1.5,
-      metalness: 0,
-      clearcoat: 1,
-      clearcoatRoughness: 0.08,
-      color: new THREE.Color("#dbeafe"),
-      attenuationColor: new THREE.Color("#2dd4bf"),
-      attenuationDistance: 2.2,
-      envMapIntensity: 1.35,
-      transparent: true,
-      side: THREE.FrontSide,
-      depthWrite: false,
+      color: new THREE.Color("#cbd5e1"),
+      metalness: 0.96,
+      roughness: 0.16,
+      envMapIntensity: 1.5,
+      clearcoat: 0.6,
+      clearcoatRoughness: 0.15,
     });
-    const knot = new THREE.Mesh(geometry, material);
-    scene.add(knot);
+    const blob = new THREE.Mesh(geometry, material);
+    blob.rotation.set(0.4, 0.9, 0.15);
+    scene.add(blob);
 
-    // 内层核：缩到 0.36 并保持在环的孔洞里。
-    // 环不自交之后，它不会再从管与管的缝隙间挤出来。
-    const coreGeometry = new THREE.IcosahedronGeometry(0.36, 3);
-    const coreMaterial = new THREE.MeshStandardMaterial({
-      color: new THREE.Color("#7c3aed"),
-      emissive: new THREE.Color("#4f46e5"),
-      emissiveIntensity: 0.6,
-      roughness: 0.4,
-      metalness: 0.3,
+    // 内部的紫色发光核，透过金属的缝隙边缘透出一点暖意
+    const coreGeometry = new THREE.IcosahedronGeometry(1.02, 2);
+    const coreMaterial = new THREE.MeshBasicMaterial({
+      color: new THREE.Color("#4c1d95"),
+      transparent: true,
+      opacity: 0.28,
     });
     const core = new THREE.Mesh(coreGeometry, coreMaterial);
+    core.rotation.copy(blob.rotation);
     scene.add(core);
 
-    // ---- 光照：不用白光 ----
-    const teal = new THREE.PointLight(new THREE.Color("#2dd4bf"), 90, 24);
-    teal.position.set(3.4, 2.4, 3.2);
-    const violet = new THREE.PointLight(new THREE.Color("#c4b5fd"), 80, 24);
-    violet.position.set(-3.6, -1.6, 2.4);
-    const rim = new THREE.PointLight(new THREE.Color("#3b82f6"), 45, 20);
-    rim.position.set(0, 3.4, -3);
-    scene.add(teal, violet, rim);
-    scene.add(new THREE.AmbientLight(new THREE.Color("#94a3b8"), 0.5));
+    // ---- 光照 ----
+    const teal = new THREE.PointLight(new THREE.Color("#2dd4bf"), 60, 26);
+    teal.position.set(3.6, 2.6, 3.4);
+    const violet = new THREE.PointLight(new THREE.Color("#a78bfa"), 52, 26);
+    violet.position.set(-3.8, -1.8, 2.6);
+    scene.add(teal, violet);
+    scene.add(new THREE.AmbientLight(new THREE.Color("#64748b"), 0.4));
 
-    // ---- 尺寸 ----
     function resize() {
       const rect = canvasEl.getBoundingClientRect();
       const w = Math.max(1, rect.width);
@@ -126,26 +135,26 @@ export function LandingFluidOrb() {
       camera.updateProjectionMatrix();
     }
     resize();
-
     const observer = new ResizeObserver(resize);
     observer.observe(canvasEl);
 
-    // ---- 动画：极慢自转 + 轻微浮动 ----
     let frame = 0;
     const clock = new THREE.Clock();
 
     function tick() {
       const t = clock.getElapsedTime();
       if (!reduced) {
-        knot.rotation.y += 0.002;
-        knot.rotation.x += 0.0007;
-        core.rotation.y -= 0.0035;
-        core.rotation.z += 0.0016;
-        const float = Math.sin(t * 0.5) * 0.14;
-        knot.position.y = float;
-        core.position.y = float;
-        teal.position.x = 3.4 + Math.sin(t * 0.28) * 0.8;
-        violet.position.y = -1.6 + Math.cos(t * 0.24) * 0.8;
+        blob.rotation.y += 0.0016;
+        blob.rotation.x += 0.0005;
+        core.rotation.copy(blob.rotation);
+        // 极缓的呼吸，让它像液态而非固体
+        const breathe = 1 + Math.sin(t * 0.42) * 0.022;
+        blob.scale.setScalar(breathe);
+        core.scale.setScalar(breathe);
+        blob.position.y = Math.sin(t * 0.36) * 0.1;
+        core.position.y = blob.position.y;
+        teal.position.x = 3.6 + Math.sin(t * 0.26) * 0.9;
+        violet.position.y = -1.8 + Math.cos(t * 0.22) * 0.9;
       }
       renderer.render(scene, camera);
       frame = window.requestAnimationFrame(tick);
@@ -160,7 +169,6 @@ export function LandingFluidOrb() {
       coreGeometry.dispose();
       coreMaterial.dispose();
       envTexture.dispose();
-      pmrem.dispose();
       renderer.dispose();
     };
   }, []);
