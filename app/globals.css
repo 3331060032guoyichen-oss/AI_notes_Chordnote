@@ -260,6 +260,9 @@ textarea:focus-visible {
   min-height: calc(100dvh - 76px);
   margin: 0 auto;
   padding: clamp(48px, 9vh, 128px) var(--landing-gutter) clamp(64px, 11vh, 150px);
+  /* 轻微视差：内容比滚动慢一点，制造纵深 */
+  transform: translateY(calc(var(--scroll-progress) * -28px));
+  will-change: transform;
 }
 
 .landing-eyebrow {
@@ -593,6 +596,10 @@ textarea:focus-visible {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+
+  .landing-hero {
+    transform: none;
   }
 }
 
