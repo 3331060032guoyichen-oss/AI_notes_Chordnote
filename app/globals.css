@@ -383,14 +383,15 @@ textarea:focus-visible {
 }
 
 .landing-facts b {
-  color: var(--v-violet);
+  /* 冰蓝：与标题的珍珠渐变同源，在暗底和青色极光上都够亮 */
+  color: #a5f3fc;
   font-size: 13px;
   font-weight: 750;
   letter-spacing: 0.04em;
 }
 
 .landing-facts span {
-  color: var(--v-quiet);
+  color: #cbd5e1;
   font-size: 13px;
 }
 
