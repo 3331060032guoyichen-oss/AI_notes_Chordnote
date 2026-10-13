@@ -46,3 +46,7 @@ next-env.d.ts
 
 # TypeScript incremental build cache
 tsconfig.tsbuildinfo
+
+# Local scratch（截图、工具输出，不进版本库）
+.tmp/
+.pnpm-store/

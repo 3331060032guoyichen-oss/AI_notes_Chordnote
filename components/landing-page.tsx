@@ -1,143 +1,207 @@
 "use client";
 
-import Image from "next/image";
-import { useRef, useState } from "react";
-import { LandingCrystalScene } from "./landing-crystal-scene";
-
-const LANDING_CONFIG = {
-  wheelDistance: 96,
-  touchDistance: 48,
-  onlyOnce: true,
-} as const;
+import { useEffect, useRef } from "react";
+import { LandingKnowledgeNetwork } from "./landing-knowledge-network";
 
 type LandingPageProps = {
   onEnter: () => void;
 };
 
+const FEATURES = [
+  {
+    index: "01",
+    title: "原始记录",
+    body: "用户可改，AI 不可改。你的原话永远是第一手材料，任何整理都不能篡改它。",
+  },
+  {
+    index: "02",
+    title: "AI 提议，你确认",
+    body: "AI 只产出草稿与关联建议，落库与否由你决定 —— 网络里不会出现你没点头的东西。",
+  },
+  {
+    index: "03",
+    title: "双向链接",
+    body: "知识页彼此引用，反向链接自动浮现。谁引用过它，一眼就看见。",
+  },
+  {
+    index: "04",
+    title: "看见网络",
+    body: "图谱从真实的关联里长出来，节点大小跟着被引用次数走，缺口一眼看得到。",
+  },
+] as const;
+
+const STEPS = [
+  { order: "1", title: "留下原话", body: "课上怎么记就怎么写，不需要先想好分类。" },
+  { order: "2", title: "让 AI 整理", body: "它读你已有的库，提出归纳页与可能的关系。" },
+  { order: "3", title: "你确认", body: "点下接受的那一刻，关系才真正成立。" },
+] as const;
+
 export function LandingPage({ onEnter }: LandingPageProps) {
-  const [revealed, setRevealed] = useState(false);
-  const pageRef = useRef<HTMLElement>(null);
-  const wheelDistance = useRef(0);
-  const touchStartY = useRef<number | null>(null);
+  const pageRef = useRef<HTMLElement | null>(null);
+  const progressRef = useRef(0);
 
-  function paintProgress(value: number) {
-    const progress = Math.min(Math.max(value, 0), 1);
-    pageRef.current?.style.setProperty("--reveal-progress", progress.toFixed(3));
-    pageRef.current?.setAttribute("data-reveal-progress", progress.toFixed(2));
-  }
+  // 用滚动进度驱动 3D 网络的亮度：越往下读，网络越亮
+  useEffect(() => {
+    function onScroll() {
+      const span = Math.max(1, window.innerHeight * 0.9);
+      const progress = Math.min(window.scrollY / span, 1);
+      progressRef.current = progress;
+      pageRef.current?.style.setProperty("--scroll-progress", progress.toFixed(3));
+    }
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
 
-  function reveal() {
-    if (LANDING_CONFIG.onlyOnce && revealed) return;
-    paintProgress(1);
-    setRevealed(true);
-  }
+  // 区块进入视口时淡入上移，让长页读起来有节奏
+  useEffect(() => {
+    const targets = pageRef.current?.querySelectorAll<HTMLElement>(".landing-reveal");
+    if (!targets || targets.length === 0) return;
 
-  function handleWheel(event: React.WheelEvent<HTMLElement>) {
-    if (revealed) return;
-    wheelDistance.current += Math.abs(event.deltaY);
-    const progress = wheelDistance.current / LANDING_CONFIG.wheelDistance;
-    paintProgress(progress);
-    if (progress >= 1) reveal();
-  }
+    if (!("IntersectionObserver" in window)) {
+      targets.forEach((element) => element.classList.add("is-visible"));
+      return;
+    }
 
-  function handleTouchStart(event: React.TouchEvent<HTMLElement>) {
-    touchStartY.current = event.touches[0]?.clientY ?? null;
-  }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting) return;
+          entry.target.classList.add("is-visible");
+          observer.unobserve(entry.target);
+        });
+      },
+      { threshold: 0.12, rootMargin: "0px 0px -60px 0px" },
+    );
 
-  function handleTouchMove(event: React.TouchEvent<HTMLElement>) {
-    if (revealed || touchStartY.current === null) return;
-    const currentY = event.touches[0]?.clientY;
-    if (currentY === undefined) return;
-    const progress = Math.abs(currentY - touchStartY.current) / LANDING_CONFIG.touchDistance;
-    paintProgress(progress);
-    if (progress >= 1) reveal();
-  }
-
-  function handlePointerMove(event: React.PointerEvent<HTMLElement>) {
-    if (event.pointerType === "touch") return;
-    const bounds = event.currentTarget.getBoundingClientRect();
-    const x = Math.min(Math.max((event.clientX - bounds.left) / bounds.width, 0), 1);
-    const y = Math.min(Math.max((event.clientY - bounds.top) / bounds.height, 0), 1);
-    const style = event.currentTarget.style;
-
-    style.setProperty("--light-x", `${(x * bounds.width).toFixed(1)}px`);
-    style.setProperty("--light-y", `${(y * bounds.height).toFixed(1)}px`);
-    style.setProperty("--light-opacity", "0.42");
-    style.setProperty("--art-x", `${((0.5 - x) * 14).toFixed(2)}px`);
-    style.setProperty("--art-y", `${((0.5 - y) * 10).toFixed(2)}px`);
-  }
-
-  function resetPointerDepth(event: React.PointerEvent<HTMLElement>) {
-    const style = event.currentTarget.style;
-    style.setProperty("--light-opacity", "0");
-    style.setProperty("--art-x", "0px");
-    style.setProperty("--art-y", "0px");
-  }
+    targets.forEach((element) => observer.observe(element));
+    return () => observer.disconnect();
+  }, []);
 
   return (
-    <main
-      ref={pageRef}
-      className={`landing-page${revealed ? " is-revealed" : ""}`}
-      data-reveal-progress="0.00"
-      onWheel={handleWheel}
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={() => { touchStartY.current = null; }}
-      onPointerMove={handlePointerMove}
-      onPointerLeave={resetPointerDepth}
-      onKeyDown={(event) => {
-        if (!revealed && (event.key === "Enter" || event.key === " ")) {
-          event.preventDefault();
-          reveal();
-        }
-      }}
-      aria-describedby="landing-instruction"
-      tabIndex={0}
-    >
-      <Image
-        className="landing-art"
-        src="/landing-knowledge-still-life-lit-v2.png"
-        alt="笔记纸、线与节点组成的知识网络"
-        fill
-        priority
-        sizes="100vw"
-      />
-      <LandingCrystalScene revealed={revealed} />
-      <div className="landing-wash" aria-hidden="true" />
-      <div className="landing-depth-light" aria-hidden="true" />
+    <main ref={pageRef} className="landing" data-reveal-progress="0.00">
+      <div className="landing-backdrop" aria-hidden="true" />
+      <LandingKnowledgeNetwork progressRef={progressRef} className="landing-network" />
 
-      <header className="landing-nav">
-        <div className="landing-brand"><span>AN</span><strong>AI Notes</strong></div>
-        <div className="landing-console-state" aria-label="本地编辑台已就绪">
-          <span className="landing-console-signal" aria-hidden="true" />
-          <span>本地编辑台</span>
-          <strong>就绪</strong>
-        </div>
-      </header>
+      <div className="landing-content">
+        <header className="landing-masthead">
+          <div className="landing-masthead-inner">
+            <div className="landing-brand">
+              <span className="landing-brand-mark">AN</span>
+              <strong>AI Notes</strong>
+            </div>
+            <p className="landing-edition">概念验证 · 第 001 期</p>
+            <div className="landing-status">
+              <span className="landing-status-dot" aria-hidden="true" />
+              <span>本地编辑台</span>
+              <strong>就绪</strong>
+            </div>
+          </div>
+        </header>
 
-      <section className="landing-intro" aria-label="AI Notes 简介">
-        <p className="landing-kicker">你的私人知识编辑室</p>
-        <h1>先留下原话，<br /><em>再形成自己的<br className="landing-mobile-break" />理解。</em></h1>
-        <p className="landing-summary">AI 帮你整理与连接，但每一次收录都由你决定。</p>
-      </section>
+        <section className="landing-hero" aria-label="AI Notes 简介">
+          <p className="landing-eyebrow">面向大学生的 AI 学习知识系统</p>
+          <h1 className="landing-title">
+            笔记不该是
+            <br />
+            一座<em>孤岛</em>。
+          </h1>
+          <p className="landing-lede">
+            课堂上的原话先落进「原始记录」，AI 负责整理与提议，
+            <br className="landing-br-wide" />
+            你点头之后，它才成为知识网络里的一页。
+          </p>
+          <div className="landing-cta">
+            <button className="landing-enter" type="button" data-sound="press" onClick={onEnter}>
+              进入编辑室
+              <span aria-hidden="true">→</span>
+            </button>
+            <a className="landing-ghost" href="#how">
+              看它如何生长
+              <span aria-hidden="true">↓</span>
+            </a>
+          </div>
+          <ul className="landing-facts">
+            <li>
+              <b>Raw</b>
+              <span>原始记录</span>
+            </li>
+            <li>
+              <b>Knowledge</b>
+              <span>知识页</span>
+            </li>
+            <li>
+              <b>Relation</b>
+              <span>关联</span>
+            </li>
+            <li>
+              <b>Graph</b>
+              <span>图谱</span>
+            </li>
+          </ul>
+        </section>
 
-      <div className="landing-gesture" aria-hidden={revealed}>
-        <button className="landing-reveal-control" type="button" data-sound="select" tabIndex={revealed ? -1 : 0} onClick={reveal} aria-label="打开编辑室">
-          <span className="landing-reveal-key" aria-hidden="true">按下</span>
-          <span><strong id="landing-instruction">打开编辑室</strong><small>也可以向上滑动</small></span>
-        </button>
+        <section className="landing-section" id="how" aria-label="四个特点">
+          <div className="landing-section-head landing-reveal">
+            <h2>
+              四个特点，
+              <br />
+              笔记自成体系。
+            </h2>
+            <p className="landing-section-label">02 — 特点</p>
+          </div>
+          <div className="landing-features landing-reveal">
+            {FEATURES.map((feature) => (
+              <article className="landing-feature" key={feature.index}>
+                <span className="landing-feature-index">{feature.index}</span>
+                <h3>{feature.title}</h3>
+                <p>{feature.body}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="landing-section landing-section-steps" aria-label="工作方式">
+          <div className="landing-section-head landing-reveal">
+            <h2>
+              三步，
+              <br />
+              让网络慢慢长出来。
+            </h2>
+            <p className="landing-section-label">03 — 工作方式</p>
+          </div>
+          <div className="landing-steps landing-reveal">
+            {STEPS.map((step, index) => (
+              <div
+                className={`landing-step${index === STEPS.length - 1 ? " is-accent" : ""}`}
+                key={step.order}
+              >
+                <span className="landing-step-order">{step.order}</span>
+                <h3>{step.title}</h3>
+                <p>{step.body}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="landing-closing landing-reveal" aria-label="开始使用">
+          <h2>
+            下一次考试前，
+            <br />
+            你的笔记已经连成网。
+          </h2>
+          <button className="landing-enter is-inverse" type="button" data-sound="press" onClick={onEnter}>
+            进入编辑室
+            <span aria-hidden="true">→</span>
+          </button>
+          <p className="landing-note">目前为概念验证版本，功能与界面随测试反馈持续调整。</p>
+        </section>
+
+        <footer className="landing-colophon">
+          <span>© AI Notes · 概念验证</span>
+          <span>AI 只提议，你确认，才写入你的网络</span>
+        </footer>
       </div>
-
-      <section className="landing-welcome" aria-live="polite" aria-hidden={!revealed}>
-        <div>
-          <span className="welcome-mark">编辑室已就绪</span>
-          <h2>从一段原话开始。</h2>
-          <p>把材料留下，审阅整理建议，再决定什么值得成为你的知识。</p>
-        </div>
-        <button type="button" tabIndex={revealed ? 0 : -1} data-sound="press" onClick={onEnter}>开始整理</button>
-      </section>
-
-      <div className="landing-frame" aria-hidden="true" />
     </main>
   );
 }
