@@ -10,7 +10,7 @@ import { useEffect, useRef } from "react";
  * 跨簇之间也会连少量长线，读起来像分类之间的交叉引用。
  */
 
-const NODE_COUNT = 48;
+const NODE_COUNT = 24; // 48 → 24（减少 50%），退居为氛围纹理
 const LINK_DISTANCE = 0.17; // 归一化距离阈值
 const CROSS_LINK_DISTANCE = 0.3; // 跨簇长线阈值
 const COLORS = ["#2dd4bf", "#a5f3fc", "#c4b5fd"] as const;
@@ -55,7 +55,7 @@ function makeNodes(): StarNode[] {
       baseX: x,
       baseY: y,
       cluster,
-      radius: 0.9 + Math.random() * 1.5,
+      radius: 1 + Math.random() * 0.5, // 1.0 ~ 1.5px 星尘
       color: COLORS[i % COLORS.length],
       phase: Math.random() * Math.PI * 2,
       speed: 0.25 + Math.random() * 0.5,
@@ -155,8 +155,8 @@ export function LandingConstellation() {
         node.y = py + node.offsetY;
       }
 
-      // 连线：细、白、低透明
-      ctx.lineWidth = 0.6;
+      // 连线：极细极淡，只作为「有结构」的暗示
+      ctx.lineWidth = 0.5;
       for (let i = 0; i < nodes.length; i += 1) {
         const a = nodes[i];
         for (let j = i + 1; j < nodes.length; j += 1) {
@@ -168,8 +168,8 @@ export function LandingConstellation() {
           const limit = sameCluster ? LINK_DISTANCE : CROSS_LINK_DISTANCE;
           if (dist > limit) continue;
           const fade = 1 - dist / limit;
-          // 跨簇的线更弱，读起来像「弱关联」
-          const alpha = (sameCluster ? 0.1 : 0.045) * fade;
+          // 跨簇的线更弱，读起来像「弱关联」；两者都在 0.05 以下
+          const alpha = (sameCluster ? 0.035 : 0.012) * fade;
           ctx.strokeStyle = `rgba(255, 255, 255, ${alpha.toFixed(3)})`;
           ctx.beginPath();
           ctx.moveTo(a.x * width, a.y * height);
@@ -178,25 +178,26 @@ export function LandingConstellation() {
         }
       }
 
-      // 节点：呼吸闪烁
+      // 节点：星尘式微光，透明度 0.08 ~ 0.15
       for (const node of nodes) {
         const breathe = reduced
-          ? 0.55
-          : 0.3 + 0.25 * (1 + Math.sin(t * node.speed + node.phase));
+          ? 0.12
+          : 0.08 + 0.035 * (1 + Math.sin(t * node.speed + node.phase));
         const cx = node.x * width;
         const cy = node.y * height;
 
-        // 外光晕
-        const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, node.radius * 5);
-        glow.addColorStop(0, `${node.color}${Math.round(breathe * 160).toString(16).padStart(2, "0")}`);
+        // 极弱外光晕
+        const halo = node.radius * 3.4;
+        const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, halo);
+        glow.addColorStop(0, `${node.color}${Math.round(breathe * 110).toString(16).padStart(2, "0")}`);
         glow.addColorStop(1, "rgba(0,0,0,0)");
         ctx.fillStyle = glow;
         ctx.beginPath();
-        ctx.arc(cx, cy, node.radius * 5, 0, Math.PI * 2);
+        ctx.arc(cx, cy, halo, 0, Math.PI * 2);
         ctx.fill();
 
         // 核心
-        ctx.globalAlpha = Math.min(1, breathe + 0.2);
+        ctx.globalAlpha = breathe;
         ctx.fillStyle = node.color;
         ctx.beginPath();
         ctx.arc(cx, cy, node.radius, 0, Math.PI * 2);
