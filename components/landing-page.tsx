@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { LandingKnowledgeNetwork } from "./landing-knowledge-network";
 
 type LandingPageProps = {
   onEnter: () => void;
@@ -12,21 +11,25 @@ const FEATURES = [
     index: "01",
     title: "原始记录",
     body: "用户可改，AI 不可改。你的原话永远是第一手材料，任何整理都不能篡改它。",
+    glyph: "✎",
   },
   {
     index: "02",
     title: "AI 提议，你确认",
     body: "AI 只产出草稿与关联建议，落库与否由你决定 —— 网络里不会出现你没点头的东西。",
+    glyph: "◈",
   },
   {
     index: "03",
     title: "双向链接",
     body: "知识页彼此引用，反向链接自动浮现。谁引用过它，一眼就看见。",
+    glyph: "⇄",
   },
   {
     index: "04",
     title: "看见网络",
     body: "图谱从真实的关联里长出来，节点大小跟着被引用次数走，缺口一眼看得到。",
+    glyph: "◉",
   },
 ] as const;
 
@@ -38,14 +41,12 @@ const STEPS = [
 
 export function LandingPage({ onEnter }: LandingPageProps) {
   const pageRef = useRef<HTMLElement | null>(null);
-  const progressRef = useRef(0);
 
-  // 用滚动进度驱动 3D 网络的亮度：越往下读，网络越亮
+  // 滚动进度：驱动玻璃卡的浮起与光斑位移
   useEffect(() => {
     function onScroll() {
-      const span = Math.max(1, window.innerHeight * 0.9);
+      const span = Math.max(1, window.innerHeight);
       const progress = Math.min(window.scrollY / span, 1);
-      progressRef.current = progress;
       pageRef.current?.style.setProperty("--scroll-progress", progress.toFixed(3));
     }
     onScroll();
@@ -53,72 +54,50 @@ export function LandingPage({ onEnter }: LandingPageProps) {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  // 区块进入视口时淡入上移，让长页读起来有节奏
-  useEffect(() => {
-    const targets = pageRef.current?.querySelectorAll<HTMLElement>(".landing-reveal");
-    if (!targets || targets.length === 0) return;
-
-    if (!("IntersectionObserver" in window)) {
-      targets.forEach((element) => element.classList.add("is-visible"));
-      return;
-    }
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (!entry.isIntersecting) return;
-          entry.target.classList.add("is-visible");
-          observer.unobserve(entry.target);
-        });
-      },
-      { threshold: 0.12, rootMargin: "0px 0px -60px 0px" },
-    );
-
-    targets.forEach((element) => observer.observe(element));
-    return () => observer.disconnect();
-  }, []);
-
   return (
-    <main ref={pageRef} className="landing" data-reveal-progress="0.00">
-      <div className="landing-backdrop" aria-hidden="true" />
-      <LandingKnowledgeNetwork progressRef={progressRef} className="landing-network" />
+    <main ref={pageRef} className="landing">
+      <div className="landing-blobs" aria-hidden="true" />
+      <div className="landing-grain" aria-hidden="true" />
 
       <div className="landing-content">
-        <header className="landing-masthead">
-          <div className="landing-masthead-inner">
+        <header className="landing-nav">
+          <div className="landing-nav-inner">
             <div className="landing-brand">
               <span className="landing-brand-mark">AN</span>
               <strong>AI Notes</strong>
             </div>
-            <p className="landing-edition">概念验证 · 第 001 期</p>
-            <div className="landing-status">
-              <span className="landing-status-dot" aria-hidden="true" />
-              <span>本地编辑台</span>
-              <strong>就绪</strong>
-            </div>
+            <nav className="landing-links" aria-label="页面导航">
+              <a href="#features">特点</a>
+              <a href="#flow">工作方式</a>
+            </nav>
+            <button className="landing-nav-cta" type="button" data-sound="press" onClick={onEnter}>
+              进入编辑室
+            </button>
           </div>
         </header>
 
         <section className="landing-hero" aria-label="AI Notes 简介">
-          <p className="landing-eyebrow">面向大学生的 AI 学习知识系统</p>
+          <p className="landing-eyebrow">
+            <span className="landing-eyebrow-dot" aria-hidden="true" />
+            面向大学生的 AI 学习知识系统
+          </p>
           <h1 className="landing-title">
             笔记不该是
             <br />
-            一座<em>孤岛</em>。
+            <span className="landing-title-gradient">一座孤岛</span>。
           </h1>
           <p className="landing-lede">
             课堂上的原话先落进「原始记录」，AI 负责整理与提议，
             <br className="landing-br-wide" />
             你点头之后，它才成为知识网络里的一页。
           </p>
-          <div className="landing-cta">
-            <button className="landing-enter" type="button" data-sound="press" onClick={onEnter}>
+          <div className="landing-actions">
+            <button className="landing-primary" type="button" data-sound="press" onClick={onEnter}>
               进入编辑室
               <span aria-hidden="true">→</span>
             </button>
-            <a className="landing-ghost" href="#how">
+            <a className="landing-secondary" href="#features">
               看它如何生长
-              <span aria-hidden="true">↓</span>
             </a>
           </div>
           <ul className="landing-facts">
@@ -141,8 +120,8 @@ export function LandingPage({ onEnter }: LandingPageProps) {
           </ul>
         </section>
 
-        <section className="landing-section" id="how" aria-label="四个特点">
-          <div className="landing-section-head landing-reveal">
+        <section className="landing-section" id="features" aria-label="四个特点">
+          <div className="landing-section-head">
             <h2>
               四个特点，
               <br />
@@ -150,10 +129,13 @@ export function LandingPage({ onEnter }: LandingPageProps) {
             </h2>
             <p className="landing-section-label">02 — 特点</p>
           </div>
-          <div className="landing-features landing-reveal">
+          <div className="landing-cards">
             {FEATURES.map((feature) => (
-              <article className="landing-feature" key={feature.index}>
-                <span className="landing-feature-index">{feature.index}</span>
+              <article className="landing-card" key={feature.index}>
+                <span className="landing-card-glyph" aria-hidden="true">
+                  {feature.glyph}
+                </span>
+                <span className="landing-card-index">{feature.index}</span>
                 <h3>{feature.title}</h3>
                 <p>{feature.body}</p>
               </article>
@@ -161,8 +143,8 @@ export function LandingPage({ onEnter }: LandingPageProps) {
           </div>
         </section>
 
-        <section className="landing-section landing-section-steps" aria-label="工作方式">
-          <div className="landing-section-head landing-reveal">
+        <section className="landing-section" id="flow" aria-label="工作方式">
+          <div className="landing-section-head">
             <h2>
               三步，
               <br />
@@ -170,12 +152,9 @@ export function LandingPage({ onEnter }: LandingPageProps) {
             </h2>
             <p className="landing-section-label">03 — 工作方式</p>
           </div>
-          <div className="landing-steps landing-reveal">
-            {STEPS.map((step, index) => (
-              <div
-                className={`landing-step${index === STEPS.length - 1 ? " is-accent" : ""}`}
-                key={step.order}
-              >
+          <div className="landing-steps">
+            {STEPS.map((step) => (
+              <div className="landing-step-card" key={step.order}>
                 <span className="landing-step-order">{step.order}</span>
                 <h3>{step.title}</h3>
                 <p>{step.body}</p>
@@ -184,17 +163,19 @@ export function LandingPage({ onEnter }: LandingPageProps) {
           </div>
         </section>
 
-        <section className="landing-closing landing-reveal" aria-label="开始使用">
-          <h2>
-            下一次考试前，
-            <br />
-            你的笔记已经连成网。
-          </h2>
-          <button className="landing-enter is-inverse" type="button" data-sound="press" onClick={onEnter}>
-            进入编辑室
-            <span aria-hidden="true">→</span>
-          </button>
-          <p className="landing-note">目前为概念验证版本，功能与界面随测试反馈持续调整。</p>
+        <section className="landing-closing" aria-label="开始使用">
+          <div className="landing-closing-card">
+            <h2>
+              下一次考试前，
+              <br />
+              你的笔记已经连成网。
+            </h2>
+            <button className="landing-primary" type="button" data-sound="press" onClick={onEnter}>
+              进入编辑室
+              <span aria-hidden="true">→</span>
+            </button>
+            <p className="landing-note">概念验证版本，功能与界面随测试反馈持续调整。</p>
+          </div>
         </section>
 
         <footer className="landing-colophon">
