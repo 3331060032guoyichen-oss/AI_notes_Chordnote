@@ -42,8 +42,37 @@ export function LandingFluidOrb() {
     const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 100);
     camera.position.set(0, 0, 6.2);
 
+    // ---- 环境贴图：transmission 靠采样环境做折射 ----
+    // 没有环境时，透明 canvas 会采样到空背景，玻璃边缘出现黑边/脏斑。
+    // 这里用一个自建的极光色小场景烘焙环境：青 + 紫 + 蓝三块发光面。
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    const envScene = new THREE.Scene();
+    const envGeo = new THREE.PlaneGeometry(8, 8);
+    const envFaces: Array<[string, [number, number, number]]> = [
+      ["#2dd4bf", [5, 2, -3]],
+      ["#c4b5fd", [-5, -1, 2]],
+      ["#3b82f6", [0, 5, 1]],
+      ["#f8fafc", [0, -5, -1]],
+    ];
+    for (const [color, pos] of envFaces) {
+      const face = new THREE.Mesh(envGeo, new THREE.MeshBasicMaterial({ color: new THREE.Color(color) }));
+      face.position.set(pos[0], pos[1], pos[2]);
+      face.lookAt(0, 0, 0);
+      envScene.add(face);
+    }
+    const envTexture = pmrem.fromScene(envScene, 0.02).texture;
+    scene.environment = envTexture;
+    envGeo.dispose();
+    envScene.traverse((obj) => {
+      if (obj instanceof THREE.Mesh) {
+        (obj.material as THREE.Material).dispose();
+      }
+    });
+
     // ---- 主体：扭曲环面（液态琉璃感）----
-    const geometry = new THREE.TorusKnotGeometry(1.32, 0.44, 180, 28, 2, 3);
+    // 管径 0.44 -> 0.34、分段 180x28 -> 288x48：
+    // 细管 + 高分段消除自交处的穿插与自转时的高光跳变。
+    const geometry = new THREE.TorusKnotGeometry(1.34, 0.34, 288, 48, 2, 3);
     const material = new THREE.MeshPhysicalMaterial({
       transmission: 1,
       roughness: 0.1,
@@ -55,21 +84,23 @@ export function LandingFluidOrb() {
       color: new THREE.Color("#dbeafe"),
       attenuationColor: new THREE.Color("#2dd4bf"),
       attenuationDistance: 2.2,
+      envMapIntensity: 1.35,
       transparent: true,
+      side: THREE.FrontSide,
+      depthWrite: false,
     });
     const knot = new THREE.Mesh(geometry, material);
     scene.add(knot);
 
-    // 内层核：让玻璃里透出一点紫，避免整块太"空"
-    const coreGeometry = new THREE.IcosahedronGeometry(0.62, 3);
+    // 内层核：让玻璃里透出一点紫。缩到 0.5 并关掉透明，
+    // 避免它穿过外面那层玻璃时产生半透明排序的闪烁。
+    const coreGeometry = new THREE.IcosahedronGeometry(0.5, 3);
     const coreMaterial = new THREE.MeshStandardMaterial({
       color: new THREE.Color("#7c3aed"),
       emissive: new THREE.Color("#4f46e5"),
-      emissiveIntensity: 0.55,
-      roughness: 0.35,
-      metalness: 0.4,
-      transparent: true,
-      opacity: 0.85,
+      emissiveIntensity: 0.6,
+      roughness: 0.4,
+      metalness: 0.3,
     });
     const core = new THREE.Mesh(coreGeometry, coreMaterial);
     scene.add(core);
@@ -127,6 +158,8 @@ export function LandingFluidOrb() {
       material.dispose();
       coreGeometry.dispose();
       coreMaterial.dispose();
+      envTexture.dispose();
+      pmrem.dispose();
       renderer.dispose();
     };
   }, []);

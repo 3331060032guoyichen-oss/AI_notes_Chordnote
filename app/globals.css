@@ -3658,8 +3658,8 @@ input::placeholder {
 .shard-note {
   --shard-tilt: -5deg;
 
-  top: 16%;
-  right: clamp(24px, 6vw, 120px);
+  top: 15%;
+  right: clamp(300px, 23vw, 420px);
   width: 168px;
   transform: rotate(-5deg);
   animation-delay: 0s;
@@ -3669,8 +3669,8 @@ input::placeholder {
 .shard-ai {
   --shard-tilt: 4deg;
 
-  top: 42%;
-  right: clamp(48px, 12vw, 230px);
+  top: 41%;
+  right: clamp(340px, 27vw, 470px);
   width: 188px;
   background: linear-gradient(160deg, rgb(45 212 191 / 16%), rgb(124 58 237 / 12%));
   box-shadow:
@@ -3694,8 +3694,8 @@ input::placeholder {
 .shard-graph {
   --shard-tilt: -3deg;
 
-  top: 66%;
-  right: clamp(20px, 4vw, 90px);
+  top: 65%;
+  right: clamp(288px, 21vw, 396px);
   width: 104px;
   transform: rotate(-3deg);
   animation-delay: 2.6s;
@@ -3997,12 +3997,12 @@ input::placeholder {
 .landing-orb-slot {
   position: absolute;
   z-index: 0;
-  top: 44%;
-  right: clamp(-90px, -2vw, 10px);
-  width: clamp(220px, 24vw, 400px);
-  height: clamp(220px, 24vw, 400px);
+  top: 46%;
+  right: clamp(-140px, -6vw, -40px);
+  width: clamp(260px, 26vw, 430px);
+  height: clamp(260px, 26vw, 430px);
   transform: translateY(-50%);
-  opacity: 0.9;
+  opacity: 0.92;
   pointer-events: none;
 }
 
