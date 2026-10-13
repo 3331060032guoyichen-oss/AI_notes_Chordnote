@@ -3732,3 +3732,96 @@ input::placeholder {
     animation: none;
   }
 }
+/* ============================================================
+   高级毛玻璃光影 —— 消灭塑料感
+   inset 顶部高光 + 大范围环境遮蔽 + 渐变边框 + 更通透的底
+   ============================================================ */
+
+.landing-nav-inner,
+.landing-card,
+.landing-step-card,
+.landing-closing-card,
+.landing-facts li,
+.landing-eyebrow,
+.landing-secondary {
+  position: relative;
+  background-color: rgba(255, 255, 255, 0.02);
+  background-image: none;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(28px) saturate(185%);
+  -webkit-backdrop-filter: blur(28px) saturate(185%);
+  box-shadow:
+    inset 0 1px 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -1px 1px 0 rgba(255, 255, 255, 0.04),
+    0 20px 40px -10px rgba(0, 0, 0, 0.5);
+}
+
+/* 碎片保持 absolute（它的 ::before 渐变边框同样成立），单独给光影 */
+.shard {
+  background-color: rgba(255, 255, 255, 0.02);
+  background-image: none;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(28px) saturate(185%);
+  -webkit-backdrop-filter: blur(28px) saturate(185%);
+  box-shadow:
+    inset 0 1px 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -1px 1px 0 rgba(255, 255, 255, 0.04),
+    0 20px 40px -10px rgba(0, 0, 0, 0.5);
+}
+
+/* 渐变边框：顶部受光更强，底部渐隐，模拟玻璃边缘反光 */
+.landing-card::before,
+.landing-step-card::before,
+.landing-closing-card::before,
+.shard::before {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  padding: 1px;
+  border-radius: inherit;
+  background: linear-gradient(
+    150deg,
+    rgba(255, 255, 255, 0.34) 0%,
+    rgba(255, 255, 255, 0.04) 38%,
+    rgba(255, 255, 255, 0.02) 62%,
+    rgba(255, 255, 255, 0.16) 100%
+  );
+  content: "";
+  pointer-events: none;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+}
+
+/* 卡片内容压在渐变边框之上 */
+.landing-card > *,
+.landing-step-card > *,
+.landing-closing-card > *,
+.shard > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* 碎片：AI 卡保留青色环境光晕，但换成物理化的双层投影 */
+.shard-ai {
+  box-shadow:
+    inset 0 1px 1px 0 rgba(255, 255, 255, 0.3),
+    0 0 44px rgba(45, 212, 191, 0.2),
+    0 20px 40px -10px rgba(0, 0, 0, 0.5);
+}
+
+/* hover 时环境遮蔽加深，浮起感更强 */
+.landing-card:hover {
+  box-shadow:
+    inset 0 1px 1px 0 rgba(255, 255, 255, 0.36),
+    0 28px 56px -12px rgba(0, 0, 0, 0.6);
+}
+
+.landing-constellation {
+  opacity: 0.6;
+}
