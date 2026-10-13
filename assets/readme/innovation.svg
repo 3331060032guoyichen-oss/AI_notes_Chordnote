@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="470" viewBox="0 0 1200 470" role="img" aria-labelledby="title desc">
+  <title id="title">Chordnote turns familiar ideas into reviewed learning workflows</title>
+  <desc id="desc">A four-row comparison of common note-taking pain points and Chordnote's product decisions.</desc>
+  <defs>
+    <linearGradient id="innovation-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0B1020"/>
+      <stop offset="1" stop-color="#15142D"/>
+    </linearGradient>
+    <linearGradient id="innovation-accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#818CF8"/>
+      <stop offset="1" stop-color="#E879F9"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="470" rx="28" fill="url(#innovation-bg)"/>
+  <text x="58" y="58" fill="#F8FAFC" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="28" font-weight="750">借鉴点 → Chordnote 的创新决定</text>
+  <text x="58" y="88" fill="#94A3B8" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="18">把成熟工具的启发，变成学生愿意信任、愿意复习的知识流程。</text>
+  <line x1="58" y1="116" x2="1142" y2="116" stroke="#334155" stroke-width="1"/>
+  <text x="58" y="148" fill="#64748B" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16" letter-spacing="2">借鉴的启发</text>
+  <text x="596" y="148" fill="#A5B4FC" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16" letter-spacing="2">我们的产品决定</text>
+
+  <g transform="translate(58 174)">
+    <circle cx="8" cy="9" r="5" fill="#F43F5E"/>
+    <text x="28" y="16" fill="#E2E8F0" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="21" font-weight="650">手动双链容易中断</text>
+    <path d="M470 10H514" stroke="#475569" stroke-width="2" stroke-dasharray="5 7"/>
+    <text x="538" y="16" fill="#38BDF8" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="21" font-weight="700">AI 拓扑生长</text>
+    <text x="538" y="43" fill="#94A3B8" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="18">Agent 提议概念与关系，学生一键确认。</text>
+  </g>
+  <g transform="translate(58 250)">
+    <circle cx="8" cy="9" r="5" fill="#F43F5E"/>
+    <text x="28" y="16" fill="#E2E8F0" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="21" font-weight="650">AI 擅自改写会失去信任</text>
+    <path d="M470 10H514" stroke="#475569" stroke-width="2" stroke-dasharray="5 7"/>
+    <text x="538" y="16" fill="#34D399" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="21" font-weight="700">零黑盒法则</text>
+    <text x="538" y="43" fill="#94A3B8" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="18">AI 只写 Draft，确认之后才进入 Knowledge。</text>
+  </g>
+  <g transform="translate(58 326)">
+    <circle cx="8" cy="9" r="5" fill="#F43F5E"/>
+    <text x="28" y="16" fill="#E2E8F0" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="21" font-weight="650">问答与笔记彼此割裂</text>
+    <path d="M470 10H514" stroke="#475569" stroke-width="2" stroke-dasharray="5 7"/>
+    <text x="538" y="16" fill="#C084FC" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="21" font-weight="700">@ 上下文复读</text>
+    <text x="538" y="43" fill="#94A3B8" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="18">服务端按引用重读真实笔记，再生成回答。</text>
+  </g>
+  <g transform="translate(58 402)">
+    <circle cx="8" cy="9" r="5" fill="#F43F5E"/>
+    <text x="28" y="16" fill="#E2E8F0" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="21" font-weight="650">Agent 行为难以协同</text>
+    <path d="M470 10H514" stroke="#475569" stroke-width="2" stroke-dasharray="5 7"/>
+    <text x="538" y="16" fill="url(#innovation-accent)" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="21" font-weight="700">LLM Wiki 规范</text>
+    <text x="538" y="43" fill="#94A3B8" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="18">用可审阅的执行手册约束模型的下一步。</text>
+  </g>
+</svg>

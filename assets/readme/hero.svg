@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="430" viewBox="0 0 1200 430" role="img" aria-labelledby="title desc">
+  <title id="title">Chordnote — Notes become chords</title>
+  <desc id="desc">A project-native visual showing raw notes becoming reviewed knowledge and connected study chords.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0A1020"/>
+      <stop offset="1" stop-color="#111C35"/>
+    </linearGradient>
+    <linearGradient id="orb" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#9EE6CF"/>
+      <stop offset="1" stop-color="#4F8CFF"/>
+    </linearGradient>
+    <filter id="soft" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="14"/>
+    </filter>
+  </defs>
+  <rect width="1200" height="430" rx="28" fill="url(#bg)"/>
+  <path d="M0 346H1200" stroke="#31405F" stroke-width="1" opacity=".55"/>
+  <path d="M640 0V430" stroke="#31405F" stroke-width="1" opacity=".35"/>
+  <circle cx="936" cy="196" r="140" fill="#4F8CFF" opacity=".12" filter="url(#soft)"/>
+  <g transform="translate(58 52)">
+    <text x="0" y="16" fill="#9EE6CF" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="18" letter-spacing="3">AI KNOWLEDGE WORKSPACE / 2026 DEMO</text>
+    <text x="0" y="104" fill="#F6F1E8" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="74" font-weight="750" letter-spacing="-2">Chordnote</text>
+    <text x="4" y="145" fill="#FF8A65" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="28" font-weight="650">和弦 · C</text>
+    <text x="0" y="205" fill="#F6F1E8" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="30" font-weight="620">Notes become chords.</text>
+    <text x="4" y="244" fill="#BAC5D9" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="22">一条笔记是音符，连起来才是和弦</text>
+    <text x="0" y="302" fill="#BAC5D9" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="18">面向大学生的生长式 AI 知识库：把学习材料变成可复用、</text>
+    <text x="0" y="330" fill="#BAC5D9" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="18">可连接、可复习的个人知识网络。</text>
+  </g>
+  <g transform="translate(690 42)">
+    <path d="M78 234C142 172 193 114 264 90" fill="none" stroke="#4F8CFF" stroke-width="3" stroke-dasharray="8 10"/>
+    <path d="M78 234C160 238 205 236 300 222" fill="none" stroke="#FF8A65" stroke-width="3" stroke-dasharray="8 10"/>
+    <path d="M264 90C296 128 314 166 300 222" fill="none" stroke="#9EE6CF" stroke-width="3"/>
+    <path d="M78 234C156 294 230 300 300 222" fill="none" stroke="#9EE6CF" stroke-width="3" opacity=".68"/>
+    <circle cx="78" cy="234" r="42" fill="#172744" stroke="#4F8CFF" stroke-width="2"/>
+    <circle cx="264" cy="90" r="42" fill="#182A35" stroke="#9EE6CF" stroke-width="2"/>
+    <circle cx="300" cy="222" r="42" fill="#33242B" stroke="#FF8A65" stroke-width="2"/>
+    <circle cx="168" cy="298" r="22" fill="url(#orb)" opacity=".95"/>
+    <text x="78" y="228" fill="#F6F1E8" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16" font-weight="700">RAW</text>
+    <text x="78" y="249" fill="#BAC5D9" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="14">your words</text>
+    <text x="264" y="84" fill="#F6F1E8" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16" font-weight="700">DRAFT</text>
+    <text x="264" y="105" fill="#BAC5D9" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="14">AI proposes</text>
+    <text x="300" y="216" fill="#F6F1E8" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16" font-weight="700">CHORD</text>
+    <text x="300" y="237" fill="#FFE0D5" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="14">you confirm</text>
+    <text x="168" y="337" fill="#F6F1E8" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="15" font-weight="700">RELATION</text>
+    <text x="0" y="380" fill="#BAC5D9" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="17">AI suggests. You decide what becomes part of memory.</text>
+  </g>
+</svg>
+
