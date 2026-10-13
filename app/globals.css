@@ -1960,7 +1960,12 @@ input::placeholder {
 .knowledge-index {
   padding: 17px;
   border-right: 1px solid var(--line);
-  background: var(--paper);
+  background-color: var(--paper);
+  background-image:
+    linear-gradient(rgb(236 239 235 / 88%), rgb(236 239 235 / 88%)),
+    url("/bg-workspace-paper.webp");
+  background-size: auto, cover;
+  background-position: center, center top;
 }
 
 .index-heading {
@@ -2297,6 +2302,11 @@ input::placeholder {
   gap: 14px;
   padding: 14px;
   border-radius: var(--radius);
+  background-image:
+    linear-gradient(rgb(240 242 238 / 86%), rgb(240 242 238 / 86%)),
+    url("/bg-studio-shadow.webp");
+  background-size: auto, cover;
+  background-position: center, center;
 }
 
 .network-map {
@@ -2308,7 +2318,12 @@ input::placeholder {
   padding: 12px;
   border: 1px solid var(--line);
   border-radius: 10px;
-  background: var(--paper);
+  background-color: var(--paper);
+  background-image:
+    linear-gradient(rgb(236 239 235 / 84%), rgb(236 239 235 / 84%)),
+    url("/bg-deep-aurora.webp");
+  background-size: auto, cover;
+  background-position: center, center;
 }
 
 .network-node {
