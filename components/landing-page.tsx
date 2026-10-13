@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { LandingConstellation } from "./landing-constellation";
 
 type LandingPageProps = {
   onEnter: () => void;
@@ -64,6 +65,7 @@ export function LandingPage({ onEnter }: LandingPageProps) {
         <span className="blob blob-5" />
       </div>
       <div className="landing-grain" aria-hidden="true" />
+      <LandingConstellation />
 
       <div className="landing-content">
         <header className="landing-nav">
@@ -83,6 +85,44 @@ export function LandingPage({ onEnter }: LandingPageProps) {
         </header>
 
         <section className="landing-hero" aria-label="AI Notes 简介">
+          {/* 悬浮 UI 碎片：全息投影式装饰，pointer-events 关闭，不遮挡文字与按钮 */}
+          <div className="landing-shards" aria-hidden="true">
+            <div className="shard shard-note">
+              <span className="shard-head">
+                <span className="shard-icon">✏️</span>
+                <span className="shard-label">原始记录</span>
+              </span>
+              <span className="shard-skeleton">
+                <i style={{ width: "88%" }} />
+                <i style={{ width: "64%" }} />
+                <i style={{ width: "76%" }} />
+              </span>
+            </div>
+
+            <div className="shard shard-ai">
+              <span className="shard-head">
+                <span className="shard-icon shard-icon-spark">✨</span>
+                <span className="shard-label">AI 提炼</span>
+              </span>
+              <span className="shard-highlight" />
+              <span className="shard-skeleton">
+                <i style={{ width: "72%" }} />
+                <i style={{ width: "52%" }} />
+              </span>
+            </div>
+
+            <div className="shard shard-graph">
+              <svg viewBox="0 0 72 54" role="presentation" focusable="false">
+                <line x1="16" y1="14" x2="52" y2="20" />
+                <line x1="52" y1="20" x2="30" y2="42" />
+                <line x1="16" y1="14" x2="30" y2="42" />
+                <circle cx="16" cy="14" r="4.5" />
+                <circle cx="52" cy="20" r="4.5" />
+                <circle cx="30" cy="42" r="4.5" />
+              </svg>
+            </div>
+          </div>
+
           <p className="landing-eyebrow">
             <span className="landing-eyebrow-dot" aria-hidden="true" />
             面向大学生的 AI 学习知识系统
