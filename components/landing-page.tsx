@@ -72,8 +72,8 @@ export function LandingPage({ onEnter }: LandingPageProps) {
         <header className="landing-nav">
           <div className="landing-nav-inner">
             <div className="landing-brand">
-              <span className="landing-brand-mark">N</span>
-              <strong>Notipelago</strong>
+              <span className="landing-brand-mark">C</span>
+              <strong>Chordnote</strong>
             </div>
             <nav className="landing-links" aria-label="页面导航">
               <a href="#features">特点</a>
@@ -85,7 +85,7 @@ export function LandingPage({ onEnter }: LandingPageProps) {
           </div>
         </header>
 
-        <section className="landing-hero" aria-label="Notipelago 简介">
+        <section className="landing-hero" aria-label="Chordnote 简介">
           {/* 悬浮 UI 碎片：全息投影式装饰，pointer-events 关闭，不遮挡文字与按钮 */}
           <div className="landing-shards" aria-hidden="true">
             <div className="shard shard-note">
@@ -134,7 +134,7 @@ export function LandingPage({ onEnter }: LandingPageProps) {
             <span className="landing-title-gradient">一座孤岛</span>
             <span className="landing-title-period">。</span>
           </h1>
-          <p className="landing-slogan">Notes are not islands.<span>没有一条笔记应该孤立存在</span></p>
+          <p className="landing-slogan">Notes become chords.<span>一条笔记是音符，连起来才是和弦</span></p>
           <p className="landing-lede">
             课堂上的原话先落进「原始记录」，AI 负责整理与提议，
             <br className="landing-br-wide" />
@@ -228,7 +228,7 @@ export function LandingPage({ onEnter }: LandingPageProps) {
         </section>
 
         <footer className="landing-colophon">
-          <span>© Notipelago · 概念验证</span>
+          <span>© Chordnote · 和弦 · 概念验证</span>
           <span>AI 只提议，你确认，才写入你的网络</span>
         </footer>
       </div>

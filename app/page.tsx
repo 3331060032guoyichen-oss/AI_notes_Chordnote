@@ -60,7 +60,7 @@ function getPreview(text: string, length = 140) {
 }
 
 function AppLogo() {
-  return <div className="app-logo" aria-label="Notipelago"><span className="logo-mark" aria-hidden="true">N</span><span>Notipelago</span></div>;
+  return <div className="app-logo" aria-label="Chordnote"><span className="logo-mark" aria-hidden="true">C</span><span>Chordnote</span></div>;
 }
 
 function StatusPill({ children, tone = "neutral" }: { children: React.ReactNode; tone?: "neutral" | "accent" | "warning" }) {
@@ -617,10 +617,10 @@ export default function Home() {
         </div>
         <div className="tree-tools"><button className={`tree-tool-item${activeTabId === "view:graph" ? " is-active" : ""}`} type="button" data-sound="select" onClick={() => navigate("graph")}>{viewMeta.graph.label}</button></div>
       </nav>
-      <div className="sidebar-bottom"><SoundToggle className="sound-toggle-sidebar" /><div className="data-status"><span className="status-dot" aria-hidden="true" /><span><strong>本地记录可用</strong><small>原始记录与知识页可追溯</small></span></div><span className="sidebar-version">Notipelago</span></div>
+      <div className="sidebar-bottom"><SoundToggle className="sound-toggle-sidebar" /><div className="data-status"><span className="status-dot" aria-hidden="true" /><span><strong>本地记录可用</strong><small>原始记录与知识页可追溯</small></span></div><span className="sidebar-version">Chordnote · 和弦</span></div>
     </aside>
     <section className="workspace-main">
-      <div className="workspace-topbar"><div className="breadcrumb"><span>Notipelago</span><span aria-hidden="true">/</span><strong>{activeTab.label}</strong></div><div className="topbar-actions"><SoundToggle className="sound-toggle-desktop" /><span className="topbar-status"><span className="status-dot" aria-hidden="true" />本地案头</span><button className="avatar-button" type="button" aria-label="打开个人菜单">G</button></div></div>
+      <div className="workspace-topbar"><div className="breadcrumb"><span>Chordnote</span><span aria-hidden="true">/</span><strong>{activeTab.label}</strong></div><div className="topbar-actions"><SoundToggle className="sound-toggle-desktop" /><span className="topbar-status"><span className="status-dot" aria-hidden="true" />本地案头</span><button className="avatar-button" type="button" aria-label="打开个人菜单">G</button></div></div>
       <div className="tab-bar" role="tablist">{openTabs.map((tab) => <div key={tab.id} className={`tab-chip${activeTabId === tab.id ? " is-active" : ""}`} role="tab" tabIndex={activeTabId === tab.id ? 0 : -1} data-sound="select" aria-selected={activeTabId === tab.id} onClick={() => setActiveTabId(tab.id)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setActiveTabId(tab.id); } }}><span>{tab.label}</span><button type="button" data-sound="select" aria-label="关闭标签" onClick={(event) => { event.stopPropagation(); closeTab(tab.id); }}>×</button></div>)}</div>
       <div className="workspace-content"><div className="main-column">{error ? <div className="feedback-banner error-message" role="alert">{error}</div> : null}{notice ? <div className="feedback-banner notice-message" aria-live="polite">{notice}</div> : null}{renderMainContent()}</div></div>
     </section>
