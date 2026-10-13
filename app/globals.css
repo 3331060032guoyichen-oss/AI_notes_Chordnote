@@ -3993,24 +3993,6 @@ input::placeholder {
    3D 空间层 —— 流体琉璃体 / 透视网格地面 / 物理厚度 / 胶片颗粒
    ============================================================ */
 
-/* 1) 3D 琉璃体：Hero 右侧焦点 */
-.landing-orb-slot {
-  position: absolute;
-  z-index: 0;
-  top: 46%;
-  right: clamp(-140px, -6vw, -40px);
-  width: clamp(260px, 26vw, 430px);
-  height: clamp(260px, 26vw, 430px);
-  transform: translateY(-50%);
-  opacity: 0.92;
-  pointer-events: none;
-}
-
-.landing-fluid-orb {
-  display: block;
-  width: 100%;
-  height: 100%;
-}
 
 /* 2) 无限延伸的透视网格地面 */
 .landing-grid {
@@ -4081,27 +4063,43 @@ input::placeholder {
   opacity: 0.03;
 }
 
-@media (max-width: 1024px) {
-  .landing-orb-slot {
-    right: -18vw;
-    width: 340px;
-    height: 340px;
-    opacity: 0.5;
-  }
-}
-
-@media (max-width: 720px) {
-  .landing-orb-slot {
-    display: none;
-  }
-}
 
 @media (prefers-reduced-motion: reduce) {
   .landing-grid-plane {
     transform: none;
   }
 }
-/* Hero 内的文字与碎片压在 3D 体之上 */
+
+@media (max-width: 1024px) {
+  .landing-orb-slot {
+    right: -16vw;
+    width: 260px;
+    height: 260px;
+    opacity: 0.5;
+  }
+}
+/* ============================================================
+   发光粒子场 —— Hero 右侧焦点（四层：粒子壳 / 线框 / 内核 / 光环）
+   ============================================================ */
+
+.landing-orb-slot {
+  position: absolute;
+  z-index: 0;
+  top: 47%;
+  right: clamp(-70px, -1vw, 20px);
+  width: clamp(280px, 30vw, 470px);
+  height: clamp(280px, 30vw, 470px);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.landing-fluid-orb {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Hero 文字与碎片压在粒子场之上 */
 .landing-hero > .landing-eyebrow,
 .landing-hero > .landing-title,
 .landing-hero > .landing-slogan,
@@ -4116,11 +4114,150 @@ input::placeholder {
   z-index: 4;
 }
 
-@media (max-width: 1024px) {
+@media (max-width: 1180px) {
   .landing-orb-slot {
-    right: -16vw;
-    width: 260px;
-    height: 260px;
-    opacity: 0.5;
+    right: -14vw;
+    width: 300px;
+    height: 300px;
+    opacity: 0.55;
+  }
+}
+
+@media (max-width: 820px) {
+  .landing-orb-slot {
+    display: none;
+  }
+}
+/* ============================================================
+   五彩星尘（tsParticles）+ 极光流星雨（CSS）
+   层级：极光色块 0 < 星丛/星尘 1 < 碎片 4 < 文字卡片 10
+   ============================================================ */
+
+.landing-stardust {
+  position: fixed;
+  z-index: 1;
+  inset: 0;
+  /* 关键：canvas 不吃指针事件，交互交给 tsParticles 的 detectsOn: "window" */
+  pointer-events: none;
+}
+
+.landing-stardust canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* 流星层 */
+.landing-meteors {
+  position: fixed;
+  z-index: 1;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.meteor {
+  position: absolute;
+  display: block;
+  width: 2px;
+  height: 2px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow:
+    0 0 6px 2px rgba(255, 255, 255, 0.8),
+    0 0 14px 4px rgba(45, 212, 191, 0.45);
+  opacity: 0;
+  /* 拖尾：渐变到极光青与幻彩紫，末端完全透明 */
+  filter: drop-shadow(0 0 0 transparent);
+  animation: meteor-fall 5.5s linear infinite;
+}
+
+/* 尾巴用伪元素画，长度靠 scaleX 控制 */
+.meteor::after {
+  position: absolute;
+  top: 50%;
+  right: 2px;
+  width: 170px;
+  height: 1px;
+  transform: translateY(-50%);
+  background: linear-gradient(
+    to left,
+    rgba(255, 255, 255, 0.95) 0%,
+    rgba(45, 212, 191, 0.65) 34%,
+    rgba(196, 181, 253, 0.35) 66%,
+    transparent 100%
+  );
+  content: "";
+}
+
+.meteor-1 {
+  top: -6%;
+  left: 82%;
+  animation-delay: 0s;
+}
+
+.meteor-2 {
+  top: -10%;
+  left: 58%;
+  animation-delay: 2.4s;
+  animation-duration: 6.4s;
+}
+
+.meteor-3 {
+  top: -4%;
+  left: 94%;
+  animation-delay: 4.1s;
+  animation-duration: 7.2s;
+}
+
+/* 从右上向左下坠落（约 225°），速度感来自短促的出现窗口 */
+@keyframes meteor-fall {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 0, 0) rotate(225deg) scale(0.7);
+  }
+
+  6% {
+    opacity: 1;
+  }
+
+  26% {
+    opacity: 1;
+    transform: translate3d(-24vw, 42vh, 0) rotate(225deg) scale(1);
+  }
+
+  36% {
+    opacity: 0;
+    transform: translate3d(-34vw, 60vh, 0) rotate(225deg) scale(0.85);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate3d(-34vw, 60vh, 0) rotate(225deg) scale(0.85);
+  }
+}
+
+/* 文字与卡片压在最上 */
+.landing-content {
+  z-index: 10;
+}
+
+/* 星丛网络与星尘同层但更暗，避免两层粒子互相干扰 */
+.landing-constellation {
+  opacity: 0.34;
+}
+
+@media (max-width: 820px) {
+  .meteor::after {
+    width: 110px;
+  }
+
+  .landing-constellation {
+    opacity: 0.24;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .meteor {
+    animation: none;
   }
 }

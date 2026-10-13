@@ -2,7 +2,8 @@
 
 import { useEffect, useRef } from "react";
 import { LandingConstellation } from "./landing-constellation";
-import { LandingFluidOrb } from "./landing-fluid-orb";
+import { LandingParticleField } from "./landing-particle-field";
+import { LandingStardust } from "./landing-stardust";
 
 type LandingPageProps = {
   onEnter: () => void;
@@ -68,6 +69,14 @@ export function LandingPage({ onEnter }: LandingPageProps) {
       </div>
       <div className="landing-grain" aria-hidden="true" />
       <LandingConstellation />
+      <LandingStardust />
+
+      {/* 极光流星雨：CSS 层，3–5 秒一颗，绝不干扰阅读 */}
+      <div className="landing-meteors" aria-hidden="true">
+        <span className="meteor meteor-1" />
+        <span className="meteor meteor-2" />
+        <span className="meteor meteor-3" />
+      </div>
 
       {/* 无限延伸的透视网格地面 + 地平线渐隐 */}
       <div className="landing-grid" aria-hidden="true">
@@ -93,10 +102,11 @@ export function LandingPage({ onEnter }: LandingPageProps) {
         </header>
 
         <section className="landing-hero" aria-label="Chordnote 简介">
-          {/* 3D 琉璃体：Hero 右侧的视觉焦点 */}
+          {/* 发光粒子场：Hero 右侧的视觉焦点 */}
           <div className="landing-orb-slot" aria-hidden="true">
-            <LandingFluidOrb />
+            <LandingParticleField />
           </div>
+
           {/* 悬浮 UI 碎片：全息投影式装饰，pointer-events 关闭，不遮挡文字与按钮 */}
           <div className="landing-shards" aria-hidden="true">
             <div className="shard shard-note">
