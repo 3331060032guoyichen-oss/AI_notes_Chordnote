@@ -16,10 +16,10 @@
   --accent-soft: #e2e6fa;
   --success: #56745e;
   --success-soft: #e2ece4;
-  --warning: #9b713f;
-  --warning-soft: #f2e9da;
+  --warning: #2dd4bf;
+  --warning-soft: #ccfbf1;
   --danger: #9d574c;
-  --danger-soft: #f4e3df;
+  --danger-soft: #ede9fe;
   --radius: 12px;
   --radius-panel: 12px;
   --radius-control: 8px;
@@ -46,7 +46,7 @@ body {
 
 body {
   min-height: 100dvh;
-  background: var(--paper);
+  background: #030712;
 }
 
 button,
@@ -84,23 +84,23 @@ textarea:focus-visible {
   /* 活力色板 */
   --v-violet: #7c3aed;
   --v-indigo: #4f46e5;
-  --v-pink: #ec4899;
-  --v-rose: #fb7185;
-  --v-amber: #fbbf24;
-  --v-cyan: #22d3ee;
-  --v-mint: #34d399;
+  --v-pink: #4f46e5;
+  --v-rose: #3b82f6;
+  --v-amber: #2dd4bf;
+  --v-cyan: #2dd4bf;
+  --v-mint: #0d9488;
 
-  --v-ink: #1b1035;
-  --v-ink-soft: #4d3c70;
-  --v-quiet: #6f5f92;
-  --v-line: rgb(124 58 237 / 14%);
+  --v-ink: #f1f5f9;
+  --v-ink-soft: #cbd5e1;
+  --v-quiet: #94a3b8;
+  --v-line: rgb(148 163 184 / 16%);
 
   /* 毛玻璃 */
-  --v-glass: rgb(255 255 255 / 46%);
-  --v-glass-strong: rgb(255 255 255 / 68%);
-  --v-glass-edge: rgb(255 255 255 / 74%);
-  --v-shadow: 0 20px 60px rgb(76 29 149 / 16%);
-  --v-shadow-soft: 0 10px 34px rgb(76 29 149 / 10%);
+  --v-glass: rgb(255 255 255 / 6%);
+  --v-glass-strong: rgb(255 255 255 / 10%);
+  --v-glass-edge: rgb(255 255 255 / 14%);
+  --v-shadow: 0 20px 60px rgb(2 6 23 / 55%);
+  --v-shadow-soft: 0 10px 34px rgb(2 6 23 / 45%);
 
   --v-gutter: clamp(20px, 5vw, 88px);
   --v-sans: "Geist", "Noto Sans SC", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;
@@ -2977,10 +2977,10 @@ input::placeholder {
     --accent-soft: #303851;
     --success: #90b99a;
     --success-soft: #293b31;
-    --warning: #d7af76;
-    --warning-soft: #4a3e2d;
-    --danger: #e09b8d;
-    --danger-soft: #4b3431;
+    --warning: #2dd4bf;
+    --warning-soft: #134e4a;
+    --danger: #7c3aed;
+    --danger-soft: #3b0764;
     --control-edge: #5d69c8;
     --control-text: #171c43;
     --control-shadow: 0 3px 9px rgb(0 0 0 / 34%);
@@ -3332,7 +3332,7 @@ input::placeholder {
 
 /* 1) 梦幻流体渐变背景：多个绝对定位的模糊圆叠在极浅底色上 */
 .landing {
-  background: #f8fafc;
+  background: #030712;
 }
 
 .landing-blobs {
@@ -3361,7 +3361,7 @@ input::placeholder {
   height: 48vw;
   top: -14vw;
   left: -10vw;
-  background: #8a2be2;
+  background: #7c3aed;
   animation: blob-a 22s ease-in-out infinite alternate;
 }
 
@@ -3370,7 +3370,7 @@ input::placeholder {
   height: 42vw;
   top: 2vw;
   right: -12vw;
-  background: #ff1493;
+  background: #3b82f6;
   animation: blob-b 26s ease-in-out infinite alternate;
 }
 
@@ -3379,7 +3379,7 @@ input::placeholder {
   height: 46vw;
   bottom: -18vw;
   left: 14vw;
-  background: #00ffff;
+  background: #2dd4bf;
   animation: blob-c 30s ease-in-out infinite alternate;
 }
 
@@ -3388,7 +3388,7 @@ input::placeholder {
   height: 36vw;
   bottom: 2vw;
   right: 4vw;
-  background: #00ff7f;
+  background: #0d9488;
   animation: blob-d 24s ease-in-out infinite alternate;
 }
 
@@ -3397,7 +3397,7 @@ input::placeholder {
   height: 32vw;
   top: 32vw;
   left: 36vw;
-  background: #ff9a3c;
+  background: #4f46e5;
   animation: blob-e 28s ease-in-out infinite alternate;
 }
 
@@ -3434,11 +3434,11 @@ input::placeholder {
 .landing-facts li,
 .landing-eyebrow,
 .landing-secondary {
-  background: rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.06);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 8px 32px 0 rgba(2, 6, 23, 0.5);
   border-radius: 24px;
 }
 
@@ -3453,7 +3453,7 @@ input::placeholder {
 }
 
 .landing-title-gradient {
-  background: linear-gradient(90deg, #ff1493, #00ffff, #8a2be2);
+  background: linear-gradient(90deg, #3b82f6, #2dd4bf, #7c3aed);
   background-size: 200% auto;
   -webkit-background-clip: text;
   background-clip: text;
@@ -3469,13 +3469,13 @@ input::placeholder {
 /* 4) 糖果色按钮 */
 .landing-primary,
 .landing-nav-cta {
-  background: linear-gradient(135deg, #ff1493 0%, #8a2be2 100%);
+  background: linear-gradient(135deg, #3b82f6 0%, #7c3aed 100%);
   color: #ffffff;
   font-weight: bold;
   border: none;
   border-radius: 999px;
   padding: 14px 32px;
-  box-shadow: 0 10px 20px -10px rgba(255, 20, 147, 0.5);
+  box-shadow: 0 10px 20px -10px rgba(79, 70, 229, 0.55);
   transition: filter 180ms ease, transform 180ms ease, box-shadow 180ms ease;
 }
 
@@ -3483,7 +3483,7 @@ input::placeholder {
 .landing-nav-cta:hover {
   filter: brightness(1.1);
   transform: translateY(-2px);
-  box-shadow: 0 16px 28px -12px rgba(255, 20, 147, 0.65);
+  box-shadow: 0 16px 28px -12px rgba(79, 70, 229, 0.7);
 }
 
 /* 5) 右下角悬浮球 —— 发光玻璃球 */
@@ -3494,12 +3494,12 @@ input::placeholder {
   gap: 0;
   border-radius: 50%;
   border: 1px solid rgba(255, 255, 255, 0.55);
-  background: rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.06);
   backdrop-filter: blur(16px) saturate(180%);
   -webkit-backdrop-filter: blur(16px) saturate(180%);
   box-shadow:
-    0 0 0 6px rgba(255, 20, 147, 0.12),
-    0 0 34px 6px rgba(138, 43, 226, 0.5),
+    0 0 0 6px rgba(59, 130, 246, 0.18),
+    0 0 34px 6px rgba(124, 58, 237, 0.55),
     0 8px 32px 0 rgba(31, 38, 135, 0.15);
   overflow: hidden;
   cursor: pointer;
@@ -3524,7 +3524,7 @@ input::placeholder {
   place-items: center;
   width: 100%;
   height: 100%;
-  color: #8a2be2;
+  color: #7c3aed;
   font-size: 24px;
   line-height: 1;
 }
