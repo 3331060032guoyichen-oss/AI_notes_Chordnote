@@ -89,13 +89,34 @@ export function parseOrganizeDraft(content: string): OrganizeDraft {
 type AssistantInput = {
   question: string;
   context: string;
+  config?: DeepSeekRequestConfig;
 };
+
+/**
+ * Per-request AI configuration. A browser may provide a user's own key and
+ * model; when omitted, the server environment remains the fallback.
+ */
+export type DeepSeekRequestConfig = {
+  apiKey?: string;
+  model?: string;
+};
+
+function resolveApiKey(apiKeyOverride: string | undefined) {
+  return apiKeyOverride === undefined
+    ? process.env.DEEPSEEK_API_KEY
+    : apiKeyOverride.trim();
+}
+
+function resolveModel(modelOverride: string | undefined) {
+  return modelOverride?.trim() || process.env.DEEPSEEK_MODEL || DEFAULT_MODEL;
+}
 
 export async function askAssistant({
   question,
   context,
+  config,
 }: AssistantInput): Promise<string> {
-  const apiKey = process.env.DEEPSEEK_API_KEY;
+  const apiKey = resolveApiKey(config?.apiKey);
 
   if (!apiKey) {
     throw new DeepSeekError(
@@ -118,7 +139,7 @@ export async function askAssistant({
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: process.env.DEEPSEEK_MODEL || DEFAULT_MODEL,
+          model: resolveModel(config?.model),
           temperature: 0.2,
           messages: [
             {
@@ -190,13 +211,15 @@ type OrganizeInput = {
     title: string;
     summary: string;
   }>;
+  config?: DeepSeekRequestConfig;
 };
 
 export async function createOrganizeDraft({
   rawText,
   existingKnowledge,
+  config,
 }: OrganizeInput): Promise<OrganizeDraft> {
-  const apiKey = process.env.DEEPSEEK_API_KEY;
+  const apiKey = resolveApiKey(config?.apiKey);
 
   if (!apiKey) {
     throw new DeepSeekError(
@@ -219,7 +242,7 @@ export async function createOrganizeDraft({
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: process.env.DEEPSEEK_MODEL || DEFAULT_MODEL,
+          model: resolveModel(config?.model),
           temperature: 0.2,
           response_format: { type: "json_object" },
           messages: [

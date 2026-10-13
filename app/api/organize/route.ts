@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 
-import { createOrganizeDraft, DeepSeekError } from "../../../lib/deepseek";
+import {
+  createOrganizeDraft,
+  DeepSeekError,
+  type DeepSeekRequestConfig,
+} from "../../../lib/deepseek";
 import { listNotes } from "../../../lib/services/notes";
 import { getSource } from "../../../lib/services/sources";
 
@@ -8,6 +12,8 @@ export const runtime = "nodejs";
 
 type OrganizeRequestBody = {
   rawId?: unknown;
+  apiKey?: unknown;
+  model?: unknown;
 };
 
 function errorResponse(message: string, status: number, code: string) {
@@ -30,7 +36,15 @@ export async function POST(request: Request) {
   const body = parsed as OrganizeRequestBody;
 
   if (typeof body.rawId !== "string" || !body.rawId.trim()) {
-    return errorResponse("没有找到要整理的原始记录，请重新选择。", 400, "RAW_ID_REQUIRED");
+    return errorResponse("没有找到要整理的笔记，请重新选择。", 400, "RAW_ID_REQUIRED");
+  }
+
+  if (body.apiKey !== undefined && typeof body.apiKey !== "string") {
+    return errorResponse("DeepSeek API Key 格式无法识别，请检查设置。", 400, "INVALID_AI_CONFIG");
+  }
+
+  if (body.model !== undefined && (typeof body.model !== "string" || !body.model.trim())) {
+    return errorResponse("模型名称不能为空，请检查设置。", 400, "INVALID_AI_CONFIG");
   }
 
   let raw;
@@ -39,14 +53,14 @@ export async function POST(request: Request) {
     raw = await getSource(body.rawId);
   } catch {
     return errorResponse(
-      "原始记录暂时没有载入。已保存的数据没有改变，请稍后重试。",
+      "笔记内容暂时没有载入。已保存的数据没有改变，请稍后重试。",
       500,
       "RAW_STORAGE_READ_FAILED",
     );
   }
 
   if (!raw) {
-    return errorResponse("这条原始记录已不存在，请刷新目录后重新选择。", 404, "RAW_NOT_FOUND");
+    return errorResponse("这条笔记已不存在，请刷新目录后重新选择。", 404, "RAW_NOT_FOUND");
   }
 
   try {
@@ -59,9 +73,17 @@ export async function POST(request: Request) {
         summary: knowledge.summary.slice(0, 300),
       }));
 
+    const config: DeepSeekRequestConfig | undefined = body.apiKey !== undefined || body.model !== undefined
+      ? {
+          apiKey: body.apiKey as string | undefined,
+          model: body.model as string | undefined,
+        }
+      : undefined;
+
     const draft = await createOrganizeDraft({
       rawText: raw.text,
       existingKnowledge,
+      config,
     });
 
     return NextResponse.json({ draft });
@@ -69,7 +91,7 @@ export async function POST(request: Request) {
     if (error instanceof DeepSeekError) {
       if (error.code === "CONFIG_MISSING") {
         return errorResponse(
-          "编辑助理尚未完成服务配置。原始记录仍然安全，请联系维护者。",
+          "还没有配置 DeepSeek API Key。请打开设置填写，或联系维护者配置服务器 Key。当前笔记仍然安全。",
           503,
           "DEEPSEEK_CONFIG_MISSING",
         );
@@ -77,7 +99,7 @@ export async function POST(request: Request) {
 
       if (error.code === "TIMEOUT") {
         return errorResponse(
-          "编辑助理这次没有按时返回。原始记录仍然安全，请稍后重新提出整理。",
+          "编辑助理这次没有按时返回。当前笔记仍然安全，请稍后重新提出建议。",
           504,
           "DEEPSEEK_TIMEOUT",
         );
@@ -85,19 +107,19 @@ export async function POST(request: Request) {
 
       if (error.code === "UPSTREAM_INVALID_JSON") {
         return errorResponse(
-          "编辑助理返回的整理稿无法审阅。原始记录仍然安全，请重新整理。",
+          "编辑助理返回的建议无法审阅。当前笔记仍然安全，请重新提出建议。",
           502,
           "INVALID_DRAFT",
         );
       }
 
       return errorResponse(
-        "编辑助理暂时无法回应。原始记录仍然安全，请稍后重新提出整理。",
+        "编辑助理暂时无法回应。当前笔记仍然安全，请稍后重新提出建议。",
         502,
         "DEEPSEEK_UPSTREAM_ERROR",
       );
     }
 
-    return errorResponse("整理稿暂时没有提出。原始记录仍然安全，请稍后重试。", 500, "ORGANIZE_FAILED");
+    return errorResponse("AI 建议暂时没有提出。当前笔记仍然安全，请稍后重试。", 500, "ORGANIZE_FAILED");
   }
 }

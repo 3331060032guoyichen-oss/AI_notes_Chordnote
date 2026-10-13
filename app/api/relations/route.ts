@@ -31,8 +31,7 @@ export async function GET() {
 /**
  * 建立交叉引用。
  *
- * 语义与旧实现一致：同一对知识页（**无序**）只保留一条 `related` 关系，
- * 因此 A→B 与 B→A 视为同一条；已被软删除的关系会被复活（`created: true`）。
+ * 关系是有向的：A→B 与 B→A 是两条不同关系；同一方向已被软删除的关系会被复活。
  */
 export async function POST(request: Request) {
   let parsed: unknown;
