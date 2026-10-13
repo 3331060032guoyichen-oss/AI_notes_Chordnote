@@ -130,7 +130,8 @@ export function LandingPage({ onEnter }: LandingPageProps) {
           <h1 className="landing-title">
             笔记不该是
             <br />
-            <span className="landing-title-gradient">一座孤岛</span>。
+            <span className="landing-title-gradient">一座孤岛</span>
+            <span className="landing-title-period">。</span>
           </h1>
           <p className="landing-lede">
             课堂上的原话先落进「原始记录」，AI 负责整理与提议，

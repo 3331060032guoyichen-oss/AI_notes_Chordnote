@@ -3825,3 +3825,72 @@ input::placeholder {
 .landing-constellation {
   opacity: 0.45;
 }
+/* ============================================================
+   排版精修 —— 珍珠全息标题 / 轻量化句号 / 镂空数字水印
+   ============================================================ */
+
+/* 主标题：珍珠全息渐变（白 → 冰蓝 → 浅青 → 淡紫） */
+.landing-title-gradient {
+  background: linear-gradient(135deg, #ffffff 0%, #e0f2fe 40%, #a5f3fc 80%, #c4b5fd 100%);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  animation: gradient-flow 6s linear infinite;
+}
+
+/* 句号：缩到 0.6 倍 + 极淡灰，不再压住标题 */
+.landing-title-period {
+  display: inline-block;
+  margin-left: 0.02em;
+  color: rgba(255, 255, 255, 0.3);
+  font-size: 0.6em;
+  line-height: 1;
+  vertical-align: 0.06em;
+  -webkit-text-fill-color: rgba(255, 255, 255, 0.3);
+}
+
+/* 步骤数字：移除实心底块，改为超大镂空描边水印 */
+.landing-step-card {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.landing-step-card .landing-step-order {
+  position: absolute;
+  z-index: 0;
+  top: 2px;
+  right: 12px;
+  display: block;
+  width: auto;
+  height: auto;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  color: transparent;
+  font-size: 120px;
+  font-weight: 900;
+  letter-spacing: -0.05em;
+  line-height: 0.78;
+  -webkit-text-stroke: 1px rgba(255, 255, 255, 0.1);
+  pointer-events: none;
+  user-select: none;
+}
+
+/* 内容压在数字水印之上 */
+.landing-step-card > h3,
+.landing-step-card > p {
+  position: relative;
+  z-index: 1;
+}
+
+@media (max-width: 640px) {
+  .landing-step-card .landing-step-order {
+    right: 8px;
+    font-size: 88px;
+  }
+}
