@@ -40,7 +40,7 @@ export function LandingFluidOrb() {
 
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 100);
-    camera.position.set(0, 0, 6.2);
+    camera.position.set(0, 0, 7.2);
 
     // ---- 环境贴图：transmission 靠采样环境做折射 ----
     // 没有环境时，透明 canvas 会采样到空背景，玻璃边缘出现黑边/脏斑。
@@ -70,9 +70,10 @@ export function LandingFluidOrb() {
     });
 
     // ---- 主体：扭曲环面（液态琉璃感）----
-    // 管径 0.44 -> 0.34、分段 180x28 -> 288x48：
-    // 细管 + 高分段消除自交处的穿插与自转时的高光跳变。
-    const geometry = new THREE.TorusKnotGeometry(1.34, 0.34, 288, 48, 2, 3);
+    // 关键约束：TorusKnot(p=2,q=3) 在管半径 > 约 0.2×环半径 时会自交穿模。
+    // 上一版 0.34/1.34 = 0.254 仍超标，环管互相穿刺。
+    // 现在 0.26/1.5 = 0.173，稳在临界值以下；分段拉到 320×64 保证曲面光滑。
+    const geometry = new THREE.TorusKnotGeometry(1.5, 0.26, 320, 64, 2, 3);
     const material = new THREE.MeshPhysicalMaterial({
       transmission: 1,
       roughness: 0.1,
@@ -92,9 +93,9 @@ export function LandingFluidOrb() {
     const knot = new THREE.Mesh(geometry, material);
     scene.add(knot);
 
-    // 内层核：让玻璃里透出一点紫。缩到 0.5 并关掉透明，
-    // 避免它穿过外面那层玻璃时产生半透明排序的闪烁。
-    const coreGeometry = new THREE.IcosahedronGeometry(0.5, 3);
+    // 内层核：缩到 0.36 并保持在环的孔洞里。
+    // 环不自交之后，它不会再从管与管的缝隙间挤出来。
+    const coreGeometry = new THREE.IcosahedronGeometry(0.36, 3);
     const coreMaterial = new THREE.MeshStandardMaterial({
       color: new THREE.Color("#7c3aed"),
       emissive: new THREE.Color("#4f46e5"),
