@@ -3,9 +3,10 @@ import { randomUUID } from "node:crypto";
 import { and, desc, eq, isNull } from "drizzle-orm";
 
 import type { Knowledge } from "../../types/knowledge";
+import type { Raw } from "../../types/raw";
 import { getUserContext } from "../auth/context";
 import { getDb } from "../db/client";
-import { noteRevisions, notes } from "../db/schema";
+import { noteRevisions, notes, rawNotes } from "../db/schema";
 
 // 知识页（notes）服务层。
 // 读路径默认只返回"未归档且未软删除"的行；按 id / rawId 单条读取不过滤（与旧存储行为一致）。
@@ -74,6 +75,75 @@ export async function getNoteByRawId(rawId: string): Promise<Knowledge | null> {
   const [row] = rows;
 
   return row ? toKnowledge(row) : null;
+}
+
+function titleFromText(text: string) {
+  const firstLine = text.split(/\r?\n/).map((line) => line.trim()).find(Boolean) ?? "未命名笔记";
+  const withoutHeading = firstLine.replace(/^#+\s*/, "").trim() || "未命名笔记";
+  return withoutHeading.length > 40 ? `${withoutHeading.slice(0, 40)}…` : withoutHeading;
+}
+
+/**
+ * 创建一条笔记，同时保留一份不可替代的原始出处。
+ * 两张表在同一事务中写入，避免新建笔记只留下 Raw 或只留下 Knowledge。
+ */
+export async function createNoteFromText(text: string): Promise<{ knowledge: Knowledge; raw: Raw }> {
+  const { db } = await getDb();
+  const { userId } = getUserContext();
+  const content = text.trim();
+  const title = titleFromText(content);
+  const summary = content.replace(/\s+/g, " ").slice(0, 160) || "未添加摘要";
+
+  return db.transaction(async (tx) => {
+    const raw = (
+      await tx
+        .insert(rawNotes)
+        .values({ id: `raw_${randomUUID()}`, userId, text })
+        .returning()
+    )[0];
+
+    const row = (
+      await tx
+        .insert(notes)
+        .values({
+          id: `knowledge_${randomUUID()}`,
+          userId,
+          rawId: raw.id,
+          title,
+          summary,
+          content,
+          keyPoints: [],
+          concepts: [],
+          keywords: [],
+          origin: "user",
+        })
+        .returning()
+    )[0];
+
+    await tx.insert(noteRevisions).values({
+      id: `revision_${randomUUID()}`,
+      userId,
+      noteId: row.id,
+      version: row.version,
+      title: row.title,
+      summary: row.summary,
+      content: row.content,
+      keyPoints: row.keyPoints,
+      concepts: row.concepts,
+      keywords: row.keywords,
+      authorType: "user",
+      authorId: userId,
+    });
+
+    return {
+      knowledge: toKnowledge(row),
+      raw: {
+        id: raw.id,
+        text: raw.text,
+        createdAt: raw.createdAt.toISOString(),
+      },
+    };
+  });
 }
 
 export type PromoteInput = {

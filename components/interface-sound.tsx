@@ -241,25 +241,6 @@ export function useInterfaceSound() {
   return value;
 }
 
-export function SoundPreferencePrompt() {
-  const { enable, mute, preference } = useInterfaceSound();
-  if (preference !== "unknown") return null;
-
-  return (
-    <section className="sound-prompt" aria-label="声音反馈设置">
-      <div>
-        <span className="sound-prompt-kicker">声音反馈</span>
-        <strong>让操作多一点触感。</strong>
-        <p>试听轻柔的按键声。你可以随时关闭。</p>
-      </div>
-      <div className="sound-prompt-actions">
-        <button className="button-dark" type="button" onClick={enable}>试听并开启</button>
-        <button className="button-secondary" type="button" onClick={mute}>保持安静</button>
-      </div>
-    </section>
-  );
-}
-
 export function SoundToggle({ className = "" }: { className?: string }) {
   const { enabled, preference, toggle } = useInterfaceSound();
   if (preference === "loading" || preference === "unknown") return null;

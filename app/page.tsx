@@ -4,7 +4,6 @@ import type { FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 
 import {
-  SoundPreferencePrompt,
   SoundToggle,
   useInterfaceSound,
 } from "../components/interface-sound";
@@ -32,13 +31,13 @@ type Tab =
   | { id: string; kind: "draft"; rawId: string; label: string };
 
 const viewMeta: Record<ViewKey, { label: string; shortLabel: string }> = {
-  "new-note": { label: "留下原话", shortLabel: "记录" },
+  "new-note": { label: "新建笔记", shortLabel: "新建" },
   graph: { label: "知识网络", shortLabel: "网络" },
 };
 
 const directNavViews: ViewKey[] = ["new-note", "graph"];
 
-const NEW_NOTE_TAB: Tab = { id: "view:new-note", kind: "view", viewKey: "new-note", label: "留下原话" };
+const NEW_NOTE_TAB: Tab = { id: "view:new-note", kind: "view", viewKey: "new-note", label: "新建笔记" };
 
 function linesToArray(value: string) {
   return value.split("\n").map((line) => line.trim()).filter(Boolean);
@@ -90,10 +89,7 @@ export default function Home() {
   const [isAsking, setIsAsking] = useState(false);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [mentionTarget, setMentionTarget] = useState<MentionItem | null>(null);
-  const [expandedSections, setExpandedSections] = useState<Record<"raw" | "knowledge", boolean>>({
-    raw: true,
-    knowledge: true,
-  });
+  const [notesExpanded, setNotesExpanded] = useState(true);
   const [, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [organizingRawId, setOrganizingRawId] = useState<string | null>(null);
@@ -101,6 +97,7 @@ export default function Home() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [contextMenu, setContextMenu] = useState<
     | { type: "raw"; raw: Raw; x: number; y: number }
     | { type: "knowledge-title"; knowledge: Knowledge; x: number; y: number }
@@ -171,7 +168,6 @@ export default function Home() {
   }, [contextMenu]);
 
   const selectedRaw = raws.find((raw) => raw.id === selectedRawId) ?? raws[0] ?? null;
-  
 
   const mentionCandidates = useMemo(() => {
     if (mentionQuery === null) return [];
@@ -244,20 +240,23 @@ export default function Home() {
 
     setIsSaving(true);
     try {
-      const response = await fetch("/api/raw", {
+      const response = await fetch("/api/notes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text }),
       });
-      const payload = (await response.json()) as { raw?: Raw; error?: { message?: string } };
-      if (!response.ok || !payload.raw) throw new Error(payload.error?.message ?? "这段原话暂时没有留下。请稍后重试。");
+      const payload = (await response.json()) as { knowledge?: Knowledge; raw?: Raw; error?: { message?: string } };
+      if (!response.ok || !payload.knowledge || !payload.raw) throw new Error(payload.error?.message ?? "这条笔记暂时没有保存。请稍后重试。");
       setRaws((current) => [payload.raw!, ...current]);
+      setKnowledges((current) => [payload.knowledge!, ...current]);
       setSelectedRawId(payload.raw.id);
+      setSelectedKnowledge(payload.knowledge);
       setText("");
-      setNotice("原始记录已留下。它会保持原样，你可以请编辑助理提出整理稿。");
+      openKnowledgeTab(payload.knowledge);
+      setNotice("笔记已创建。你可以继续编辑它，也可以从右侧请编辑助理提出建议。");
       play("success");
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : "这段原话暂时没有留下。内容仍在输入框中，请稍后重试。");
+      setError(submitError instanceof Error ? submitError.message : "这条笔记暂时没有保存。内容仍在输入框中，请稍后重试。");
     } finally {
       setIsSaving(false);
     }
@@ -444,16 +443,16 @@ export default function Home() {
 
   function renderCaptureForm() {
     return <form className="capture-panel" onSubmit={handleSubmit}>
-      <div className="section-topline"><span>留下原话</span><StatusPill>原始记录不改写</StatusPill></div>
-      <label htmlFor="raw-text">把尚未整理的内容留在这里</label>
+      <div className="section-topline"><span>新建笔记</span><StatusPill>原始出处会自动保留</StatusPill></div>
+      <label htmlFor="raw-text">写下你现在想保存的内容</label>
       <textarea id="raw-text" value={text} onChange={(event) => setText(event.target.value)} maxLength={MAX_RAW_LENGTH} placeholder="课堂笔记、阅读摘录，或一个还没有答案的问题" rows={8} />
-      <div className="capture-footer"><span>{text.length.toLocaleString()} / {MAX_RAW_LENGTH.toLocaleString()}</span><button className="button-dark" type="submit" data-sound="press" disabled={isSaving}>{isSaving ? "正在留下" : "留下原话"}</button></div>
+      <div className="capture-footer"><span>{text.length.toLocaleString()} / {MAX_RAW_LENGTH.toLocaleString()}</span><button className="button-dark" type="submit" data-sound="press" disabled={isSaving}>{isSaving ? "正在保存" : "创建笔记"}</button></div>
     </form>;
   }
 
   function renderNewNote() {
     return <>
-      <header className="workspace-heading compact-heading"><div><p className="eyebrow">私人知识编辑室</p><h1>先留下原话。</h1><p>现在不必完整。记录会保持原样，之后再由你决定如何理解和收录。</p></div><StatusPill tone="accent">案头 01</StatusPill></header>
+      <header className="workspace-heading compact-heading"><div><p className="eyebrow">私人知识编辑室</p><h1>新增一条笔记。</h1><p>每次保存都会生成一条独立笔记，原始内容会作为出处保留。</p></div><StatusPill tone="accent">可继续添加</StatusPill></header>
       {renderCaptureForm()}
     </>;
   }
@@ -581,28 +580,24 @@ export default function Home() {
 
   if (showLanding) return <LandingPage onEnter={() => setShowLanding(false)} />;
 
-  return <main className="app-shell">
-    <div className="mobile-topbar"><button className="mobile-menu-button" type="button" data-sound="select" onClick={() => setMobileNavOpen((current) => !current)} aria-expanded={mobileNavOpen} aria-controls="workspace-nav">目录</button><AppLogo /><button className="mobile-new-button" type="button" data-sound="press" onClick={() => navigate("new-note")}>记录</button></div>
-    <aside id="workspace-nav" className={`workspace-sidebar${mobileNavOpen ? " is-open" : ""}`}>
-      <div className="sidebar-top"><AppLogo /><button className="workspace-switcher" type="button"><span className="workspace-avatar">G</span><span><strong>私人知识编辑室</strong><small>本地案头</small></span><span aria-hidden="true">⌄</span></button><button className="new-source-button" type="button" data-sound="press" onClick={() => navigate("new-note")}><span aria-hidden="true">+</span> 留下原话</button></div>
+  return <main className={`app-shell${sidebarOpen ? "" : " sidebar-collapsed"}`}>
+    <div className="mobile-topbar"><button className="mobile-menu-button" type="button" data-sound="select" onClick={() => setMobileNavOpen((current) => !current)} aria-expanded={mobileNavOpen} aria-controls="workspace-nav">目录</button><AppLogo /><button className="mobile-new-button" type="button" data-sound="press" onClick={() => navigate("new-note")}>新建</button></div>
+    <aside id="workspace-nav" className={`workspace-sidebar${mobileNavOpen ? " is-open" : ""}${sidebarOpen ? "" : " is-collapsed"}`}>
+      <button className="sidebar-toggle" type="button" data-sound="select" onClick={() => setSidebarOpen((current) => !current)} aria-expanded={sidebarOpen} aria-controls="workspace-nav" aria-label={sidebarOpen ? "收起笔记侧栏" : "展开笔记侧栏"}><span aria-hidden="true">{sidebarOpen ? "‹" : "›"}</span></button>
+      <div className="sidebar-top"><AppLogo /><button className="workspace-switcher" type="button"><span className="workspace-avatar">G</span><span><strong>私人知识编辑室</strong><small>本地案头</small></span><span aria-hidden="true">⌄</span></button><button className="new-source-button" type="button" data-sound="press" onClick={() => navigate("new-note")}><span aria-hidden="true">+</span> 新建笔记</button></div>
       <nav className="file-tree" aria-label="编辑室目录">
         <div className="tree-section">
-          <button className="tree-section-header" type="button" data-sound="select" onClick={() => setExpandedSections((current) => ({ ...current, raw: !current.raw }))} aria-expanded={expandedSections.raw}>
-            <span className={`tree-caret${expandedSections.raw ? " is-open" : ""}`} aria-hidden="true">▾</span>
-            <span>原始记录</span>
-            <span className="tree-count">{raws.length}</span>
-          </button>
-          {expandedSections.raw ? <div className="tree-items">{raws.length === 0 ? <p className="tree-empty">还没有留下原话</p> : raws.map((raw) => <button className={`tree-item${activeTabId === `raw:${raw.id}` ? " is-selected" : ""}`} type="button" data-sound="select" key={raw.id} onClick={() => openRawTab(raw)}>{getPreview(raw.text, 32)}</button>)}</div> : null}
-        </div>
-        <div className="tree-section">
-          <button className="tree-section-header" type="button" data-sound="select" onClick={() => setExpandedSections((current) => ({ ...current, knowledge: !current.knowledge }))} aria-expanded={expandedSections.knowledge}>
-            <span className={`tree-caret${expandedSections.knowledge ? " is-open" : ""}`} aria-hidden="true">▾</span>
-            <span>知识页</span>
+          <button className="tree-section-header" type="button" data-sound="select" onClick={() => setNotesExpanded((current) => !current)} aria-expanded={notesExpanded}>
+            <span className={`tree-caret${notesExpanded ? " is-open" : ""}`} aria-hidden="true">▾</span>
+            <span>笔记</span>
             <span className="tree-count">{knowledges.length}</span>
           </button>
-          {expandedSections.knowledge ? <div className="tree-items">{knowledges.length === 0 ? <p className="tree-empty">还没有收录知识页</p> : knowledges.map((knowledge) => <button className={`tree-item${activeTabId === `knowledge:${knowledge.id}` ? " is-selected" : ""}`} type="button" data-sound="select" key={knowledge.id} onClick={() => openKnowledgeTab(knowledge)}>{getPreview(knowledge.title, 32)}</button>)}</div> : null}
+          {notesExpanded ? <div className="tree-items">{knowledges.length === 0 ? <p className="tree-empty">还没有笔记，先创建一条</p> : knowledges.map((knowledge) => <button className={`tree-item${activeTabId === `knowledge:${knowledge.id}` ? " is-selected" : ""}`} type="button" data-sound="select" key={knowledge.id} onClick={() => openKnowledgeTab(knowledge)}>{getPreview(knowledge.title, 32)}</button>)}</div> : null}
         </div>
-        <div className="tree-tools"><button className={`tree-tool-item${activeTabId === "view:graph" ? " is-active" : ""}`} type="button" data-sound="select" onClick={() => navigate("graph")}>{viewMeta.graph.label}</button></div>
+        <div className="tree-section tree-tools-section">
+          <button className={`tree-tool-item${activeTabId === "view:new-note" ? " is-active" : ""}`} type="button" data-sound="select" onClick={() => navigate("new-note")}><span aria-hidden="true">＋</span> 新建笔记</button>
+          <button className={`tree-tool-item${activeTabId === "view:graph" ? " is-active" : ""}`} type="button" data-sound="select" onClick={() => navigate("graph")}>{viewMeta.graph.label}</button>
+        </div>
       </nav>
       <div className="sidebar-bottom"><SoundToggle className="sound-toggle-sidebar" /><div className="data-status"><span className="status-dot" aria-hidden="true" /><span><strong>本地记录可用</strong><small>原始记录与知识页可追溯</small></span></div><span className="sidebar-version">AI Notes</span></div>
     </aside>
@@ -628,7 +623,6 @@ export default function Home() {
       <div className="ai-trace"><span className="status-dot" aria-hidden="true" />回复只依据你选择的材料，也不会自动写入知识页</div>
     </aside>
     <nav className="mobile-bottom-nav" aria-label="移动端导航">{directNavViews.map((view) => <button className={activeTab.kind === "view" && activeTab.viewKey === view ? "is-active" : ""} type="button" data-sound="select" key={view} onClick={() => navigate(view)}><span>{viewMeta[view].shortLabel}</span></button>)}<button type="button" data-sound="select" onClick={() => setMobileNavOpen(true)}><span>更多</span></button></nav>
-    <SoundPreferencePrompt />
     {contextMenu?.type === "raw" ? <div className="raw-context-menu" style={{ left: contextMenu.x, top: contextMenu.y }} onClick={(event) => event.stopPropagation()}><div className="context-menu-label">原始记录</div><div className="context-menu-title">{getPreview(contextMenu.raw.text, 62)}</div><button type="button" data-sound="destructive" onClick={() => void handleDeleteRaw(contextMenu.raw)}>移除这条记录</button></div> : null}
     {contextMenu?.type === "knowledge-title" ? <div className="raw-context-menu" style={{ left: contextMenu.x, top: contextMenu.y }} onClick={(event) => event.stopPropagation()}><div className="context-menu-label">修订标题</div><div className="context-menu-title">{getPreview(contextMenu.knowledge.title, 62)}</div><button type="button" data-sound="press" onClick={() => { setEditingTitleId(contextMenu.knowledge.id); setTitleDraft(contextMenu.knowledge.title); setContextMenu(null); }}>修改标题</button></div> : null}
   </main>;
