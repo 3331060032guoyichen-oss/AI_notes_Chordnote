@@ -3927,3 +3927,59 @@ input::placeholder {
     filter: blur(110px);
   }
 }
+/* 新建笔记的「笔记名」输入（与正文框区分层级：更小、更像标题栏） */
+.raw-title-input {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--line, rgb(148 163 184 / 16%));
+  border-radius: 12px;
+  background: rgb(255 255 255 / 4%);
+  color: inherit;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.raw-title-input::placeholder {
+  color: rgb(148 163 184 / 75%);
+  font-weight: 500;
+}
+
+.raw-title-input:focus-visible {
+  outline: 2px solid #7c3aed;
+  outline-offset: 1px;
+}
+
+.field-hint {
+  margin-left: 8px;
+  color: rgb(148 163 184 / 85%);
+  font-size: 11px;
+  font-weight: 500;
+}
+/* 标牌语：英文主句 + 中文注脚 */
+.landing-slogan {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  margin: clamp(18px, 2.6vh, 30px) 0 0;
+  font-size: clamp(15px, 1.15vw, 18px);
+  letter-spacing: -0.01em;
+  flex-wrap: wrap;
+}
+
+.landing-slogan {
+  color: #a5f3fc;
+  font-weight: 650;
+}
+
+.landing-slogan span {
+  color: rgb(148 163 184 / 90%);
+  font-size: 0.86em;
+  font-weight: 500;
+}
+
+/* 标牌语之后紧跟的正文，间距收紧一档 */
+.landing-slogan + .landing-lede {
+  margin-top: clamp(12px, 1.8vh, 20px);
+}
