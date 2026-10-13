@@ -4261,3 +4261,90 @@ input::placeholder {
     animation: none;
   }
 }
+/* ============================================================
+   Hero 横向分区（根治重叠）
+   之前用绝对定位 + 猜 px 值，标题按 vw 缩放而碎片卡在 px 上限，
+   窗口一宽就必然叠在一起。现在改成按容器百分比硬分区：
+     左 0–56%  文字
+     中 58–78% 三块碎片
+     右 78–100% 3D 粒子场
+   百分比随容器一起缩放，任何窗口宽度都不会越界。
+   ============================================================ */
+
+.landing-hero {
+  max-width: 1560px;
+}
+
+.landing-hero > .landing-eyebrow,
+.landing-hero > .landing-title,
+.landing-hero > .landing-slogan,
+.landing-hero > .landing-lede,
+.landing-hero > .landing-actions,
+.landing-hero > .landing-facts {
+  max-width: 56%;
+}
+
+/* 碎片容器只占中间一段，碎片改用 left 定位（相对这个容器） */
+.landing-shards {
+  z-index: 4;
+  right: auto;
+  left: 58%;
+  width: 20%;
+}
+
+.shard-note {
+  top: 12%;
+  right: auto;
+  left: 0;
+}
+
+.shard-ai {
+  top: 40%;
+  right: auto;
+  left: 12%;
+}
+
+.shard-graph {
+  top: 66%;
+  right: auto;
+  left: 4%;
+}
+
+/* 3D 占最右一段 */
+.landing-orb-slot {
+  top: 48%;
+  right: 0;
+  left: auto;
+  width: 24%;
+  height: auto;
+  aspect-ratio: 1;
+  transform: translateY(-50%);
+}
+
+/* 窄屏退回单列：碎片隐藏，3D 缩到角落 */
+@media (max-width: 1180px) {
+  .landing-hero > .landing-eyebrow,
+  .landing-hero > .landing-title,
+  .landing-hero > .landing-slogan,
+  .landing-hero > .landing-lede,
+  .landing-hero > .landing-actions,
+  .landing-hero > .landing-facts {
+    max-width: 100%;
+  }
+
+  .landing-shards {
+    display: none;
+  }
+
+  .landing-orb-slot {
+    right: -8%;
+    width: 34%;
+    opacity: 0.5;
+  }
+}
+
+@media (max-width: 820px) {
+  .landing-orb-slot {
+    display: none;
+  }
+}
