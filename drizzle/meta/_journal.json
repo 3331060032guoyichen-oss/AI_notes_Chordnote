@@ -29,6 +29,13 @@
       "when": 1791647379371,
       "tag": "0003_lean_bloodscream",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1791903404978,
+      "tag": "0004_boring_jackal",
+      "breakpoints": true
     }
   ]
 }

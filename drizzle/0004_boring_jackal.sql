@@ -1,0 +1,1 @@
+ALTER TABLE "raw_notes" ADD COLUMN "title" text;
