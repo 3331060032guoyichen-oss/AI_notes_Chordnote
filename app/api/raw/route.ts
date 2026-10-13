@@ -6,11 +6,12 @@ import {
   createSource,
   listSources,
   MAX_RAW_TEXT_LENGTH,
+  MAX_RAW_TITLE_LENGTH,
 } from "../../../lib/services/sources";
 
 export const runtime = "nodejs";
 
-type RawRequestBody = { text?: unknown; rawId?: unknown };
+type RawRequestBody = { text?: unknown; title?: unknown; rawId?: unknown };
 
 function errorResponse(message: string, status: number, code: string) {
   return NextResponse.json({ error: { code, message } }, { status });
@@ -59,8 +60,24 @@ export async function POST(request: Request) {
     );
   }
 
+  // 笔记名可选；只做长度与类型校验，不接受非字符串
+  let title: string | null = null;
+  if (body.title !== undefined && body.title !== null) {
+    if (typeof body.title !== "string") {
+      return errorResponse("笔记名的格式无法识别，请重新填写。", 400, "TITLE_INVALID");
+    }
+    if (body.title.length > MAX_RAW_TITLE_LENGTH) {
+      return errorResponse(
+        `笔记名不能超过 ${MAX_RAW_TITLE_LENGTH} 个字符，请缩短后再保存。`,
+        400,
+        "TITLE_TOO_LONG",
+      );
+    }
+    title = body.title;
+  }
+
   try {
-    return NextResponse.json({ raw: await createSource(body.text) }, { status: 201 });
+    return NextResponse.json({ raw: await createSource(body.text, title) }, { status: 201 });
   } catch {
     return errorResponse(
       "这段原话暂时没有留下。内容没有写入，请稍后重试。",

@@ -24,9 +24,13 @@ type SourceRow = typeof rawNotes.$inferSelect;
 /** 原始记录正文长度上限（POST 与 PATCH 共用同一个数字，避免两处各写一份）。 */
 export const MAX_RAW_TEXT_LENGTH = 50_000;
 
+/** 笔记名长度上限。标题只是索引用的短标签，不需要很长。 */
+export const MAX_RAW_TITLE_LENGTH = 120;
+
 function toSource(row: SourceRow): Raw {
   return {
     id: row.id,
+    title: row.title,
     text: row.text,
     createdAt: row.createdAt.toISOString(),
   };
@@ -57,12 +61,17 @@ export async function getSource(id: string): Promise<Raw | null> {
   return row ? toSource(row) : null;
 }
 
-export async function createSource(text: string): Promise<Raw> {
+/**
+ * 新建原始记录。
+ * `title` 可选：原始记录允许先只有正文，笔记名后补（也允许一直不填）。
+ */
+export async function createSource(text: string, title?: string | null): Promise<Raw> {
   const { db } = await getDb();
   const { userId } = getUserContext();
+  const normalizedTitle = typeof title === "string" && title.trim() ? title.trim() : null;
   const rows = await db
     .insert(rawNotes)
-    .values({ id: `raw_${randomUUID()}`, userId, text })
+    .values({ id: `raw_${randomUUID()}`, userId, text, title: normalizedTitle })
     .returning();
 
   return toSource(rows[0]);

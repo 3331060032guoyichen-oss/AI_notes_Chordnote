@@ -15,6 +15,9 @@
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.2.0",
+    "@tsparticles/engine": "^4.4.0",
+    "@tsparticles/react": "^4.4.0",
+    "@tsparticles/slim": "^4.4.0",
     "bufferutil": "^4.1.0",
     "drizzle-orm": "0.45.4",
     "next": "^15.0.0",

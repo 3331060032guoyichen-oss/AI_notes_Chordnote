@@ -139,6 +139,8 @@ export async function createNoteFromText(text: string): Promise<{ knowledge: Kno
       knowledge: toKnowledge(row),
       raw: {
         id: raw.id,
+        // 原始记录的「笔记名」列（迁移 0004 新增），由用户手填，可与自动标题并存
+        title: raw.title,
         text: raw.text,
         createdAt: raw.createdAt.toISOString(),
       },

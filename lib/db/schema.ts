@@ -47,6 +47,8 @@ export const rawNotes = pgTable(
   {
     id,
     userId,
+    // 笔记名：可选。留空时列表回退为正文预览（记录原话的门槛不该被标题抬高）
+    title: text("title"),
     text: text("text").notNull(),
     version: integer("version").notNull().default(1),
     // 归档优先：删除治理统一为"先归档"，永久删除属独立高风险流程

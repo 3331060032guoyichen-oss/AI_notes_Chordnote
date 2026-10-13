@@ -15,6 +15,7 @@ import type { OrganizeDraft } from "../types/organize";
 import type { Raw } from "../types/raw";
 
 const MAX_RAW_LENGTH = 50_000;
+const MAX_RAW_TITLE_LENGTH = 120;
 
 type ViewKey = "new-note" | "graph";
 
@@ -58,7 +59,7 @@ function getPreview(text: string, length = 140) {
 }
 
 function AppLogo() {
-  return <div className="app-logo" aria-label="AI Notes"><span className="logo-mark" aria-hidden="true">AN</span><span>AI Notes</span></div>;
+  return <div className="app-logo" aria-label="Chordnote"><span className="logo-mark" aria-hidden="true">C</span><span>Chordnote</span></div>;
 }
 
 function StatusPill({ children, tone = "neutral" }: { children: React.ReactNode; tone?: "neutral" | "accent" | "warning" }) {
@@ -75,6 +76,7 @@ export default function Home() {
   const [openTabs, setOpenTabs] = useState<Tab[]>([NEW_NOTE_TAB]);
   const [activeTabId, setActiveTabId] = useState(NEW_NOTE_TAB.id);
   const [text, setText] = useState("");
+  const [noteTitle, setNoteTitle] = useState("");
   const [raws, setRaws] = useState<Raw[]>([]);
   const [knowledges, setKnowledges] = useState<Knowledge[]>([]);
   const [graph, setGraph] = useState<GraphData>({ nodes: [], edges: [] });
@@ -218,7 +220,7 @@ export default function Home() {
 
   function openRawTab(raw: Raw) {
     setSelectedRawId(raw.id);
-    openTab({ id: `raw:${raw.id}`, kind: "raw", rawId: raw.id, label: getPreview(raw.text, 18) });
+    openTab({ id: `raw:${raw.id}`, kind: "raw", rawId: raw.id, label: raw.title?.trim() ? getPreview(raw.title, 18) : getPreview(raw.text, 18) });
   }
 
   function openKnowledgeTab(knowledge: Knowledge) {
@@ -243,7 +245,7 @@ export default function Home() {
       const response = await fetch("/api/notes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
+        body: JSON.stringify({ text, title: noteTitle.trim() || null }),
       });
       const payload = (await response.json()) as { knowledge?: Knowledge; raw?: Raw; error?: { message?: string } };
       if (!response.ok || !payload.knowledge || !payload.raw) throw new Error(payload.error?.message ?? "这条笔记暂时没有保存。请稍后重试。");
@@ -252,6 +254,7 @@ export default function Home() {
       setSelectedRawId(payload.raw.id);
       setSelectedKnowledge(payload.knowledge);
       setText("");
+        setNoteTitle("");
       openKnowledgeTab(payload.knowledge);
       setNotice("笔记已创建。你可以继续编辑它，也可以从右侧请编辑助理提出建议。");
       play("success");
@@ -444,6 +447,16 @@ export default function Home() {
   function renderCaptureForm() {
     return <form className="capture-panel" onSubmit={handleSubmit}>
       <div className="section-topline"><span>新建笔记</span><StatusPill>原始出处会自动保留</StatusPill></div>
+        <label htmlFor="raw-title">笔记名<span className="field-hint">可选，方便日后在左侧找到它</span></label>
+        <input
+          id="raw-title"
+          className="raw-title-input"
+          type="text"
+          value={noteTitle}
+          onChange={(event) => setNoteTitle(event.target.value)}
+          maxLength={MAX_RAW_TITLE_LENGTH}
+          placeholder="例如：第三讲 · 反向传播推导"
+        />
       <label htmlFor="raw-text">写下你现在想保存的内容</label>
       <textarea id="raw-text" value={text} onChange={(event) => setText(event.target.value)} maxLength={MAX_RAW_LENGTH} placeholder="课堂笔记、阅读摘录，或一个还没有答案的问题" rows={8} />
       <div className="capture-footer"><span>{text.length.toLocaleString()} / {MAX_RAW_LENGTH.toLocaleString()}</span><button className="button-dark" type="submit" data-sound="press" disabled={isSaving}>{isSaving ? "正在保存" : "创建笔记"}</button></div>
@@ -599,10 +612,10 @@ export default function Home() {
           <button className={`tree-tool-item${activeTabId === "view:graph" ? " is-active" : ""}`} type="button" data-sound="select" onClick={() => navigate("graph")}>{viewMeta.graph.label}</button>
         </div>
       </nav>
-      <div className="sidebar-bottom"><SoundToggle className="sound-toggle-sidebar" /><div className="data-status"><span className="status-dot" aria-hidden="true" /><span><strong>本地记录可用</strong><small>原始记录与知识页可追溯</small></span></div><span className="sidebar-version">AI Notes</span></div>
+      <div className="sidebar-bottom"><SoundToggle className="sound-toggle-sidebar" /><div className="data-status"><span className="status-dot" aria-hidden="true" /><span><strong>本地记录可用</strong><small>原始记录与知识页可追溯</small></span></div><span className="sidebar-version">Chordnote · 和弦</span></div>
     </aside>
     <section className="workspace-main">
-      <div className="workspace-topbar"><div className="breadcrumb"><span>AI Notes</span><span aria-hidden="true">/</span><strong>{activeTab.label}</strong></div><div className="topbar-actions"><SoundToggle className="sound-toggle-desktop" /><span className="topbar-status"><span className="status-dot" aria-hidden="true" />本地案头</span><button className="avatar-button" type="button" aria-label="打开个人菜单">G</button></div></div>
+      <div className="workspace-topbar"><div className="breadcrumb"><span>Chordnote</span><span aria-hidden="true">/</span><strong>{activeTab.label}</strong></div><div className="topbar-actions"><SoundToggle className="sound-toggle-desktop" /><span className="topbar-status"><span className="status-dot" aria-hidden="true" />本地案头</span><button className="avatar-button" type="button" aria-label="打开个人菜单">G</button></div></div>
       <div className="tab-bar" role="tablist">{openTabs.map((tab) => <div key={tab.id} className={`tab-chip${activeTabId === tab.id ? " is-active" : ""}`} role="tab" tabIndex={activeTabId === tab.id ? 0 : -1} data-sound="select" aria-selected={activeTabId === tab.id} onClick={() => setActiveTabId(tab.id)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setActiveTabId(tab.id); } }}><span>{tab.label}</span><button type="button" data-sound="select" aria-label="关闭标签" onClick={(event) => { event.stopPropagation(); closeTab(tab.id); }}>×</button></div>)}</div>
       <div className="workspace-content"><div className="main-column">{error ? <div className="feedback-banner error-message" role="alert">{error}</div> : null}{notice ? <div className="feedback-banner notice-message" aria-live="polite">{notice}</div> : null}{renderMainContent()}</div></div>
     </section>

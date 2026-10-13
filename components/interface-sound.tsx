@@ -241,6 +241,7 @@ export function useInterfaceSound() {
   return value;
 }
 
+
 export function SoundToggle({ className = "" }: { className?: string }) {
   const { enabled, preference, toggle } = useInterfaceSound();
   if (preference === "loading" || preference === "unknown") return null;
