@@ -642,6 +642,8 @@ textarea:focus-visible {
   display: grid;
   grid-template-columns: var(--sidebar-width) minmax(0, 1fr) var(--rail-width);
   min-height: 100dvh;
+  background: var(--paper);
+  transition: grid-template-columns 180ms ease;
 }
 
 .workspace-sidebar {
@@ -656,6 +658,42 @@ textarea:focus-visible {
   background: color-mix(in srgb, var(--surface) 78%, transparent);
   backdrop-filter: blur(16px) saturate(1.05);
   -webkit-backdrop-filter: blur(16px) saturate(1.05);
+}
+
+.workspace-sidebar.is-collapsed {
+  align-items: center;
+  padding-right: 8px;
+  padding-left: 8px;
+}
+
+.workspace-sidebar.is-collapsed > *:not(.sidebar-toggle) {
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.sidebar-toggle {
+  position: absolute;
+  z-index: 6;
+  top: 76px;
+  right: -11px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: 0 8px 8px 0;
+  color: var(--muted);
+  background: var(--surface-raised);
+  box-shadow: 4px 5px 12px rgb(42 56 108 / 8%);
+  font-size: 18px;
+  line-height: 1;
+}
+
+.sidebar-toggle:hover {
+  color: var(--accent-strong);
+  background: var(--accent-soft);
 }
 
 .sidebar-top {
@@ -920,7 +958,8 @@ textarea:focus-visible {
   font-size: 11px;
 }
 
-.tree-tools {
+.tree-tools,
+.tree-tools-section {
   display: grid;
   gap: 2px;
   padding-top: 14px;
@@ -928,6 +967,9 @@ textarea:focus-visible {
 }
 
 .tree-tool-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
   padding: 7px 10px;
   border: 0;
   border-radius: 7px;
@@ -2707,6 +2749,10 @@ input::placeholder {
     grid-template-columns: 216px minmax(0, 1fr) 280px;
   }
 
+  .app-shell.sidebar-collapsed {
+    grid-template-columns: 48px minmax(0, 1fr) 280px;
+  }
+
   .workspace-content,
   .workspace-topbar {
     padding-right: 28px;
@@ -2722,6 +2768,10 @@ input::placeholder {
 @media (max-width: 1020px) {
   .app-shell {
     grid-template-columns: 216px minmax(0, 1fr);
+  }
+
+  .app-shell.sidebar-collapsed {
+    grid-template-columns: 48px minmax(0, 1fr);
   }
 
   .ai-rail {
@@ -2740,6 +2790,10 @@ input::placeholder {
     display: block;
     min-height: 100dvh;
     padding-bottom: 67px;
+  }
+
+  .app-shell.sidebar-collapsed {
+    display: block;
   }
 
   .mobile-topbar {
@@ -2783,6 +2837,22 @@ input::placeholder {
 
   .workspace-sidebar.is-open {
     display: flex;
+  }
+
+  .workspace-sidebar.is-collapsed {
+    align-items: stretch;
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+
+  .workspace-sidebar.is-collapsed > *:not(.sidebar-toggle) {
+    visibility: visible;
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .sidebar-toggle {
+    display: none;
   }
 
   .sidebar-top .app-logo {
@@ -3170,93 +3240,6 @@ input::placeholder {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--success) 16%, transparent);
 }
 
-.sound-prompt {
-  position: fixed;
-  z-index: 35;
-  right: 24px;
-  bottom: 24px;
-  display: grid;
-  gap: 16px;
-  width: min(336px, calc(100vw - 32px));
-  padding: 20px;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-panel);
-  color: var(--ink);
-  background-color: rgb(16 26 48 / 94%);
-  background-image: radial-gradient(circle, var(--texture-dot) 0.65px, transparent 0.75px);
-  background-size: 9px 9px;
-  box-shadow: var(--panel-shadow), 0 18px 54px rgb(2 6 23 / 60%);
-}
-
-.sound-prompt-close {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  display: grid;
-  place-items: center;
-  width: 26px;
-  height: 26px;
-  border: 1px solid transparent;
-  border-radius: 7px;
-  color: var(--quiet);
-  background: transparent;
-  font-size: 15px;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.sound-prompt-close:hover {
-  border-color: var(--line);
-  color: var(--ink);
-  background: var(--surface);
-}
-
-.sound-prompt-close:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
-/* 窄屏：上移避开底部导航，别挡住主操作 */
-@media (max-width: 760px) {
-  .sound-prompt {
-    right: 16px;
-    bottom: 78px;
-    left: 16px;
-    width: auto;
-  }
-}
-
-.sound-prompt-kicker {
-  display: block;
-  margin-bottom: 8px;
-  color: var(--accent-strong);
-  font-size: 10px;
-  font-weight: 750;
-  letter-spacing: 0.1em;
-}
-
-.sound-prompt strong {
-  display: block;
-  font-size: 16px;
-  letter-spacing: -0.02em;
-}
-
-.sound-prompt p {
-  margin: 7px 0 0;
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.6;
-}
-
-.sound-prompt-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.sound-prompt-actions button {
-  flex: 1 1 130px;
-}
 
 .sound-toggle {
   display: inline-flex;
@@ -3303,12 +3286,6 @@ input::placeholder {
     display: inline-flex;
   }
 
-  .sound-prompt {
-    right: 16px;
-    bottom: 83px;
-    left: 16px;
-    width: auto;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -3488,65 +3465,6 @@ input::placeholder {
   box-shadow: 0 16px 28px -12px rgba(79, 70, 229, 0.7);
 }
 
-/* 5) 右下角悬浮球 —— 发光玻璃球 */
-.sound-prompt {
-  width: 68px;
-  height: 68px;
-  padding: 0;
-  gap: 0;
-  border-radius: 50%;
-  border: 1px solid rgb(148 163 184 / 26%);
-  background: rgb(16 26 48 / 72%);
-  backdrop-filter: blur(16px) saturate(180%);
-  -webkit-backdrop-filter: blur(16px) saturate(180%);
-  box-shadow:
-    0 0 0 6px rgb(124 58 237 / 12%),
-    0 0 28px 4px rgb(124 58 237 / 42%),
-    0 8px 32px rgb(2 6 23 / 60%);
-  overflow: hidden;
-  cursor: pointer;
-  transition: transform 220ms ease, box-shadow 220ms ease, width 260ms ease, height 260ms ease;
-}
-
-.sound-prompt:hover {
-  transform: translateY(-2px) scale(1.04);
-}
-
-.sound-prompt.is-open {
-  width: min(336px, calc(100vw - 32px));
-  height: auto;
-  padding: 20px;
-  gap: 16px;
-  border-radius: 24px;
-  cursor: default;
-}
-
-.sound-prompt-orb {
-  display: grid;
-  place-items: center;
-  width: 100%;
-  height: 100%;
-  /* <button> 默认带 buttonface 浅灰底，会把玻璃球照白 */
-  border: 0;
-  background: transparent;
-  color: #a78bfa;
-  font-size: 24px;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.sound-prompt.is-open .sound-prompt-orb {
-  display: none;
-}
-
-.sound-prompt-body {
-  display: none;
-}
-
-.sound-prompt.is-open .sound-prompt-body {
-  display: grid;
-  gap: 16px;
-}
 
 @media (prefers-reduced-motion: reduce) {
   .blob {
