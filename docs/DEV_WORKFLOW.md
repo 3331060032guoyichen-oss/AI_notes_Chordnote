@@ -40,9 +40,13 @@ pnpm dev                     # http://localhost:3000
 pnpm exec tsc --noEmit   # 类型检查
 pnpm build               # 生产构建；不要与 pnpm dev 同时跑（共用 .next/ 会互相覆盖）
 pnpm dev                 # 另开终端
-pnpm test                # 60 项回归断言，需服务在跑；结束时打印「清理后库内为 0」
+pnpm test                # 74 项回归断言，需服务在跑；结束时打印「清理后本次测试数据为 0」
 pnpm verify:db           # 校验数据库结构（11 张表 / 11 个 CHECK / 8 个外键）
+pnpm seed:demo           # 可选：幂等写入演示数据（需服务在跑）
+pnpm seed:reset          # 可选：清空业务表（默认 dry-run，加 --yes 才执行，删除前备份到 .tmp/）
 ```
+
+断言只针对**本次测试自己造的数据**，所以库里播了演示内容（`pnpm seed:demo`）也能跑绿 —— 不要写成"全表为 0"。
 
 要验证线上而不是本地：把 `REGRESSION_BASE_URL` 指向线上站点再跑 `pnpm test`（PowerShell：`$env:REGRESSION_BASE_URL="https://hilarious-kheer-89a440.netlify.app"`）。
 

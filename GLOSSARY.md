@@ -23,8 +23,14 @@ AI 针对一条 Source 产出的整理结果，**不持久化**。用户确认�
 _Avoid_：草稿、OrganizeDraft（后者仅作类型名保留）
 
 **Proposal（提议）**：
-AI 想要改变知识网络时提交的可审阅对象，三态 `proposed / accepted / rejected`。当前只有表与枚举，**没有服务、没有接口**。
+AI 想要改变知识网络时提交的可审阅对象。**状态机**：`pending → approved → applied`（用户同意并执行）/ `rejected`（用户拒绝）/ `stale`（同意时目标已经变了，只能让 AI 重新生成）。服务在 `lib/services/proposals.ts`，接口在 `/api/proposals*`；`kind` 目前放行 `link_create` / `source_create` / `note_update`。
+**提议不是写入**：approved 只是"同意"，真正落库发生在 `apply`，两者分开是为了让"谁在什么时候同意了什么"可查。
 _Avoid_：建议、suggestion
+
+**Archive（归档）**：
+把一条 Source 或 Note 从**日常视图**里收起来 —— 「我不想在日常里看到它」，不是「它不是我的数据」。原始记录与知识页都有这个状态（`archived_at`），都可以恢复。
+导出**包含已归档内容**；归档不写修订历史（正文没变），只写审计。被归档的 Note 不再挡着它的 Source 被移除。
+_Avoid_：删除、软删除（那是 `deleted_at` 与 `links` 的语义）、回收站
 
 **Chord（和弦）**：
 产品品牌名与营销隐喻（"一条笔记是音符，连起来才是和弦"）。**它不是领域概念**——数据模型里不存在这个实体，代码里也没有对应类型。

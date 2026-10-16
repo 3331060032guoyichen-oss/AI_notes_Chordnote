@@ -6,21 +6,29 @@
 
 ## 一、当前实际模型（已实现）
 
-持久化在 `data/*.json`，由 `lib/*-storage.ts` 通过 `node:fs/promises` 读写。
-所有读取在文件不存在（`ENOENT`）时返回空数组/空对象，不抛异常。
+> ⚠️ **2026-10-17 现状纠正：存储层早已不是 JSON 文件。**
+> 实际持久化在 **PostgreSQL（Neon）**，由 **Drizzle ORM** 读写：schema 在 `lib/db/schema.ts`，
+> 迁移在 `drizzle/0000`–`0005`，服务层在 `lib/services/`（`sources` / `notes` / `links` / `proposals` / `bundle`）。
+> 下面各条目的**字段形状**仍然准确（类型层 `types/` 与之一致），但凡是写着 `data/*.json`、
+> `lib/*-storage.ts`、文件不存在返回空数组的句子，都是 2026-10 早期 JSON 时代的遗留，**以代码为准**。
+> 契约与路由见 [`docs/schema.md`](schema.md)。
 
 ### Raw —— 原始输入（用户可改，AI 不可改）
 
 ```text
 Raw {
   id: string          // raw_<uuid>
+  title: string | null // 用户起的名字（迁移 0004 新增）；为空时界面显示「未命名 N」
   text: string        // 上限 50000 字符
+  archivedAt: string | null
   createdAt: string
 }
 ```
 
-存储于 `data/raw.json`（不进 Git）。**当前代码**只有创建（`POST /api/raw`）、列表（`GET`）、删除（`DELETE`）三种操作，**还没有修改接口**。
-若该 Raw 已被某条 Knowledge 引用，删除会返回 `409 RAW_REFERENCED_BY_KNOWLEDGE`。
+表 `raw_notes`。当前有创建（`POST /api/raw`）、列表（`GET`）、修订（`PATCH /api/raw/:id`，留 `audit_log`）
+与「移除」—— 移除是**归档**（写 `archived_at`），不是物理删除。
+若该 Raw 被一条**未归档的** Knowledge 引用，「移除」返回 `409 RAW_REFERENCED_BY_KNOWLEDGE`；
+那一页归档之后即可移除（2026-10-17 修：此前不管页码状态一律 409，用户没有出口）。
 
 > **2026-10-10 决策：Raw 允许用户修改。**
 > 原先「Raw 不可变」的表述作废。新的边界是：**用户可改，AI 不可改**。

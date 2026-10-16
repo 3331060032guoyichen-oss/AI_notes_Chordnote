@@ -112,13 +112,14 @@ All business tables carry `user_id text NOT NULL`. 所有时间列为 `timestamp
 | Method & Path | Request | Success | Notes |
 |---|---|---|---|
 | `GET /api/raw` | — | `200 { raws: Raw[] }` | 排除已归档 |
-| `POST /api/raw` | `{ text }` | `201 { raw }` | 空 / 超长 → 400 |
-| `DELETE /api/raw` | `{ rawId }` | `200 { deleted, archived: true }` | **归档**，非物理删除；被知识页引用 → 409 |
+| `POST /api/raw` | `{ text, title? }` | `201 { raw }` | 空 / 超长 → 400；`title` 可选，非字符串或超长 → 400 |
+| `DELETE /api/raw` | `{ rawId }` | `200 { deleted, archived: true }` | **归档**，非物理删除；被**未归档的**知识页引用 → `409 RAW_REFERENCED_BY_KNOWLEDGE`（那一页归档后即可移除）|
 | `PATCH /api/raw/:id` | `{ text }` | `200 { raw, changed }` | `user_edit`：只有 `user` 主体可用（Agent → `403 USE_PROPOSAL_FLOW`）；每次改动写一条 `audit_log` 修订记录；正文相同 → `changed: false` 且不写库；不存在 / 已归档 / 非本人 → `404 RAW_NOT_FOUND` |
 | `GET /api/knowledge` | — | `200 { knowledges: Knowledge[] }` | 排除归档 / 墓碑 |
+| `GET /api/knowledge?scope=archived` | — | `200 { knowledges: Knowledge[] }` | 只返回已归档的页（左栏「已归档」分组用）|
 | `POST /api/knowledge` | `{ rawId, draft, origin? }` | `201 { knowledge, created: true }` | 幂等；已存在 → `200 created:false`；`origin` 默认 `user` |
 | `GET /api/knowledge/:id` | — | `200 { knowledge, raw }` | `raw` 可能为 `null` |
-| `PATCH /api/knowledge/:id` | 字段 + 可选 `version` | `200 { knowledge }` | 带 `version` 且不匹配 → `409 VERSION_CONFLICT`（不写入）|
+| `PATCH /api/knowledge/:id` | 字段 / `{ archived }` + 可选 `version` | `200 { knowledge }` | `archived: true/false` 即归档 / 恢复（不写修订，只写审计）；带 `version` 且不匹配 → `409 VERSION_CONFLICT`（不写入）|
 | `GET /api/knowledge/:id/relations` | — | `200 { relations }` | |
 | `GET /api/knowledge/:id/backlinks` | — | `200 { backlinks: Knowledge[] }` | 反查对端 |
 | `GET /api/relations` | — | `200 { relations }` | 排除已软删 |
@@ -127,8 +128,17 @@ All business tables carry `user_id text NOT NULL`. 所有时间列为 `timestamp
 | `GET /api/graph` | — | `200 { nodes, edges }` | 边仅保留两端都存在的笔记 |
 | `POST /api/organize` | `{ rawId }` | `200 { draft }` | 需 `DEEPSEEK_API_KEY`；缺 → `503` |
 | `POST /api/assistant` | `{ question, contextType, contextId? }` | `200 { answer }` | 同上；`contextType`: `knowledge \| raw \| draft \| none` |
+| `POST /api/assistant/propose` | `{ knowledgeId, question? }` | `200 { proposal }` | 编辑助理对一张知识页提出**改写正文**的提议（`note_update`），只落 `pending`，不写正文 |
+| `POST /api/agent/organize` | `{ question, contextType, contextId?, draftContext? }` | `200 { trace }` | Agent 工具循环（检索 → 通读 → 提提议），返回可渲染轨迹；提议真的落进 `proposals`（`status=pending`），正式数据一条不动 |
+| `GET /api/proposals` | `?status=&targetNoteId=` | `200 { proposals }` | 提议列表 |
+| `POST /api/proposals` | 提议内容 | `201 { proposal }` | 提交提议 |
+| `POST /api/proposals/:id/approve` `reject` `apply` | — | `200` | 决议与执行；`apply` 需要已 `approved`，支持 `Idempotency-Key`；目标版本变了 → 提议推进到 `stale` |
+| `GET /api/export` | `?format=markdown` | `200` JSON 全量快照 / `application/zip` | 默认 JSON（原始记录 + 知识页 + 关联 + 修订历史）；`format=markdown` 返回 README + notes/*.md + sources/*.md 的 zip |
+| `POST /api/import` | 知识包 JSON | `200 { dryRun, result }` | `?dryRun=1` 只算数不写库；同名（原始记录没有标题时按正文）一律保留已有、跳过导入 |
 
 `Knowledge` 响应字段：`id, rawId, title, summary, content, keyPoints[], concepts[], keywords[], version?, createdAt, updatedAt`。
+
+> **没有 `POST /api/notes`。** 它曾经是一次写出 raw + knowledge 的捷径，2026-10-17 删除 —— 那等于绕过「整理助手提议 → 用户确认」这一步。新建只写 Raw。
 
 ---
 
@@ -151,7 +161,7 @@ All business tables carry `user_id text NOT NULL`. 所有时间列为 `timestamp
 
 ## 7. Migration and Deployment
 
-- 迁移文件：`drizzle/0000`–`0003`。**已在 dev 分支执行**；**production 分支未执行任何迁移**。
+- 迁移文件：`drizzle/0000`–`0005`。**已在 dev 分支执行**；**production 分支未执行任何迁移**。
 - 应用运行期使用**池化**连接串（`DATABASE_URL`）；迁移与 `pg_dump` 使用**直连**串（`DATABASE_URL_UNPOOLED`）。
 - 环境变量：本地 `.env.local`（已 gitignore）；部署平台在站点设置里配置（不要写进仓库）。
 - `NOT IMPLEMENTED`：部署、Neon 连接在生产环境的验证、备份机制（当前依赖 Neon 免费套餐的 6 小时即时恢复窗口）。
