@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { isOrganizeDraft } from "../../../lib/deepseek";
-import { listNotes, promoteFromSource } from "../../../lib/services/notes";
+import { listArchivedNotes, listNotes, promoteFromSource } from "../../../lib/services/notes";
 import { getSource } from "../../../lib/services/sources";
 
 export const runtime = "nodejs";
@@ -16,9 +16,17 @@ function errorResponse(message: string, status: number, code: string) {
   return NextResponse.json({ error: { code, message } }, { status });
 }
 
-export async function GET() {
+/**
+ * 知识页列表。
+ *
+ * `?scope=archived` 读已归档的那些 —— 归档是"日常看不到"，所以要有一条显式的读取路径，
+ * 否则归档就成了一扇单向门。
+ */
+export async function GET(request: Request) {
   try {
-    return NextResponse.json({ knowledges: await listNotes() });
+    const scope = new URL(request.url).searchParams.get("scope");
+    const knowledges = scope === "archived" ? await listArchivedNotes() : await listNotes();
+    return NextResponse.json({ knowledges });
   } catch {
     return errorResponse(
       "知识页暂时没有载入。已收录的内容没有改变，请稍后重试。",

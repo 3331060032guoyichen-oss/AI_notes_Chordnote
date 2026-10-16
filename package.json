@@ -11,7 +11,9 @@
     "lint": "eslint .",
     "test": "node --env-file=.env.local scripts/regression.mjs",
     "verify:db": "node --env-file=.env.local scripts/db-verify.mjs",
-    "test:cleanup": "node --env-file=.env.local scripts/cleanup-verify-rows.mjs"
+    "test:cleanup": "node --env-file=.env.local scripts/cleanup-verify-rows.mjs",
+    "seed:demo": "node scripts/seed-demo.mjs",
+    "seed:reset": "node --env-file=.env.local scripts/reset-demo-data.mjs"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.2.0",
@@ -19,6 +21,7 @@
     "@tsparticles/react": "^4.4.0",
     "@tsparticles/slim": "^4.4.0",
     "bufferutil": "^4.1.0",
+    "d3-force": "^3.0.0",
     "drizzle-orm": "0.45.4",
     "next": "^15.0.0",
     "react": "^19.0.0",
@@ -29,6 +32,7 @@
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.7",
     "@next/eslint-plugin-next": "^15.5.26",
+    "@types/d3-force": "^3.0.10",
     "@types/node": "^22.0.0",
     "@types/pg": "^8.23.1",
     "@types/react": "^19.0.0",
@@ -38,7 +42,7 @@
     "@typescript-eslint/eslint-plugin": "^8.0.0",
     "@typescript-eslint/parser": "^8.0.0",
     "drizzle-kit": "0.31.11",
-    "eslint": "^9.0.0",
+    "eslint": "^10.12.0",
     "eslint-config-next": "^15.0.0",
     "eslint-plugin-import": "^2.31.0",
     "eslint-plugin-jsx-a11y": "^6.10.0",

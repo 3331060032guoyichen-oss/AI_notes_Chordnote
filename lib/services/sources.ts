@@ -1,11 +1,11 @@
 import { randomUUID } from "node:crypto";
 
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, isNotNull, isNull } from "drizzle-orm";
 
 import type { Raw } from "../../types/raw";
 import { requireUserActor } from "../auth/authorize";
 import { getUserContext } from "../auth/context";
-import { getDb } from "../db/client";
+import { getDb, type DbTransaction } from "../db/client";
 import { auditLog, rawNotes } from "../db/schema";
 
 // 原始记录（raw_notes）服务层。
@@ -48,6 +48,25 @@ export async function listSources(): Promise<Raw[]> {
   return rows.map(toSource);
 }
 
+/**
+ * 已归档的原始记录。
+ *
+ * 为什么要单独一个函数：**导出包含已归档内容**（归档是"我不想在日常里看到它"，
+ * 不是"它不是我的数据"），所以导入判重时必须也能看见它们 —— 只看未归档的那一份，
+ * 重导自己的包就会把已归档的原话当成新的再建一遍。
+ */
+export async function listArchivedSources(): Promise<Raw[]> {
+  const { db } = await getDb();
+  const { userId } = getUserContext();
+  const rows = await db
+    .select()
+    .from(rawNotes)
+    .where(and(eq(rawNotes.userId, userId), isNotNull(rawNotes.archivedAt)))
+    .orderBy(desc(rawNotes.createdAt));
+
+  return rows.map(toSource);
+}
+
 export async function getSource(id: string): Promise<Raw | null> {
   const { db } = await getDb();
   const { userId } = getUserContext();
@@ -67,9 +86,26 @@ export async function getSource(id: string): Promise<Raw | null> {
  */
 export async function createSource(text: string, title?: string | null): Promise<Raw> {
   const { db } = await getDb();
+
+  return db.transaction((tx) => createSourceInTx(tx, text, title));
+}
+
+/**
+ * 事务内版本。
+ *
+ * 提议执行（`source_create`）要求"写 raw_notes → 更新提议状态 → 写审计"在同一个事务内完成，
+ * 所以真正的插入放在这里；`createSource` 只是自带事务的薄包装，规则只有这一份。
+ *
+ * 注意：raw_notes 没有 `proposal_id` 列（与 links 不同），提议关联记在提议侧。
+ */
+export async function createSourceInTx(
+  tx: DbTransaction,
+  text: string,
+  title?: string | null,
+): Promise<Raw> {
   const { userId } = getUserContext();
   const normalizedTitle = typeof title === "string" && title.trim() ? title.trim() : null;
-  const rows = await db
+  const rows = await tx
     .insert(rawNotes)
     .values({ id: `raw_${randomUUID()}`, userId, text, title: normalizedTitle })
     .returning();

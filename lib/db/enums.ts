@@ -33,6 +33,9 @@ export const PROPOSAL_KINDS = [
   "note_merge",
   "bulk_organize",
   "moc_update",
+  // 把一条原始记录（如错题）存进知识库。走提议而非直接写入：
+  // 原始记录是 AI 不得改写的对象，新建同样必须经用户确认（AGENTS.md 改动边界）。
+  "source_create",
 ] as const;
 export type ProposalKind = (typeof PROPOSAL_KINDS)[number];
 

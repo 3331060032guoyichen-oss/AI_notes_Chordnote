@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { getNote, updateNote } from "../../../../lib/services/notes";
+import { getNote, setNoteArchived, updateNote } from "../../../../lib/services/notes";
 import type { UpdateNotePatch } from "../../../../lib/services/notes";
 import { getSource } from "../../../../lib/services/sources";
 
@@ -14,6 +14,8 @@ type KnowledgePatchBody = {
   concepts?: unknown;
   keywords?: unknown;
   version?: unknown;
+  /** 归档 / 恢复。true = 归档（日常列表不再显示，但数据完整保留、可恢复）。 */
+  archived?: unknown;
 };
 
 function errorResponse(message: string, status: number, code: string) {
@@ -75,6 +77,30 @@ export async function PATCH(
   }
 
   const body = parsed as KnowledgePatchBody;
+
+  // 归档 / 恢复走单独的服务函数：它不写修订（正文没变），但要写审计。
+  if (body.archived !== undefined) {
+    if (typeof body.archived !== "boolean") {
+      return errorResponse("归档状态无法识别，请刷新后重试。", 400, "INVALID_ARCHIVED");
+    }
+
+    try {
+      const result = await setNoteArchived(id, body.archived);
+
+      if (result.status === "not_found") {
+        return errorResponse("这张知识页已不存在，请刷新目录。", 404, "KNOWLEDGE_NOT_FOUND");
+      }
+
+      return NextResponse.json({ knowledge: result.knowledge });
+    } catch {
+      return errorResponse(
+        "归档状态暂时没有保存。原有知识页没有改变，请稍后重试。",
+        500,
+        "KNOWLEDGE_STORAGE_WRITE_FAILED",
+      );
+    }
+  }
+
   const patch: UpdateNotePatch = {};
 
   if (body.title !== undefined) {

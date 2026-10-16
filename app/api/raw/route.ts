@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { getNoteByRawId } from "../../../lib/services/notes";
+import { getActiveNoteByRawId } from "../../../lib/services/notes";
 import {
   archiveSource,
   createSource,
@@ -115,10 +115,12 @@ export async function DELETE(request: Request) {
   }
 
   try {
-    const knowledge = await getNoteByRawId(body.rawId);
+    // 只看**当前有效**的那一页：已归档的知识页不再挡着它的出处被收起，
+    // 否则用户会卡死在"那一页已归档、这条原话却永远删不掉"。
+    const knowledge = await getActiveNoteByRawId(body.rawId);
     if (knowledge) {
       return errorResponse(
-        "这条原始记录已有知识页引用，暂时不能移除。请先处理对应的知识页。",
+        `这条原话已经整理成「${knowledge.title}」了。要先收起它，请先在左栏「笔记」里归档那一页，再回来移除这条记录。`,
         409,
         "RAW_REFERENCED_BY_KNOWLEDGE",
       );

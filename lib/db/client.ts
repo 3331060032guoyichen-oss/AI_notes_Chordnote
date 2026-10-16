@@ -5,6 +5,14 @@ import * as schema from "./schema";
 
 export type Database = ReturnType<typeof drizzle<typeof schema>>;
 
+/**
+ * 事务句柄。
+ *
+ * 服务层需要"在一个事务里做多步"时接收它（例如提议执行：写正式数据 → 更新提议状态 → 写审计）。
+ * 类型从 `Database` 推导，因此驱动替换只影响本文件，服务层不会出现驱动专属类型。
+ */
+export type DbTransaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
+
 export interface DbHandle {
   db: Database;
   pool: Pool;

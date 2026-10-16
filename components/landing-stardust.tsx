@@ -6,28 +6,79 @@ import { loadSlim } from "@tsparticles/slim";
 import type { Engine, ISourceOptions } from "@tsparticles/engine";
 
 /**
- * 五彩星尘 —— 基于 tsParticles 的背景交互层
+ * 五彩星尘 —— 基于 tsParticles 的背景层。首屏与工作台共用这一份配方。
  *
  * 规范要点：
  *   - 颜色只用极光色系，绝无纯红/纯绿
  *   - 粒子 1–3px，透明度 0.2–0.8 缓慢闪烁（眨眼）
- *   - 鼠标 150px 半径引力（grab）+ 极淡连线（0.1）
- *   - 总数压在 80 以内，fpsLimit 60，移动端减量并关闭鼠标交互
+ *   - 总数压在 80 以内，粒子多了就成了"下雪"，不是星尘
  *   - detectsOn: "window"，canvas 自身 pointer-events: none，不挡按钮
+ *
+ * 两处用的差别只在 `StardustTuning` 里三个数：
+ *   - 首屏（`LANDING_TUNING`）：鼠标 150px 引力 + 极淡连线，是欢迎页的一部分；
+ *   - 工作台（`APP_TUNING`）：**关掉鼠标交互**（那边一直在写字、拖图谱，
+ *     光点跟着光标反而是干扰），粒子更少、更暗、更慢 —— 它是背景，不是主角。
  */
 
 const AURORA_COLORS = ["#2DD4BF", "#A5F3FC", "#C4B5FD", "#6EE7B7", "#FFFFFF"];
 
-function buildOptions(): ISourceOptions {
+type StardustTuning = {
+  /** 鼠标引力 + 连线。工作台关掉。 */
+  interactive: boolean;
+  count: number;
+  opacity: [number, number];
+  /** 连线透明度；`null` = 不画连线（窄屏省算力）。 */
+  linkOpacity: number | null;
+  speed: [number, number];
+  fps: number;
+};
+
+const LANDING_TUNING: StardustTuning = {
+  interactive: true,
+  count: 70,
+  opacity: [0.2, 0.8],
+  linkOpacity: 0.06,
+  speed: [0.15, 0.5],
+  fps: 60,
+};
+
+const LANDING_MOBILE_TUNING: StardustTuning = {
+  interactive: false,
+  count: 28,
+  opacity: [0.2, 0.8],
+  linkOpacity: null,
+  speed: [0.25, 0.25],
+  fps: 60,
+};
+
+const APP_TUNING: StardustTuning = {
+  interactive: false,
+  count: 46,
+  opacity: [0.12, 0.5],
+  linkOpacity: 0.05,
+  speed: [0.1, 0.3],
+  fps: 45,
+};
+
+const APP_MOBILE_TUNING: StardustTuning = {
+  interactive: false,
+  count: 20,
+  opacity: [0.12, 0.5],
+  linkOpacity: null,
+  speed: [0.1, 0.3],
+  fps: 45,
+};
+
+function buildOptions(tuning: StardustTuning): ISourceOptions {
   return {
     fullScreen: { enable: false },
-    fpsLimit: 60,
+    fpsLimit: tuning.fps,
     detectRetina: true,
     background: { color: { value: "transparent" } },
     interactivity: {
       detectsOn: "window",
       events: {
-        onHover: { enable: true, mode: ["grab"] },
+        onHover: { enable: tuning.interactive, mode: ["grab"] },
         onClick: { enable: false },
         resize: { enable: true },
       },
@@ -39,11 +90,11 @@ function buildOptions(): ISourceOptions {
       },
     },
     particles: {
-      number: { value: 70, density: { enable: true, width: 1600, height: 1000 } },
+      number: { value: tuning.count, density: { enable: true, width: 1600, height: 1000 } },
       color: { value: AURORA_COLORS },
       shape: { type: "circle" },
       opacity: {
-        value: { min: 0.2, max: 0.8 },
+        value: { min: tuning.opacity[0], max: tuning.opacity[1] },
         animation: { enable: true, speed: 0.35, sync: false },
       },
       size: {
@@ -51,15 +102,15 @@ function buildOptions(): ISourceOptions {
         animation: { enable: true, speed: 1.2, sync: false },
       },
       links: {
-        enable: true,
+        enable: tuning.linkOpacity !== null,
         distance: 130,
         color: "#A5F3FC",
-        opacity: 0.06,
+        opacity: tuning.linkOpacity ?? 0,
         width: 0.6,
       },
       move: {
         enable: true,
-        speed: { min: 0.15, max: 0.5 },
+        speed: { min: tuning.speed[0], max: tuning.speed[1] },
         direction: "none",
         random: true,
         straight: false,
@@ -69,35 +120,17 @@ function buildOptions(): ISourceOptions {
   };
 }
 
-function buildMobileOptions(base: ISourceOptions): ISourceOptions {
-  return {
-    ...base,
-    interactivity: {
-      detectsOn: "window",
-      events: { onHover: { enable: false }, resize: { enable: true } },
-    },
-    particles: {
-      ...base.particles,
-      number: { value: 28 },
-      links: { enable: false },
-      move: { enable: true, speed: 0.25, direction: "none", outModes: { default: "out" } },
-    },
-  };
-}
-
 /** 只有引擎就绪后才挂载 canvas，避免首帧空转 */
-function StardustCanvas({ options }: { options: ISourceOptions }) {
+function StardustCanvas({ id, className, options }: { id: string; className: string; options: ISourceOptions }) {
   const { loaded } = useParticlesProvider();
   if (!loaded) return null;
-  return <Particles id="landing-stardust" className="landing-stardust" options={options} />;
+  return <Particles id={id} className={className} options={options} />;
 }
 
-export function LandingStardust() {
-  const register = useCallback(async (engine: Engine) => {
-    await loadSlim(engine);
-  }, []);
-
+/** 窄屏减量：粒子更少、不连线。两个入口共用这一套判断。 */
+function useNarrowViewport() {
   const [isNarrow, setIsNarrow] = useState(false);
+
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 820px)");
     const sync = () => setIsNarrow(mq.matches);
@@ -106,12 +139,50 @@ export function LandingStardust() {
     return () => mq.removeEventListener("change", sync);
   }, []);
 
-  const options = useMemo(() => buildOptions(), []);
-  const mobileOptions = useMemo(() => buildMobileOptions(buildOptions()), []);
+  return isNarrow;
+}
+
+function registerEngine(engine: Engine) {
+  return loadSlim(engine);
+}
+
+/** 首屏的星尘（`app/globals.css` 的 `.landing-stardust` 定位）。 */
+export function LandingStardust() {
+  const register = useCallback(registerEngine, []);
+  const isNarrow = useNarrowViewport();
+  const options = useMemo(() => buildOptions(LANDING_TUNING), []);
+  const mobileOptions = useMemo(() => buildOptions(LANDING_MOBILE_TUNING), []);
 
   return (
     <ParticlesProvider init={register}>
-      <StardustCanvas options={isNarrow ? mobileOptions : options} />
+      <StardustCanvas
+        id="landing-stardust"
+        className="landing-stardust"
+        options={isNarrow ? mobileOptions : options}
+      />
+    </ParticlesProvider>
+  );
+}
+
+/**
+ * 工作台背景的星尘（`app/globals.css` 的 `.app-stardust` 定位）。
+ *
+ * 用同一个 `ParticlesProvider` 配方、另一组参数；两处不会同时挂载
+ * （首屏一进编辑室就卸载），所以不会出现两个引擎抢着跑。
+ */
+export function AppStardust() {
+  const register = useCallback(registerEngine, []);
+  const isNarrow = useNarrowViewport();
+  const options = useMemo(() => buildOptions(APP_TUNING), []);
+  const mobileOptions = useMemo(() => buildOptions(APP_MOBILE_TUNING), []);
+
+  return (
+    <ParticlesProvider init={register}>
+      <StardustCanvas
+        id="app-stardust"
+        className="app-stardust"
+        options={isNarrow ? mobileOptions : options}
+      />
     </ParticlesProvider>
   );
 }

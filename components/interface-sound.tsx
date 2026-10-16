@@ -240,26 +240,3 @@ export function useInterfaceSound() {
   if (!value) throw new Error("useInterfaceSound must be used inside InterfaceSoundProvider");
   return value;
 }
-
-
-export function SoundToggle({ className = "" }: { className?: string }) {
-  const { enabled, preference, toggle } = useInterfaceSound();
-  if (preference === "loading" || preference === "unknown") return null;
-
-  if (preference === "unsupported") {
-    return <button className={`sound-toggle ${className}`.trim()} type="button" disabled>声音不可用</button>;
-  }
-
-  return (
-    <button
-      className={`sound-toggle${enabled ? " is-on" : ""} ${className}`.trim()}
-      type="button"
-      aria-pressed={enabled}
-      aria-label={enabled ? "关闭界面声音" : "开启界面声音"}
-      onClick={toggle}
-    >
-      <span>声音</span>
-      <strong>{enabled ? "开" : "关"}</strong>
-    </button>
-  );
-}

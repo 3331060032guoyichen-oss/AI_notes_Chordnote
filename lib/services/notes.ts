@@ -1,12 +1,12 @@
 import { randomUUID } from "node:crypto";
 
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, isNotNull, isNull } from "drizzle-orm";
 
 import type { Knowledge } from "../../types/knowledge";
 import type { Raw } from "../../types/raw";
 import { getUserContext } from "../auth/context";
-import { getDb } from "../db/client";
-import { noteRevisions, notes, rawNotes } from "../db/schema";
+import { getDb, type DbTransaction } from "../db/client";
+import { auditLog, noteRevisions, notes, rawNotes } from "../db/schema";
 
 // 知识页（notes）服务层。
 // 读路径默认只返回"未归档且未软删除"的行；按 id / rawId 单条读取不过滤（与旧存储行为一致）。
@@ -34,6 +34,7 @@ function toKnowledge(row: NoteRow): Knowledge {
     concepts: toStringArray(row.concepts),
     keywords: toStringArray(row.keywords),
     version: row.version,
+    archivedAt: row.archivedAt ? row.archivedAt.toISOString() : null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -51,6 +52,70 @@ export async function listNotes(): Promise<Knowledge[]> {
   return rows.map(toKnowledge);
 }
 
+/**
+ * 已归档的知识页。
+ *
+ * 归档的语义是"我不想在日常里看到它"，不是删除 —— 所以必须有一个地方能找回来，
+ * 否则归档就是一扇单向门。墓碑（`deleted_at`）与永久清除不在这里：见 AGENTS.md
+ * 的删除生命周期，purge 需要独立的高风险流程。
+ */
+export async function listArchivedNotes(): Promise<Knowledge[]> {
+  const { db } = await getDb();
+  const { userId } = getUserContext();
+  const rows = await db
+    .select()
+    .from(notes)
+    .where(and(eq(notes.userId, userId), isNotNull(notes.archivedAt), isNull(notes.deletedAt)))
+    .orderBy(desc(notes.updatedAt));
+
+  return rows.map(toKnowledge);
+}
+
+export type ArchiveNoteResult = { status: "ok"; knowledge: Knowledge } | { status: "not_found" };
+
+/** 归档 / 恢复。`archived: false` 即恢复。 */
+export async function setNoteArchived(id: string, archived: boolean): Promise<ArchiveNoteResult> {
+  const { db } = await getDb();
+  const { userId, actor } = getUserContext();
+
+  return db.transaction(async (tx) => {
+    const current = (
+      await tx
+        .select()
+        .from(notes)
+        .where(and(eq(notes.id, id), eq(notes.userId, userId)))
+        .limit(1)
+        .for("update")
+    )[0];
+
+    if (!current) return { status: "not_found" as const };
+
+    const updated = (
+      await tx
+        .update(notes)
+        .set({ archivedAt: archived ? new Date() : null, updatedAt: new Date() })
+        .where(and(eq(notes.id, id), eq(notes.userId, userId)))
+        .returning()
+    )[0];
+
+    // 归档不写修订：它没有改动正文，写进修订历史只会让"这一页改过什么"变难读。
+    // 但它是用户的一次决定，所以进审计。
+    await tx.insert(auditLog).values({
+      id: `audit_${randomUUID()}`,
+      userId,
+      actorType: actor.type,
+      actorId: actor.id,
+      operation: archived ? "note.archive" : "note.restore",
+      targetType: "note",
+      targetId: id,
+      result: "ok",
+      detail: { title: updated.title },
+    });
+
+    return { status: "ok" as const, knowledge: toKnowledge(updated) };
+  });
+}
+
 export async function getNote(id: string): Promise<Knowledge | null> {
   const { db } = await getDb();
   const { userId } = getUserContext();
@@ -64,88 +129,32 @@ export async function getNote(id: string): Promise<Knowledge | null> {
   return row ? toKnowledge(row) : null;
 }
 
-export async function getNoteByRawId(rawId: string): Promise<Knowledge | null> {
+/**
+ * 取这条原始记录**当前有效**的知识页（已归档、已删除的不算）。
+ *
+ * 名字里那个 active 是刻意的：调用方是「移除原始记录」的守卫，而**归档只是
+ * "我不想在日常里看到它"** —— 那一页已经不占着这条原话的日常位置了。
+ * 如果连归档的也算数，用户就没有出口：知识页没有删除接口，归档是它唯一的"处理"方式，
+ * 于是"移除了那一页 → 出处却永远删不掉"（2026-10-17 就是这么被绊住的）。
+ */
+export async function getActiveNoteByRawId(rawId: string): Promise<Knowledge | null> {
   const { db } = await getDb();
   const { userId } = getUserContext();
   const rows = await db
     .select()
     .from(notes)
-    .where(and(eq(notes.rawId, rawId), eq(notes.userId, userId)))
+    .where(
+      and(
+        eq(notes.rawId, rawId),
+        eq(notes.userId, userId),
+        isNull(notes.archivedAt),
+        isNull(notes.deletedAt),
+      ),
+    )
     .limit(1);
   const [row] = rows;
 
   return row ? toKnowledge(row) : null;
-}
-
-function titleFromText(text: string) {
-  const firstLine = text.split(/\r?\n/).map((line) => line.trim()).find(Boolean) ?? "未命名笔记";
-  const withoutHeading = firstLine.replace(/^#+\s*/, "").trim() || "未命名笔记";
-  return withoutHeading.length > 40 ? `${withoutHeading.slice(0, 40)}…` : withoutHeading;
-}
-
-/**
- * 创建一条笔记，同时保留一份不可替代的原始出处。
- * 两张表在同一事务中写入，避免新建笔记只留下 Raw 或只留下 Knowledge。
- */
-export async function createNoteFromText(text: string): Promise<{ knowledge: Knowledge; raw: Raw }> {
-  const { db } = await getDb();
-  const { userId } = getUserContext();
-  const content = text.trim();
-  const title = titleFromText(content);
-  const summary = content.replace(/\s+/g, " ").slice(0, 160) || "未添加摘要";
-
-  return db.transaction(async (tx) => {
-    const raw = (
-      await tx
-        .insert(rawNotes)
-        .values({ id: `raw_${randomUUID()}`, userId, text })
-        .returning()
-    )[0];
-
-    const row = (
-      await tx
-        .insert(notes)
-        .values({
-          id: `knowledge_${randomUUID()}`,
-          userId,
-          rawId: raw.id,
-          title,
-          summary,
-          content,
-          keyPoints: [],
-          concepts: [],
-          keywords: [],
-          origin: "user",
-        })
-        .returning()
-    )[0];
-
-    await tx.insert(noteRevisions).values({
-      id: `revision_${randomUUID()}`,
-      userId,
-      noteId: row.id,
-      version: row.version,
-      title: row.title,
-      summary: row.summary,
-      content: row.content,
-      keyPoints: row.keyPoints,
-      concepts: row.concepts,
-      keywords: row.keywords,
-      authorType: "user",
-      authorId: userId,
-    });
-
-    return {
-      knowledge: toKnowledge(row),
-      raw: {
-        id: raw.id,
-        // 原始记录的「笔记名」列（迁移 0004 新增），由用户手填，可与自动标题并存
-        title: raw.title,
-        text: raw.text,
-        createdAt: raw.createdAt.toISOString(),
-      },
-    };
-  });
 }
 
 export type PromoteInput = {
@@ -243,47 +252,61 @@ export async function updateNote(
   expectedVersion?: number,
 ): Promise<UpdateNoteResult> {
   const { db } = await getDb();
+  return db.transaction((tx) => updateNoteInTx(tx, id, patch, expectedVersion));
+}
+
+/**
+ * 在一个**已有**事务里更新知识页。
+ *
+ * 与 `updateNote` 语义完全一致，`updateNote` 只是它外面包了一层事务。之所以要暴露
+ * 事务内版本：执行 `note_update` 提议时必须把"改正文 → 写入修订 → 更新提议状态 → 写审计"
+ * 放进同一个事务，否则中途失败会留下"正文改了但提议还停在 approved"的错位状态。
+ */
+export async function updateNoteInTx(
+  tx: DbTransaction,
+  id: string,
+  patch: UpdateNotePatch,
+  expectedVersion?: number,
+): Promise<UpdateNoteResult> {
   const { userId } = getUserContext();
 
-  return db.transaction(async (tx) => {
-    const current = (
-      await tx
-        .select()
-        .from(notes)
-        .where(and(eq(notes.id, id), eq(notes.userId, userId)))
-        .limit(1)
-        .for("update")
-    )[0];
+  const current = (
+    await tx
+      .select()
+      .from(notes)
+      .where(and(eq(notes.id, id), eq(notes.userId, userId)))
+      .limit(1)
+      .for("update")
+  )[0];
 
-    if (!current) return { status: "not_found" as const };
+  if (!current) return { status: "not_found" as const };
 
-    if (expectedVersion !== undefined && current.version !== expectedVersion) {
-      return { status: "conflict" as const, knowledge: toKnowledge(current) };
-    }
+  if (expectedVersion !== undefined && current.version !== expectedVersion) {
+    return { status: "conflict" as const, knowledge: toKnowledge(current) };
+  }
 
-    const updated = (
-      await tx
-        .update(notes)
-        .set({ ...patch, version: current.version + 1, updatedAt: new Date() })
-        .where(and(eq(notes.id, id), eq(notes.userId, userId)))
-        .returning()
-    )[0];
+  const updated = (
+    await tx
+      .update(notes)
+      .set({ ...patch, version: current.version + 1, updatedAt: new Date() })
+      .where(and(eq(notes.id, id), eq(notes.userId, userId)))
+      .returning()
+  )[0];
 
-    await tx.insert(noteRevisions).values({
-      id: `revision_${randomUUID()}`,
-      userId,
-      noteId: updated.id,
-      version: updated.version,
-      title: updated.title,
-      summary: updated.summary,
-      content: updated.content,
-      keyPoints: updated.keyPoints,
-      concepts: updated.concepts,
-      keywords: updated.keywords,
-      authorType: "user",
-      authorId: userId,
-    });
-
-    return { status: "ok" as const, knowledge: toKnowledge(updated) };
+  await tx.insert(noteRevisions).values({
+    id: `revision_${randomUUID()}`,
+    userId,
+    noteId: updated.id,
+    version: updated.version,
+    title: updated.title,
+    summary: updated.summary,
+    content: updated.content,
+    keyPoints: updated.keyPoints,
+    concepts: updated.concepts,
+    keywords: updated.keywords,
+    authorType: "user",
+    authorId: userId,
   });
+
+  return { status: "ok" as const, knowledge: toKnowledge(updated) };
 }

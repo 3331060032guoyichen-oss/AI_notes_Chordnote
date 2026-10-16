@@ -12,6 +12,8 @@ export type Knowledge = {
    * 旧 JSON 存储没有这个字段，因此是可选的。
    */
   version?: number;
+  /** 归档时间。null / 缺省表示在日常列表里可见；归档不删数据，可以恢复。 */
+  archivedAt?: string | null;
   createdAt: string;
   updatedAt: string;
 };

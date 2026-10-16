@@ -4,7 +4,7 @@ import { and, desc, eq, isNull, or } from "drizzle-orm";
 
 import type { KnowledgeRelation } from "../../types/relation";
 import { getUserContext } from "../auth/context";
-import { getDb } from "../db/client";
+import { getDb, type DbTransaction } from "../db/client";
 import { links } from "../db/schema";
 
 // 正式关系（links）服务层。
@@ -78,60 +78,79 @@ export async function createOrReviveLink(
   input: CreateLinkInput,
 ): Promise<{ relation: KnowledgeRelation; created: boolean }> {
   const { db } = await getDb();
+
+  return db.transaction((tx) => createOrReviveLinkInTx(tx, input));
+}
+
+/**
+ * 事务内版本。
+ *
+ * 提议执行（事务 T4）要求"写 links → 更新提议状态 → 写审计"在同一个事务内完成，
+ * 所以真正的实现放在这里；`createOrReviveLink` 只是自带事务的薄包装。
+ * 归属过滤、去重与复活规则只有这一份，两个入口不会各说各话。
+ *
+ * `attribution` 让提议执行时写下的关系带上 `proposal_id` 与 `origin='ai'`；
+ * 用户自己建立关系时保持默认（`proposal_id = null`、`origin = 'user'`）。
+ */
+export async function createOrReviveLinkInTx(
+  tx: DbTransaction,
+  input: CreateLinkInput,
+  attribution: { proposalId?: string | null; origin?: "user" | "ai" } = {},
+): Promise<{ relation: KnowledgeRelation; created: boolean }> {
   const { userId } = getUserContext();
+  const { proposalId = null, origin = "user" } = attribution;
 
-  return db.transaction(async (tx) => {
-    const existing = (
-      await tx
-        .select()
-        .from(links)
-        .where(
-          and(
-            eq(links.userId, userId),
-            eq(links.type, "related"),
-            or(
-              and(eq(links.sourceNoteId, input.sourceId), eq(links.targetNoteId, input.targetId)),
-              and(eq(links.sourceNoteId, input.targetId), eq(links.targetNoteId, input.sourceId)),
-            ),
+  const existing = (
+    await tx
+      .select()
+      .from(links)
+      .where(
+        and(
+          eq(links.userId, userId),
+          eq(links.type, "related"),
+          or(
+            and(eq(links.sourceNoteId, input.sourceId), eq(links.targetNoteId, input.targetId)),
+            and(eq(links.sourceNoteId, input.targetId), eq(links.targetNoteId, input.sourceId)),
           ),
-        )
-        .limit(1)
-        .for("update")
-    )[0];
+        ),
+      )
+      .limit(1)
+      .for("update")
+  )[0];
 
-    if (existing && existing.deletedAt === null) {
-      return { relation: toRelation(existing), created: false };
-    }
+  if (existing && existing.deletedAt === null) {
+    return { relation: toRelation(existing), created: false };
+  }
 
-    if (existing) {
-      const revived = (
-        await tx
-          .update(links)
-          .set({ deletedAt: null, reason: input.reason })
-          .where(eq(links.id, existing.id))
-          .returning()
-      )[0];
-
-      return { relation: toRelation(revived), created: true };
-    }
-
-    const inserted = (
+  if (existing) {
+    const revived = (
       await tx
-        .insert(links)
-        .values({
-          id: `link_${randomUUID()}`,
-          userId,
-          sourceNoteId: input.sourceId,
-          targetNoteId: input.targetId,
-          type: "related",
-          reason: input.reason,
-          origin: "user",
-        })
+        .update(links)
+        .set({ deletedAt: null, reason: input.reason, origin, proposalId })
+        .where(eq(links.id, existing.id))
         .returning()
     )[0];
 
-    return { relation: toRelation(inserted), created: true };
-  });
+    return { relation: toRelation(revived), created: true };
+  }
+
+  const inserted = (
+    await tx
+      .insert(links)
+      .values({
+        id: `link_${randomUUID()}`,
+        userId,
+        sourceNoteId: input.sourceId,
+        targetNoteId: input.targetId,
+        type: "related",
+        reason: input.reason,
+        origin,
+        proposalId,
+      })
+      .returning()
+  )[0];
+
+  return { relation: toRelation(inserted), created: true };
 }
 
 /** 普通"移除"= 软删除。影响 0 行（不存在或已软删）返回 false，调用方据此返回 404。 */
