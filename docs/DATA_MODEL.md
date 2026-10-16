@@ -6,8 +6,9 @@
 
 ## 一、当前实际模型（已实现）
 
-> ⚠️ **2026-10-17 现状纠正：存储层早已不是 JSON 文件。**
-> 实际持久化在 **PostgreSQL（Neon）**，由 **Drizzle ORM** 读写：schema 在 `lib/db/schema.ts`，
+> ⚠️ **2026-10-17 现状纠正：存储层早已不是 JSON 文件，也不再依赖云端数据库。**
+> 实际持久化在**本机 PGlite**（PostgreSQL 的 WASM 版，跑在应用进程内，数据在 `data/pglite`），
+> 由 **Drizzle ORM** 读写：schema 在 `lib/db/schema.ts`，
 > 迁移在 `drizzle/0000`–`0005`，服务层在 `lib/services/`（`sources` / `notes` / `links` / `proposals` / `bundle`）。
 > 下面各条目的**字段形状**仍然准确（类型层 `types/` 与之一致），但凡是写着 `data/*.json`、
 > `lib/*-storage.ts`、文件不存在返回空数组的句子，都是 2026-10 早期 JSON 时代的遗留，**以代码为准**。
@@ -56,7 +57,7 @@ RawRevision {                // 新增：修改历史，保证「可追溯」
 三条要同时成立的约束：
 
 1. 用户可以修改 Raw 正文（`PATCH /api/raw`）。
-2. **AI 永远不能改写 Raw 的正文**；AI 只能在 Draft 里引用原文。`lib/deepseek.ts` 的整理链路只产出 `OrganizeDraft`，不写 `data/raw.json`。
+2. **AI 永远不能改写 Raw 的正文**；AI 只能在 Draft 里引用原文。整理链路只产出 `OrganizeDraft`，从不写 `raw_notes` 的正文列。
 3. 每次修改留下 `RawRevision`，否则「原始出处」的信任基础会消失。
 
 ### Knowledge —— 用户确认后的知识页
@@ -76,8 +77,8 @@ Knowledge {
 }
 ```
 
-存储于 `data/knowledge.json`（不进 Git）。
-同一个 `rawId` 重复确认不会创建第二条记录（`createKnowledge` 返回 `created: false`）。
+存储于表 `notes`（就在本机 `data/pglite` 这份库里，不进 Git）。
+同一个 `rawId` 重复确认不会创建第二条记录（`POST /api/knowledge` 返回 `created: false`）。
 支持 `PATCH /api/knowledge/:id` 部分更新（`title` / `summary` / `content` / `keyPoints` / `concepts` / `keywords`，全部可选），更新时刷新 `updatedAt`。
 
 ### KnowledgeRelation —— 知识之间的关联
@@ -93,7 +94,7 @@ KnowledgeRelation {
 }
 ```
 
-存储于 `data/relations.json`（不进 Git）。`related` 被当作**对称**关系处理：服务端以无序 ID 对去重，要求两端 Knowledge 都存在，并拒绝自连接。
+存储于表 `links`（同一份本机库）。`related` 被当作**对称**关系处理：服务端以无序 ID 对去重，要求两端 Knowledge 都存在，并拒绝自连接。
 
 ### WikiPage / WikiLink —— 只读的 Wiki 结构
 
@@ -177,7 +178,9 @@ OrganizeDraft {
 
 AI 对知识关系的创建或修改先生成 Proposal，状态为 `proposed`、`accepted` 或 `rejected`。只有用户接受后才进入正式知识图谱。
 
-**当前状态：未实现。** 现有流程是「AI 在 Draft 中给建议 → 用户勾选 → 直接写入 Relation」，缺少可追溯的 Proposal 中间态。
+**当前状态：已实现，状态名与上面不同。** `proposals` 表 + `/api/proposals`（列表 / 提交）+ `/api/proposals/:id`（approve / reject / apply）都已落地，取值是 `pending` / `approved` / `rejected` / `applied` / `failed` / `stale` / `cancelled`（唯一来源 `lib/db/enums.ts`）。对应关系：长期模型的 `proposed → accepted` ≈ 当前的 `pending → approved → applied`，`rejected` 两边同名。
+
+**仍然成立的那条边界**：AI 自己只写 `pending` 提议，正式数据一律等用户批准后由 `apply` 落库（见 `docs/adr/0001`）。
 
 ---
 
@@ -190,7 +193,7 @@ AI 对知识关系的创建或修改先生成 Proposal，状态为 `proposed`、
 | `Concept` | `Knowledge.concepts`（字符串数组）| 只是标签，**不是**可关联、可别名匹配的核心节点（原 `WikiPage` 的 kind = `concept` 已随 Wiki 层移除）|
 | `Card` | 无 | **未实现** |
 | `Edge`（多类型） | `KnowledgeRelation`（只有 `related`，无向） | 关系类型单一、无方向 |
-| `Proposal` | Draft 内的 `relatedKnowledge` 建议 + 用户勾选 | 没有独立的可追溯实体 |
+| `Proposal` | `proposals` 表 + `/api/proposals*`（`pending → approved → applied`，另有 `rejected` / `stale` / `cancelled`）| 已实现；状态命名与长期模型不同，语义等价 |
 | `Wiki`（承载四类节点） | 无（原 `WikiPage` / `WikiLink` 已于 2026-10-10 移除）| 未实现，需要以新形态重新设计 |
 
 **另外注意**：「出链」（Outlink）是规划中的特有功能，当前代码里没有对应概念 —— 现有 Relation 是对称的，无法表达"从 A 指向 B"。做这项功能时需要先决定是给 Relation 加方向，还是新增有向链接类型。详见 `ROADMAP.md`。
