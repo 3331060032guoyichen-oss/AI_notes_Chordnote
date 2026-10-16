@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chordnote · 界面预览稿</title>
+<style>
+:root{
+  --paper:#030712; --surface:#0a1122; --surface-raised:#101a30;
+  --ink:#e8edf7; --muted:#94a3b8; --quiet:#64748b;
+  --line:rgb(148 163 184 / 18%); --line-strong:rgb(148 163 184 / 32%);
+  --accent:#7c3aed; --accent-strong:#6d28d9; --accent-soft:rgb(124 58 237 / 20%);
+  --success:#2dd4bf; --success-soft:rgb(45 212 191 / 14%);
+  --radius:12px; --radius-control:8px; --radius-label:6px;
+  --sidebar-width:232px; --rail-width:312px;
+  --shadow:0 18px 50px rgb(2 6 23 / 55%);
+  --panel-shadow:inset 0 1px rgb(255 255 255 / 8%), 0 10px 30px rgb(2 6 23 / 50%);
+  --font:"Geist","Noto Sans SC","Microsoft YaHei",ui-sans-serif,system-ui,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  background:#01040b; color:var(--ink); font-family:var(--font);
+  padding:40px 32px 72px; -webkit-font-smoothing:antialiased;
+}
+.page-head{max-width:1320px;margin:0 auto 40px}
+.page-head h1{font-size:26px;font-weight:700;letter-spacing:-.02em}
+.page-head p{color:var(--muted);font-size:14px;margin-top:8px;line-height:1.7;max-width:760px}
+.page-head code{background:var(--surface-raised);padding:2px 6px;border-radius:4px;font-size:12.5px;color:var(--ink)}
+.screen{max-width:1320px;margin:0 auto 56px}
+.screen > h2{
+  font-size:13px;font-weight:600;color:var(--muted);letter-spacing:.08em;
+  text-transform:uppercase;margin-bottom:12px;
+}
+.screen > h2 span{color:var(--accent)}
+.screen > .hint{color:var(--quiet);font-size:12.5px;margin:-6px 0 14px;line-height:1.6}
+
+/* ---------- app shell ---------- */
+.shell{
+  display:grid; grid-template-columns:var(--sidebar-width) 1fr var(--rail-width);
+  height:660px; border:1px solid var(--line-strong); border-radius:16px;
+  overflow:hidden; background:var(--paper);
+  background-image:
+    radial-gradient(1100px 520px at 12% -8%, rgb(124 58 237 / 15%), transparent 60%),
+    radial-gradient(900px 460px at 92% 4%, rgb(45 212 191 / 8%), transparent 58%);
+  box-shadow:var(--shadow);
+}
+
+/* ---------- sidebar ---------- */
+.sidebar{
+  background:color-mix(in srgb, var(--surface) 82%, transparent);
+  border-right:1px solid var(--line);
+  padding:18px 14px; display:flex; flex-direction:column; gap:16px; overflow:hidden;
+}
+.brand{display:flex;align-items:center;gap:9px;padding:0 4px}
+.brand .mark{
+  width:26px;height:26px;border-radius:8px;flex:none;
+  background:linear-gradient(140deg,var(--accent),#38bdf8);
+  display:grid;place-items:center;font-size:13px;font-weight:800;color:#fff;
+}
+.brand b{font-size:15px;font-weight:650;letter-spacing:-.01em}
+.ws{
+  display:flex;align-items:center;gap:9px;padding:9px 10px;
+  background:var(--surface-raised);border:1px solid var(--line);border-radius:var(--radius-control);
+}
+.ws i{
+  width:22px;height:22px;border-radius:6px;flex:none;background:var(--accent-soft);
+  color:var(--accent);display:grid;place-items:center;font-size:11px;font-weight:700;font-style:normal;
+}
+.ws div{min-width:0}
+.ws b{display:block;font-size:12.5px;font-weight:600}
+.ws small{display:block;font-size:10.5px;color:var(--quiet);margin-top:1px}
+.btn-new{
+  display:flex;align-items:center;justify-content:center;gap:7px;
+  padding:10px;border-radius:var(--radius-control);font-size:13px;font-weight:600;
+  background:linear-gradient(180deg,#8b5cf6,var(--accent-strong));
+  color:#fff;box-shadow:0 3px 8px rgb(2 6 23 / 55%);
+}
+.nav-group{display:flex;flex-direction:column;gap:2px}
+.nav-head{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:6px 8px;font-size:11px;color:var(--quiet);letter-spacing:.04em;
+}
+.nav-item{
+  display:flex;align-items:center;gap:8px;height:34px;padding:0 9px;
+  border-radius:var(--radius-label);font-size:12.5px;color:var(--muted);
+}
+.nav-item .dot{width:5px;height:5px;border-radius:99px;background:var(--line-strong);flex:none}
+.nav-item .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nav-item.is-active{background:var(--accent-soft);color:var(--ink);font-weight:600}
+.nav-item.is-active .dot{background:var(--accent)}
+.side-foot{margin-top:auto;padding:10px 9px;border-top:1px solid var(--line);font-size:10.5px;color:var(--quiet);line-height:1.6}
+
+/* ---------- main ---------- */
+.main{display:flex;flex-direction:column;min-width:0;overflow:hidden}
+.topbar{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:0 18px;height:52px;flex:none;border-bottom:1px solid var(--line);
+  background:color-mix(in srgb,var(--paper) 82%,transparent);
+}
+.crumb{font-size:12.5px;color:var(--quiet)}
+.crumb b{color:var(--ink);font-weight:600}
+.crumb .div{opacity:.5;margin:0 7px}
+.status{
+  display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--muted);
+  border:1px solid var(--line);border-radius:99px;padding:4px 10px;
+}
+.status .led{width:6px;height:6px;border-radius:99px;background:var(--success)}
+.tabs{display:flex;gap:2px;padding:8px 14px 0;flex:none;overflow:hidden}
+.tab{
+  display:flex;align-items:center;gap:7px;height:32px;padding:0 12px;
+  border-radius:var(--radius-label) var(--radius-label) 0 0;font-size:12.5px;color:var(--quiet);
+}
+.tab.is-active{background:var(--surface-raised);color:var(--ink);font-weight:600}
+.tab .x{opacity:.45;font-size:14px}
+.stage{flex:1;position:relative;overflow:hidden;padding:16px;min-height:0}
+
+/* ---------- graph screen ---------- */
+.graph-board{
+  position:relative;height:100%;border:1px solid var(--line);border-radius:var(--radius);
+  background:radial-gradient(760px 420px at 50% 46%, rgb(124 58 237 / 9%), transparent 70%), var(--surface);
+  overflow:hidden;
+}
+.graph-board canvas{display:block;width:100%;height:100%;cursor:grab}
+.graph-board canvas:active{cursor:grabbing}
+.gtitle{position:absolute;left:18px;top:16px;pointer-events:none}
+.gtitle h3{font-size:22px;font-weight:700;letter-spacing:-.02em}
+.gtitle p{font-size:12px;color:var(--quiet);margin-top:5px}
+.gfilters{position:absolute;left:18px;bottom:16px;display:flex;gap:6px;flex-wrap:wrap;max-width:60%}
+.chip{
+  font-size:11.5px;padding:5px 11px;border-radius:99px;border:1px solid var(--line);
+  background:color-mix(in srgb,var(--surface-raised) 80%,transparent);color:var(--muted);cursor:pointer;
+  backdrop-filter:blur(8px);
+}
+.chip.on{background:var(--accent-soft);border-color:var(--accent);color:var(--ink);font-weight:600}
+.gzoom{
+  position:absolute;right:16px;bottom:16px;display:flex;align-items:center;gap:2px;
+  border:1px solid var(--line);border-radius:99px;padding:4px;
+  background:color-mix(in srgb,var(--surface-raised) 82%,transparent);backdrop-filter:blur(10px);
+}
+.gzoom button{
+  width:28px;height:28px;border:0;border-radius:99px;background:transparent;color:var(--muted);
+  font-size:15px;cursor:pointer;font-family:var(--font);
+}
+.gzoom button:hover{background:var(--accent-soft);color:var(--ink)}
+.gzoom .zval{font-size:11.5px;color:var(--quiet);padding:0 8px;min-width:44px;text-align:center}
+.legend{position:absolute;right:16px;top:16px;display:flex;flex-direction:column;gap:7px}
+.legend span{display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--muted)}
+.legend i{width:9px;height:9px;border-radius:99px;flex:none}
+
+/* ---------- note screen ---------- */
+.note-scroll{height:100%;overflow:auto;padding:6px 4px}
+.note{
+  max-width:700px;margin:0 auto;background:color-mix(in srgb,var(--surface) 66%,transparent);
+  border:1px solid var(--line);border-radius:var(--radius);padding:34px 40px 40px;box-shadow:var(--panel-shadow);
+}
+.note .eyebrow{font-size:11px;color:var(--accent);letter-spacing:.06em;font-weight:600}
+.note h3{font-size:27px;font-weight:700;letter-spacing:-.02em;margin:10px 0 14px}
+.note .meta{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px}
+.note .meta i{
+  font-style:normal;font-size:11px;padding:3px 9px;border-radius:99px;
+  background:var(--accent-soft);color:var(--muted);border:1px solid var(--line);
+}
+.note p{font-size:16px;line-height:1.75;color:var(--ink);margin-bottom:16px}
+.note p .lref{
+  color:#a5b4fc;border-bottom:1px dashed color-mix(in srgb,#a5b4fc 55%,transparent);
+  cursor:pointer;padding-bottom:1px;
+}
+.note p .lref:hover{color:#c4b5fd;border-bottom-color:#c4b5fd}
+.note .ghost{
+  color:var(--quiet);border-bottom:1px dashed var(--line-strong);cursor:pointer;
+}
+
+/* ---------- rail ---------- */
+.rail{
+  background:color-mix(in srgb,var(--surface) 78%,transparent);
+  border-left:1px solid var(--line);display:flex;flex-direction:column;overflow:hidden;
+}
+.rail-head{padding:16px 16px 12px;border-bottom:1px solid var(--line);flex:none}
+.rail-head h4{font-size:12px;font-weight:650;letter-spacing:.05em;color:var(--muted);text-transform:uppercase}
+.rail-body{flex:1;overflow:auto;padding:6px 0 14px}
+.blk{padding:14px 16px;border-bottom:1px solid var(--line)}
+.blk:last-child{border-bottom:0}
+.blk-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:9px}
+.blk-head b{font-size:12.5px;font-weight:650}
+.blk-head em{
+  font-style:normal;font-size:10.5px;color:var(--accent);background:var(--accent-soft);
+  border-radius:99px;padding:2px 8px;font-weight:600;
+}
+.blk-head em.zero{color:var(--quiet);background:var(--line)}
+.blk p.hint{font-size:11.5px;color:var(--quiet);line-height:1.6}
+.link-row{
+  display:block;padding:9px 10px;border-radius:var(--radius-label);cursor:pointer;
+  border:1px solid transparent;
+}
+.link-row:hover{background:var(--surface-raised);border-color:var(--line)}
+.link-row .lt{font-size:12.5px;font-weight:600;color:var(--ink)}
+.link-row .ls{font-size:11px;color:var(--quiet);margin-top:4px;line-height:1.55}
+.link-row .ls mark{background:color-mix(in srgb,var(--accent) 32%,transparent);color:#ddd6fe;border-radius:3px;padding:0 3px}
+.mention{
+  display:flex;align-items:center;justify-content:space-between;gap:8px;
+  padding:8px 10px;border-radius:var(--radius-label);
+}
+.mention:hover{background:var(--surface-raised)}
+.mention span{font-size:12.5px;color:var(--muted)}
+.mention button{
+  font-family:var(--font);font-size:11px;font-weight:600;padding:4px 9px;border-radius:99px;
+  border:1px solid var(--accent);background:var(--accent-soft);color:#ddd6fe;cursor:pointer;white-space:nowrap;
+}
+.mention button:hover{background:var(--accent);color:#fff}
+.assist-input{
+  display:flex;align-items:center;gap:8px;border:1px solid var(--line-strong);
+  border-radius:var(--radius-control);padding:9px 10px;background:var(--surface-raised);
+}
+.assist-input span{font-size:12px;color:var(--quiet);flex:1}
+.assist-input i{
+  width:26px;height:26px;border-radius:7px;flex:none;display:grid;place-items:center;
+  background:var(--accent);color:#fff;font-style:normal;font-size:13px;
+}
+.assist-note{font-size:11px;color:var(--quiet);margin-top:9px;line-height:1.6}
+
+/* ---------- graph controls rail (screen 1) ---------- */
+.ctl{padding:14px 16px;border-bottom:1px solid var(--line)}
+.ctl > b{display:block;font-size:12.5px;font-weight:650;margin-bottom:11px}
+.ctl label{display:block;font-size:11.5px;color:var(--muted);margin-bottom:7px}
+.ctl .row{display:flex;align-items:center;gap:10px;margin-bottom:11px}
+.ctl .row span{font-size:11px;color:var(--quiet);width:34px;text-align:right}
+.slider{flex:1;height:3px;border-radius:99px;background:var(--line-strong);position:relative}
+.slider i{position:absolute;top:-4px;width:11px;height:11px;border-radius:99px;background:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 26%,transparent)}
+.toggle-row{display:flex;align-items:center;justify-content:space-between;font-size:12px;color:var(--muted);padding:5px 0}
+.sw{width:32px;height:18px;border-radius:99px;background:var(--line-strong);position:relative;flex:none}
+.sw.on{background:var(--accent)}
+.sw i{position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:99px;background:#fff}
+.sw.on i{left:16px}
+</style>
+</head>
+<body>
+
+<div class="page-head">
+  <h1>Chordnote · 界面预览稿</h1>
+  <p>这份稿子只补两处<strong>当前缺失</strong>的界面：知识网络（力导向图谱）和知识页右栏的<strong>反链四块</strong>。配色、圆角、字号、栏宽全部取自代码里的真实令牌（<code>--paper #030712</code> / <code>--accent #7c3aed</code> / 侧栏 <code>232px</code> / 右栏 <code>312px</code>），不是重新发明一套视觉。图谱是<strong>真的在跑</strong>力导向模拟——可以拖动节点、缩放、切换筛选。</p>
+</div>
+
+<!-- ================= 屏幕一：知识网络 ================= -->
+<section class="screen">
+  <h2>屏幕一 · <span>知识网络</span></h2>
+  <p class="hint">替换掉现在的规则网格卡片。节点大小 = 被引用次数；鼠标悬停高亮邻居、其余淡出；三色区分学科，用来展示「跨学科关联」这件事。</p>
+
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand"><i class="mark">C</i><b>Chordnote</b></div>
+      <div class="ws"><i>私</i><div><b>私人知识库</b><small>4 条原始记录 · 6 条知识页</small></div></div>
+      <div class="btn-new">＋ 留下原话</div>
+
+      <div class="nav-group">
+        <div class="nav-head"><span>原始记录</span><span>4</span></div>
+        <div class="nav-item"><i class="dot"></i><span class="t">IEEE 754 双精度用 1 位符号…</span></div>
+        <div class="nav-item"><i class="dot"></i><span class="t">浮点数精度：0.1 + 0.2 在…</span></div>
+        <div class="nav-item"><i class="dot"></i><span class="t">走查测试：为什么 0.1 + 0…</span></div>
+      </div>
+
+      <div class="nav-group">
+        <div class="nav-head"><span>知识页</span><span>6</span></div>
+        <div class="nav-item"><i class="dot"></i><span class="t">IEEE 754 双精度结构</span></div>
+        <div class="nav-item"><i class="dot"></i><span class="t">浮点数精度问题</span></div>
+        <div class="nav-item"><i class="dot"></i><span class="t">特征值与对角化</span></div>
+      </div>
+
+      <div class="nav-group">
+        <div class="nav-head"><span>工具</span></div>
+        <div class="nav-item is-active"><i class="dot"></i><span class="t">知识网络</span></div>
+      </div>
+
+      <div class="side-foot">本地记录可用<br>原始记录与知识页可追溯</div>
+    </aside>
+
+    <main class="main">
+      <div class="topbar">
+        <div class="crumb">Chordnote <span class="div">/</span> <b>知识网络</b></div>
+        <div class="status"><i class="led"></i>已同步</div>
+      </div>
+      <div class="tabs">
+        <div class="tab">留下原话 <span class="x">×</span></div>
+        <div class="tab">浮点数精度问题 <span class="x">×</span></div>
+        <div class="tab is-active">知识网络 <span class="x">×</span></div>
+      </div>
+      <div class="stage">
+        <div class="graph-board">
+          <canvas id="graph"></canvas>
+          <div class="gtitle">
+            <h3>看见理解如何相互回应。</h3>
+            <p>只呈现你已确认的知识页与交叉引用，不添加装饰性内容。</p>
+          </div>
+          <div class="legend">
+            <span><i style="background:#7c3aed"></i>数学</span>
+            <span><i style="background:#38bdf8"></i>物理</span>
+            <span><i style="background:#2dd4bf"></i>计算机</span>
+          </div>
+          <div class="gfilters">
+            <span class="chip on" data-f="all">全部</span>
+            <span class="chip" data-f="数学">数学</span>
+            <span class="chip" data-f="物理">物理</span>
+            <span class="chip" data-f="计算机">计算机</span>
+          </div>
+          <div class="gzoom">
+            <button id="zout">−</button>
+            <span class="zval" id="zval">100%</span>
+            <button id="zin">＋</button>
+            <button id="zfit" title="回到适应视图" style="font-size:12px">⤢</button>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <aside class="rail">
+      <div class="rail-head"><h4>图谱设置</h4></div>
+      <div class="rail-body">
+        <div class="ctl">
+          <b>筛选</b>
+          <label>搜索文件</label>
+          <div class="assist-input"><span>输入关键词…</span><i>⌕</i></div>
+          <div style="height:11px"></div>
+          <div class="toggle-row">显示孤立节点<div class="sw on"><i></i></div></div>
+          <div class="toggle-row">显示连线方向<div class="sw"><i></i></div></div>
+        </div>
+        <div class="ctl">
+          <b>显示</b>
+          <label>节点大小</label>
+          <div class="row"><div class="slider"><i style="left:34%"></i></div><span>1.0×</span></div>
+          <label>连线粗细</label>
+          <div class="row"><div class="slider"><i style="left:22%"></i></div><span>1.0×</span></div>
+        </div>
+        <div class="ctl">
+          <b>力</b>
+          <label>中心力</label>
+          <div class="row"><div class="slider"><i style="left:52%"></i></div><span>0.52</span></div>
+          <label>斥力</label>
+          <div class="row"><div class="slider"><i style="left:50%"></i></div><span>10</span></div>
+          <label>连线力</label>
+          <div class="row"><div class="slider"><i style="left:100%"></i></div><span>1.0</span></div>
+          <label>连线长度</label>
+          <div class="row"><div class="slider"><i style="left:48%"></i></div><span>250</span></div>
+        </div>
+      </div>
+    </aside>
+  </div>
+</section>
+
+<!-- ================= 屏幕二：知识页 + 反链面板 ================= -->
+<section class="screen">
+  <h2>屏幕二 · <span>知识页与反链面板</span></h2>
+  <p class="hint">右栏按已定决策从上到下四块：<strong>入链 / 出链 / 未链接提及 / 编辑助理</strong>。跟随当前标签变化，不是全局聊天框。</p>
+
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand"><i class="mark">C</i><b>Chordnote</b></div>
+      <div class="ws"><i>私</i><div><b>私人知识库</b><small>4 条原始记录 · 6 条知识页</small></div></div>
+      <div class="btn-new">＋ 留下原话</div>
+      <div class="nav-group">
+        <div class="nav-head"><span>原始记录</span><span>4</span></div>
+        <div class="nav-item"><i class="dot"></i><span class="t">IEEE 754 双精度用 1 位符号…</span></div>
+        <div class="nav-item"><i class="dot"></i><span class="t">浮点数精度：0.1 + 0.2 在…</span></div>
+      </div>
+      <div class="nav-group">
+        <div class="nav-head"><span>知识页</span><span>6</span></div>
+        <div class="nav-item is-active"><i class="dot"></i><span class="t">IEEE 754 双精度结构</span></div>
+        <div class="nav-item"><i class="dot"></i><span class="t">浮点数精度问题</span></div>
+        <div class="nav-item"><i class="dot"></i><span class="t">特征值与对角化</span></div>
+        <div class="nav-item"><i class="dot"></i><span class="t">二次型标准形</span></div>
+      </div>
+      <div class="nav-group">
+        <div class="nav-head"><span>工具</span></div>
+        <div class="nav-item"><i class="dot"></i><span class="t">知识网络</span></div>
+      </div>
+      <div class="side-foot">本地记录可用<br>原始记录与知识页可追溯</div>
+    </aside>
+
+    <main class="main">
+      <div class="topbar">
+        <div class="crumb">Chordnote <span class="div">/</span> 知识页 <span class="div">/</span> <b>IEEE 754 双精度结构</b></div>
+        <div class="status"><i class="led"></i>已同步</div>
+      </div>
+      <div class="tabs">
+        <div class="tab">IEEE 754 双精度结构 <span class="x">×</span></div>
+        <div class="tab">浮点数精度问题 <span class="x">×</span></div>
+      </div>
+      <div class="stage">
+        <div class="note-scroll">
+          <article class="note">
+            <div class="eyebrow">知识页 · 计算机</div>
+            <h3>IEEE 754 双精度结构</h3>
+            <div class="meta"><i>浮点数</i><i>二进制表示</i><i>精度</i></div>
+            <p>双精度浮点数用 64 位表示：1 位符号位、11 位阶码、52 位尾数。阶码采用偏置表示（bias = 1023），尾数隐含前导 1，因此实际有效精度是 53 位二进制。</p>
+            <p>这个结构决定了能精确表示的十进制小数非常有限。像 <span class="lref">0.1</span> 这样的数在二进制下是无限循环小数，只能被截断存储——这正是 <span class="lref">浮点数精度问题</span> 的根源。</p>
+            <p>理解这个结构，也是理解 <span class="lref">误差传播</span> 与 <span class="ghost">数值稳定性</span> 的前提。数值稳定性这一页还没有建立，点击可以直接创建。</p>
+          </article>
+        </div>
+      </div>
+    </main>
+
+    <aside class="rail">
+      <div class="rail-head"><h4>上下文 · 跟随当前标签</h4></div>
+      <div class="rail-body">
+
+        <div class="blk">
+          <div class="blk-head"><b>入链</b><em>2</em></div>
+          <div class="link-row">
+            <div class="lt">浮点数精度问题</div>
+            <div class="ls">要理解精度问题，需要先知道双精度能表示哪些数。</div>
+          </div>
+          <div class="link-row">
+            <div class="lt">为什么 0.1 + 0.2 ≠ 0.3</div>
+            <div class="ls">归因到 <mark>IEEE 754 双精度结构</mark> 中的尾数截断。</div>
+          </div>
+        </div>
+
+        <div class="blk">
+          <div class="blk-head"><b>出链</b><em>2</em></div>
+          <div class="link-row">
+            <div class="lt">浮点数精度问题</div>
+            <div class="ls">本文提到：0.1 的二进制表示</div>
+          </div>
+          <div class="link-row">
+            <div class="lt">误差传播</div>
+            <div class="ls">本文提到：截断带来的累积误差</div>
+          </div>
+        </div>
+
+        <div class="blk">
+          <div class="blk-head"><b>未链接提及</b><em>2</em></div>
+          <p class="hint" style="margin-bottom:9px">正文里出现了这些知识页的标题，但还没有建立关联。</p>
+          <div class="mention"><span>特征值与对角化</span><button>建立关联</button></div>
+          <div class="mention"><span>数值稳定性</span><button>建立关联</button></div>
+        </div>
+
+        <div class="blk">
+          <div class="blk-head"><b>编辑助理</b><em class="zero">待命</em></div>
+          <div class="assist-input"><span>写下问题，@ 可以引用已有材料</span><i>↗</i></div>
+          <div class="assist-note">助理只会<strong>提议</strong>修改，写入前一定等你确认。</div>
+        </div>
+
+      </div>
+    </aside>
+  </div>
+</section>
+
+<script>
+/* ============ 知识网络：真实力导向模拟（无外部依赖） ============ */
+(function () {
+  const canvas = document.getElementById('graph');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+
+  const GROUPS = { '数学': '#7c3aed', '物理': '#38bdf8', '计算机': '#2dd4bf' };
+  const RAW = [
+    { id: 1,  t: 'IEEE 754 双精度结构', g: '计算机' },
+    { id: 2,  t: '浮点数精度问题',       g: '计算机' },
+    { id: 3,  t: '误差传播',             g: '数学'   },
+    { id: 4,  t: '数值稳定性',           g: '数学'   },
+    { id: 5,  t: '特征值与对角化',       g: '数学'   },
+    { id: 6,  t: '二次型标准形',         g: '数学'   },
+    { id: 7,  t: '正交变换',             g: '数学'   },
+    { id: 8,  t: '量子态叠加',           g: '物理'   },
+    { id: 9,  t: '薛定谔方程',           g: '物理'   },
+    { id: 10, t: '厄米矩阵',             g: '物理'   },
+    { id: 11, t: '浮点运算指令集',       g: '计算机' },
+    { id: 12, t: '区间算术',             g: '数学'   },
+  ];
+  const EDGES = [
+    [1,2],[1,11],[2,3],[2,12],[3,4],[3,12],[4,5],[5,6],[5,7],[6,7],
+    [5,10],[8,9],[9,10],[10,5],[8,1],[4,2]
+  ];
+  // 隔离节点（用来展示「孤立点」）
+  RAW.push({ id: 13, t: '傅里叶变换', g: '数学' });
+
+  const nodes = RAW.map((n, i) => Object.assign({
+    x: Math.cos(i * 2.4) * 130 + (i % 3) * 40,
+    y: Math.sin(i * 2.4) * 110 + (i % 4) * 30,
+    vx: 0, vy: 0, r: 5, deg: 0
+  }, n));
+  const byId = id => nodes.find(n => n.id === id);
+  const links = EDGES.map(([s, t]) => ({ s: byId(s), t: byId(t) }));
+  links.forEach(l => { l.s.deg++; l.t.deg++; });
+  nodes.forEach(n => { n.r = 4.5 + Math.min(n.deg, 6) * 1.6; });
+
+  let W = 0, H = 0, dpr = 1;
+  let scale = 1, tx = 0, ty = 0;
+  let filter = 'all', hover = null, drag = null;
+
+  function resize() {
+    const box = canvas.parentElement.getBoundingClientRect();
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = box.width; H = box.height;
+    canvas.width = W * dpr; canvas.height = H * dpr;
+    canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  /* --- 力学：斥力 + 弹簧 + 向心力 + 碰撞 --- */
+  const CENTER = 0.52, REPEL = 3400, LINK = 0.012, DIST = 96, DAMP = 0.86;
+  let alpha = 1;
+
+  function tick() {
+    const cx = W / 2, cy = H / 2;
+    for (const n of nodes) {
+      n.fx = 0; n.fy = 0;
+      // 中心力
+      n.fx += (cx - n.x) * CENTER * 0.0022;
+      n.fy += (cy - n.y) * CENTER * 0.0022;
+    }
+    // 斥力（Barnes-Hut 省略，节点少，直接 O(n²)）
+    for (let i = 0; i < nodes.length; i++) {
+      for (let j = i + 1; j < nodes.length; j++) {
+        const a = nodes[i], b = nodes[j];
+        let dx = b.x - a.x, dy = b.y - a.y;
+        let d2 = dx * dx + dy * dy;
+        if (d2 < 1) { dx = Math.random() - .5; dy = Math.random() - .5; d2 = 1; }
+        const d = Math.sqrt(d2);
+        const f = REPEL / d2;
+        const fx = dx / d * f, fy = dy / d * f;
+        a.fx -= fx; a.fy -= fy; b.fx += fx; b.fy += fy;
+        // 碰撞
+        const min = a.r + b.r + 12;
+        if (d < min) {
+          const push = (min - d) / d * 0.5;
+          a.fx -= dx * push; a.fy -= dy * push;
+          b.fx += dx * push; b.fy += dy * push;
+        }
+      }
+    }
+    // 弹簧
+    for (const l of links) {
+      const dx = l.t.x - l.s.x, dy = l.t.y - l.s.y;
+      const d = Math.sqrt(dx * dx + dy * dy) || 1;
+      const f = (d - DIST) * LINK;
+      const fx = dx / d * f, fy = dy / d * f;
+      l.s.fx += fx; l.s.fy += fy; l.t.fx -= fx; l.t.fy -= fy;
+    }
+    // 积分
+    for (const n of nodes) {
+      if (n.fixed) continue;
+      n.vx = (n.vx + n.fx) * DAMP;
+      n.vy = (n.vy + n.fy) * DAMP;
+      n.x += n.vx; n.y += n.vy;
+    }
+    alpha *= 0.992;
+    if (alpha < 0.02) alpha = 0.02;
+  }
+
+  function visible(n) { return filter === 'all' || n.g === filter; }
+  function neighborsOf(n) {
+    const set = new Set([n.id]);
+    links.forEach(l => {
+      if (l.s.id === n.id) set.add(l.t.id);
+      if (l.t.id === n.id) set.add(l.s.id);
+    });
+    return set;
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    ctx.save();
+    ctx.translate(tx, ty); ctx.scale(scale, scale);
+
+    const nb = hover ? neighborsOf(hover) : null;
+
+    // 连线
+    for (const l of links) {
+      if (!visible(l.s) || !visible(l.t)) continue;
+      const hot = hover && (nb.has(l.s.id) && nb.has(l.t.id));
+      const dim = hover && !hot;
+      ctx.beginPath();
+      ctx.moveTo(l.s.x, l.s.y); ctx.lineTo(l.t.x, l.t.y);
+      ctx.strokeStyle = hot ? 'rgba(167,139,250,.85)'
+                          : dim ? 'rgba(148,163,184,.10)'
+                                : 'rgba(148,163,184,.26)';
+      ctx.lineWidth = hot ? 1.8 : 1;
+      ctx.stroke();
+    }
+
+    // 节点
+    for (const n of nodes) {
+      if (!visible(n)) continue;
+      const c = GROUPS[n.g] || '#94a3b8';
+      const dim = hover && !nb.has(n.id);
+      // 光晕
+      if (!dim) {
+        const grd = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, n.r * 3.4);
+        grd.addColorStop(0, c + '55'); grd.addColorStop(1, c + '00');
+        ctx.fillStyle = grd;
+        ctx.beginPath(); ctx.arc(n.x, n.y, n.r * 3.4, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.beginPath(); ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2);
+      ctx.fillStyle = dim ? c + '33' : c;
+      ctx.fill();
+      if (hover && hover.id === n.id) {
+        ctx.lineWidth = 2; ctx.strokeStyle = '#fff'; ctx.stroke();
+      }
+      // 标签
+      const showLabel = !dim && (scale > 0.62 || n.deg >= 3 || (hover && nb.has(n.id)));
+      if (showLabel) {
+        ctx.font = '600 11.5px "Noto Sans SC","Microsoft YaHei",sans-serif';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        const a = Math.max(0, Math.min(1, (scale - 0.55) * 2.2));
+        ctx.fillStyle = `rgba(232,237,247,${dim ? .12 : a})`;
+        ctx.fillText(n.t, n.x, n.y + n.r + 11);
+      }
+    }
+    ctx.restore();
+  }
+
+  function loop() { tick(); draw(); requestAnimationFrame(loop); }
+
+  /* --- 交互 --- */
+  function toWorld(e) {
+    const r = canvas.getBoundingClientRect();
+    return { x: (e.clientX - r.left - tx) / scale, y: (e.clientY - r.top - ty) / scale };
+  }
+  canvas.addEventListener('mousemove', e => {
+    const p = toWorld(e);
+    if (drag) {
+      drag.x = p.x; drag.y = p.y; drag.vx = 0; drag.vy = 0;
+      alpha = Math.max(alpha, 0.42);
+      return;
+    }
+    let hit = null;
+    for (const n of nodes) {
+      if (!visible(n)) continue;
+      if ((p.x - n.x) ** 2 + (p.y - n.y) ** 2 < (n.r + 7) ** 2) { hit = n; break; }
+    }
+    hover = hit;
+    canvas.style.cursor = hit ? 'pointer' : 'grab';
+  });
+  canvas.addEventListener('mousedown', e => {
+    const p = toWorld(e);
+    for (const n of nodes) {
+      if (!visible(n)) continue;
+      if ((p.x - n.x) ** 2 + (p.y - n.y) ** 2 < (n.r + 9) ** 2) {
+        drag = n; n.fixed = true; canvas.style.cursor = 'grabbing'; return;
+      }
+    }
+  });
+  window.addEventListener('mouseup', () => {
+    if (drag) { drag.fixed = false; drag = null; }
+  });
+  canvas.addEventListener('wheel', e => {
+    e.preventDefault();
+    const r = canvas.getBoundingClientRect();
+    const mx = e.clientX - r.left, my = e.clientY - r.top;
+    const next = Math.max(0.3, Math.min(3, scale * (e.deltaY < 0 ? 1.08 : 0.925)));
+    tx = mx - (mx - tx) * (next / scale);
+    ty = my - (my - ty) * (next / scale);
+    scale = next;
+    document.getElementById('zval').textContent = Math.round(scale * 100) + '%';
+  }, { passive: false });
+
+  document.getElementById('zin').onclick = () => { scale = Math.min(3, scale * 1.2); sync(); };
+  document.getElementById('zout').onclick = () => { scale = Math.max(.3, scale / 1.2); sync(); };
+  document.getElementById('zfit').onclick = () => { scale = 1; tx = 0; ty = 0; sync(); };
+  function sync() { document.getElementById('zval').textContent = Math.round(scale * 100) + '%'; }
+
+  document.querySelectorAll('.chip').forEach(chip => {
+    chip.onclick = () => {
+      document.querySelectorAll('.chip').forEach(c => c.classList.remove('on'));
+      chip.classList.add('on');
+      filter = chip.dataset.f;
+      alpha = 0.9;   // 筛选不重建布局，只重新加热
+    };
+  });
+
+  /* --- 启动 --- */
+  resize();
+  window.addEventListener('resize', resize);
+  // 居中初始坐标
+  nodes.forEach(n => { n.x += W / 2; n.y += H / 2; });
+  loop();
+})();
+</script>
+</body>
+</html>
