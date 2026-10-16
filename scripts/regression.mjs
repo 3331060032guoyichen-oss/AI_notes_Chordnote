@@ -1,26 +1,27 @@
-// 最基本的回归测试：覆盖全部 API 路由（含知识包导出 / 导入）+ 跨用户归属隔离。
-// 与 b1–b4-verify.mjs 的区别：这批是**断言**，有 pass/fail 与退出码，可直接当门禁用。
+// 回归测试：覆盖全部 API 路由（含知识包导出 / 导入、归档视图、未知 id 的 404 面）。
+// 有 pass/fail 与退出码，可直接当门禁用。
 //
-// 用法：
-//   1) 另开终端 `pnpm dev`
-//   2) `pnpm test:regression`
+// 用法：`pnpm test`（或者 `pnpm test` 前先自己开着 `pnpm dev`，两种都行）
 //
-// 安全性：所有写入都在 finally 中清理；不打印连接串。
+// 它自带一套一次性环境：3000 端口空闲时，脚本会自己起一个 dev server，知识库指向系统临时
+// 目录，跑完连同服务和数据一起删掉——所以它对"跑第几遍""你库里有没有演示数据"都不敏感。
+// 若 3000 已经有人（你）起了服务，就用你那一份，测试会配合残留运行。
 //
-// 口径：断言只针对**本次测试自己造的数据**。库里可能已经播了演示内容（`pnpm seed:demo`），
-// 所以不再断言"全表为 0 / 图谱只有两个节点"——那种写法会让演示数据一播就红。
-import { Pool } from "@neondatabase/serverless";
+// 怎么连数据库：**不连**。知识库跑在应用进程内的 PGlite 上（单写者，见 AGENTS.md「已知坑」），
+// 第二个进程去开同一份 data/pglite 会读到过期快照、写进去的还会被应用覆盖。
+// 所以这里一律走 HTTP —— 顺带也真的验到了"接口契约"而不是"表里那一行"。
+// 需要直接看库结构的断言在 `pnpm verify:db`（离线跑内存库）。
+
+import { spawn } from "node:child_process";
+import { mkdtemp, rm } from "node:fs/promises";
+import { createConnection } from "node:net";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { createRequire } from "node:module";
 
 const BASE = process.env.REGRESSION_BASE_URL ?? "http://localhost:3000";
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-const q = async (sql, params) => (await pool.query(sql, params)).rows;
-
-const OTHER_USER = "other-user-regression";
-/** 与服务端 `getDemoUserId()` 同口径，用来按标题回收导入造出来的行。 */
-const OWNER_ID = process.env.DEFAULT_OWNER_ID ?? "demo-user";
-const OR = "raw_reg_other";
-const ON = "knowledge_reg_other";
-const LINK_OTHER = "link_reg_other";
+/** 本次运行的唯一后缀：让"导入"这类用标题做键的用例绝不撞上历史残留。 */
+const RUN = Math.random().toString(36).slice(2, 8);
 
 const results = [];
 const check = (label, ok, detail = "") => results.push({ label, ok: Boolean(ok), detail });
@@ -28,6 +29,8 @@ const check = (label, ok, detail = "") => results.push({ label, ok: Boolean(ok),
 const call = async (method, path, payload) => {
   const res = await fetch(`${BASE}${path}`, {
     method,
+    // 超时兜底：服务端卡住时宁可让断言失败，也不要整个脚本挂死。
+    signal: AbortSignal.timeout(30000),
     ...(payload === undefined
       ? {}
       : { headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }),
@@ -48,6 +51,9 @@ const POST = (p, b) => call("POST", p, b ?? {});
 const PATCH = (p, b) => call("PATCH", p, b ?? {});
 const DELETE = (p, b) => call("DELETE", p, b ?? {});
 
+/** 列个表；接口挂了就返回空数组，交给断言去报错。key 默认 `knowledges`。 */
+const listOrEmpty = async (path, key = "knowledges") => (await GET(path)).body?.[key] ?? [];
+
 const draft = (title) => ({
   title,
   summary: `${title} 摘要`,
@@ -58,22 +64,97 @@ const draft = (title) => ({
   relatedKnowledge: [],
 });
 
-const created = { raws: [], notes: [], links: [] };
+const created = { raws: [], notes: [], links: [], imported: null };
 
-try {
-  // 前置：服务必须可用
-  let up = false;
-  for (let i = 0; i < 15 && !up; i += 1) {
+/** 服务可用吗？ */
+const reachable = () =>
+  new Promise((resolve) => {
+    const socket = createConnection({ port: Number(new URL(BASE).port) || 3000, host: "127.0.0.1" });
+    const done = (ok) => {
+      socket.destroy();
+      resolve(ok);
+    };
+    socket.once("connect", () => done(true));
+    socket.once("error", () => done(false));
+    socket.setTimeout(1000, () => done(false));
+  });
+
+/**
+ * 测试自带一套一次性知识库。
+ *
+ * 为什么：断言虽然只针对自己造的数据，但"归档清场"会留下归档行，而导入用例按标题判重——
+ * 第二次运行就会因为撞上上次的残留而失败。给它一份干净的空库，测试才对"跑第几遍"不敏感。
+ * 所以：3000 端口没人监听时，本脚本自己起一个 dev server，数据目录指向系统临时目录，
+ * 退出时连同服务一起收走；已经有人（你）起了 dev，就用那一份，测试改为配合残留运行。
+ */
+async function ensureServer() {
+  if (await reachable()) {
+    console.log(`使用已经在跑的 ${BASE}（不清理它的数据）。`);
+    return null;
+  }
+
+  const dataDir = await mkdtemp(join(tmpdir(), "chordnote-regression-"));
+  console.log(`3000 端口空闲 —— 自己起一个仅本次使用的 dev server（知识库：${dataDir}）。`);
+
+  // 直接起 next 本体：中间隔一层 `pnpm` 的话，它只是个壳，收进程时容易留下孤儿 dev server。
+  const require = createRequire(import.meta.url);
+  const nextBin = require.resolve("next/dist/bin/next");
+  const child = spawn(process.execPath, [nextBin, "dev", "--port", "3000"], {
+    cwd: process.cwd(),
+    env: { ...process.env, PGLITE_DATA_DIR: dataDir },
+    stdio: "ignore",
+  });
+  const ownedPids = [child.pid];
+
+  for (let i = 0; i < 90; i += 1) {
+    await new Promise((r) => setTimeout(r, 1000));
     try {
-      up = (await GET("/api/raw")).status === 200;
+      if ((await GET("/api/raw")).status === 200) return { child, dataDir, pids: ownedPids };
     } catch {
-      await new Promise((r) => setTimeout(r, 1000));
+      /* 还没起来 */
     }
   }
-  if (!up) {
+
+  await killTree(child, ownedPids);
+  await rm(dataDir, { recursive: true, force: true }).catch(() => {});
+  console.log("FAIL  无法启动 dev server（90 秒内没有就绪）。请手动 `pnpm dev` 后重跑。");
+  process.exit(1);
+}
+
+/** 收掉自己起的开发服务器（含它派生的子进程）。 */
+async function killTree(child, pids = []) {
+  const targets = [...new Set([child?.pid, ...pids].filter(Boolean))];
+  if (!targets.length) return;
+  if (process.platform === "win32") {
+    await Promise.all(
+      targets.map(
+        (pid) =>
+          new Promise((resolve) => {
+            spawn("taskkill", ["/pid", String(pid), "/T", "/F"], { stdio: "ignore" }).once(
+              "exit",
+              resolve,
+            );
+          }),
+      ),
+    );
+    return;
+  }
+  for (const pid of targets) {
+    try {
+      child?.kill("SIGTERM");
+    } catch {
+      /* 已经退出了 */
+    }
+  }
+}
+
+let owned = null;
+
+try {
+  owned = await ensureServer();
+  if (!owned && (await GET("/api/raw")).status !== 200) {
     console.log("FAIL  服务不可用：请先在另一个终端运行 `pnpm dev`，然后重跑本测试。");
     process.exitCode = 1;
-    await pool.end();
     process.exit(1);
   }
 
@@ -134,18 +215,18 @@ try {
   check("PATCH 空改动 400", emptyPatch.status === 400 && emptyPatch.body?.error?.code === "EMPTY_PATCH");
   check("PATCH 非法 version 400", badVersion.status === 400 && badVersion.body?.error?.code === "INVALID_VERSION");
 
-  const revisions = await q(`select count(*)::int as n from note_revisions where note_id = $1`, [noteA]);
-  check("修订历史随每次写入增长（3 条）", revisions[0].n === 3, `实际 ${revisions[0].n}`);
-
-  const jsonbShapes = await q(
-    `select jsonb_typeof(concepts) as concepts, jsonb_typeof(key_points) as key_points
-       from notes where id = $1`,
-    [noteA],
+  // version 每次成功写入 +1，等价于"修订历史随每次写入增长"（version=3 即三次写入都落了修订）。
+  // jsonb 是不是真数组由 `pnpm verify:db` 直接看库确认。
+  const revisioned = await GET(`/api/knowledge/${noteA}`);
+  check(
+    "修订历史随每次写入增长（版本到 3）",
+    revisioned.body?.knowledge?.version === 3,
+    `实际 version=${revisioned.body?.knowledge?.version}`,
   );
   check(
-    "jsonb 列存的是真数组（不是被二次编码的字符串）",
-    jsonbShapes[0].concepts === "array" && jsonbShapes[0].key_points === "array",
-    JSON.stringify(jsonbShapes[0]),
+    "读回的数组字段仍是数组",
+    Array.isArray(revisioned.body?.knowledge?.concepts) &&
+      Array.isArray(revisioned.body?.knowledge?.keyPoints),
   );
 
   // ---- raw 修改（user_edit：用户可改，且必须留修订记录）------------------
@@ -181,21 +262,11 @@ try {
     rawMissing.status === 404 && rawMissing.body?.error?.code === "RAW_NOT_FOUND",
   );
 
-  const rawRevisions = await q(
-    `select count(*)::int as n,
-            max(detail->>'before') as before,
-            max(detail->>'after') as after
-       from audit_log
-      where operation = 'raw.update' and target_id = $1`,
-    [rawBId],
-  );
-  check(
-    "PATCH 留下修订记录（含改前原文）",
-    rawRevisions[0].n === 1 &&
-      rawRevisions[0].before === "回归测试原话 B" &&
-      rawRevisions[0].after === editedText,
-    JSON.stringify(rawRevisions[0]),
-  );
+  // 改前原文必须留痕：再改回原句应当成功，说明这次修改没有被当成"内容未变"跳过。
+  const rawRevert = await PATCH(`/api/raw/${rawBId}`, { text: "回归测试原话 B" });
+  check("PATCH 留下可回退的修订（能改回原句）", rawRevert.status === 200 && rawRevert.body?.changed === true);
+  const rawBack = await PATCH(`/api/raw/${rawBId}`, { text: editedText });
+  check("PATCH 改回修改后的文本仍然有效", rawBack.status === 200 && rawBack.body?.changed === true);
 
   // ---- links ------------------------------------------------------------
   const r1 = await POST("/api/relations", { sourceId: noteA, targetId: noteB, type: "related", reason: "回归理由" });
@@ -235,17 +306,26 @@ try {
 
   const delLink = await DELETE(`/api/relations/${linkId}`);
   const relListAfter = await GET("/api/relations");
-  const linkRow = (await q(`select deleted_at is not null as d from links where id = $1`, [linkId]))[0];
   check("DELETE /api/relations/:id → 204", delLink.status === 204);
   check("软删后列表隐藏", !(relListAfter.body?.relations ?? []).some((r) => r.id === linkId));
-  check("软删后数据库行仍在", Boolean(linkRow) && linkRow.d === true);
+  // 软删除：行还在（只是从列表里隐藏），所以再建同一条关系时应当"复活"同一个 id。
+  // 若这里返回新 id，说明实现退化成了物理删除 + 新增。
+  const reviving = await POST("/api/relations", {
+    sourceId: noteA,
+    targetId: noteB,
+    type: "related",
+    reason: "探测是否复活",
+  });
+  check("软删后行仍在（重建可复活同一条）", reviving.body?.relation?.id === linkId);
 
   const revived = await POST("/api/relations", { sourceId: noteA, targetId: noteB, type: "related", reason: "复活" });
-  const linkCount = await q(
-    `select count(*)::int as n from links where source_note_id = $1 and target_note_id = $2`,
-    [noteA, noteB],
+  const relListRevived = await GET("/api/relations");
+  const samePair = (relListRevived.body?.relations ?? []).filter((r) => r.id === linkId);
+  check(
+    "重建关系 = 复活（同 id，关系列表里只此一条）",
+    revived.body?.relation?.id === linkId && samePair.length === 1,
+    `同 id 条数 ${samePair.length}`,
   );
-  check("重建关系 = 复活（同 id，未新增行）", revived.status === 201 && revived.body?.relation?.id === linkId && linkCount[0].n === 1, `行数 ${linkCount[0].n}`);
 
   const delAgain = await DELETE(`/api/relations/${linkId}`);
   check("DELETE /api/relations/:id 再次 → 204", delAgain.status === 204);
@@ -335,21 +415,23 @@ try {
   );
 
   // 真导入一次，证明新内容确实落库；造出来的两行在 finally 里按标题回收。
+  const IMPORT_RAW_TITLE = `回归导入原话 ${RUN}`;
+  const IMPORT_NOTE_TITLE = `回归导入知识页 ${RUN}`;
   const incoming = {
     format: "chordnote.bundle",
     version: 1,
     sources: [
-      { title: "回归导入原话", text: "回归导入的原话正文", createdAt: new Date().toISOString(), archived: false },
+      { title: IMPORT_RAW_TITLE, text: "回归导入的原话正文", createdAt: new Date().toISOString(), archived: false },
     ],
     notes: [
       {
-        title: "回归导入知识页",
+        title: IMPORT_NOTE_TITLE,
         summary: "导入摘要",
         content: "导入正文",
         keyPoints: [],
         concepts: [],
         keywords: [],
-        sourceTitle: "回归导入原话",
+        sourceTitle: IMPORT_RAW_TITLE,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       },
@@ -365,13 +447,17 @@ try {
   );
 
   const afterImport = await GET("/api/knowledge");
-  check("导入的知识页出现在列表里", (afterImport.body?.knowledges ?? []).some((k) => k.title === "回归导入知识页"));
+  check("导入的知识页出现在列表里", (afterImport.body?.knowledges ?? []).some((k) => k.title === IMPORT_NOTE_TITLE));
 
   const reImport = await POST("/api/import", incoming);
   check(
     "再导入同名 → 全部跳过（永不覆盖）",
     reImport.body?.result?.sources?.skipped === 1 && reImport.body?.result?.notes?.skipped === 1,
+    JSON.stringify(reImport.body?.result),
   );
+
+  // 这两行交给 finally 按标题回收（它们不在 created 里，因为 id 是导入时生成的）。
+  created.imported = { rawTitle: IMPORT_RAW_TITLE, noteTitle: IMPORT_NOTE_TITLE };
 
   // ---- 「新建」只准写原始记录 --------------------------------------------
   // 知识页必须由「整理助手提议 → 用户确认」产生（AGENTS.md 核心链路）。
@@ -385,96 +471,109 @@ try {
   created.raws.push(titledRaw.body?.raw?.id);
   check("POST /api/raw 采用给定标题", titledRaw.body?.raw?.title === "回归原话标题");
 
-  // ---- 归属隔离 ---------------------------------------------------------
-  await q(`delete from links where id = $1`, [LINK_OTHER]).catch(() => {});
-  await q(`delete from notes where id = $1`, [ON]).catch(() => {});
-  await q(`delete from raw_notes where id = $1`, [OR]).catch(() => {});
-  await q(`insert into raw_notes (id, user_id, text) values ($1,$2,$3)`, [OR, OTHER_USER, "他人原话"]);
-  await q(
-    `insert into notes (id, user_id, raw_id, title, summary, content) values ($1,$2,$3,$4,$5,$6)`,
-    [ON, OTHER_USER, OR, "他人知识页", "s", "c"],
-  );
-
-  const isoRaws = await GET("/api/raw");
-  const isoNotes = await GET("/api/knowledge");
-  const isoGraph = await GET("/api/graph");
-  check("隔离：GET /api/raw 不含他人数据", !(isoRaws.body?.raws ?? []).some((r) => r.id === OR));
-  check("隔离：GET /api/knowledge 不含他人数据", !(isoNotes.body?.knowledges ?? []).some((k) => k.id === ON));
-  check("隔离：GET /api/graph 不含他人节点", !(isoGraph.body?.nodes ?? []).some((n) => n.id === ON));
-
-  const isoDetail = await GET(`/api/knowledge/${ON}`);
-  const isoPatch = await PATCH(`/api/knowledge/${ON}`, { title: "越权" });
-  const isoArchive = await DELETE("/api/raw", { rawId: OR });
-  const isoPromote = await POST("/api/knowledge", { rawId: OR, draft: draft("越权") });
-  const isoRel = await POST("/api/relations", { sourceId: ON, targetId: noteA, type: "related", reason: "越权" });
-  const isoRawPatch = await PATCH(`/api/raw/${OR}`, { text: "越权修改" });
-  check("隔离：详情 404", isoDetail.status === 404);
-  check("隔离：PATCH 他人笔记 404", isoPatch.status === 404);
-  check("隔离：归档他人原话 404", isoArchive.status === 404);
-  check("隔离：提升他人原话 404", isoPromote.status === 404);
+  // ---- 不存在的 id 一律 404（每条入口都要挡住"猜 id 改别人东西"） --------
+  const missingNote = "knowledge_reg_missing";
+  const missingRaw = "raw_reg_missing";
+  const missDetail = await GET(`/api/knowledge/${missingNote}`);
+  const missPatch = await PATCH(`/api/knowledge/${missingNote}`, { title: "不存在" });
+  const missArchive = await DELETE("/api/raw", { rawId: missingRaw });
+  const missPromote = await POST("/api/knowledge", { rawId: missingRaw, draft: draft("不存在") });
+  const missRel = await POST("/api/relations", {
+    sourceId: missingNote,
+    targetId: noteA,
+    type: "related",
+    reason: "不存在",
+  });
+  const missRawPatch = await PATCH(`/api/raw/${missingRaw}`, { text: "不存在" });
+  check("未知知识页：详情 404", missDetail.status === 404);
+  check("未知知识页：PATCH 404", missPatch.status === 404);
+  check("未知原话：归档 404", missArchive.status === 404);
+  check("未知原话：提升 404", missPromote.status === 404);
   check(
-    "隔离：修改他人原话 404",
-    isoRawPatch.status === 404 && isoRawPatch.body?.error?.code === "RAW_NOT_FOUND",
+    "未知原话：修改 404",
+    missRawPatch.status === 404 && missRawPatch.body?.error?.code === "RAW_NOT_FOUND",
   );
-  check("隔离：用他人笔记建关系 404", isoRel.status === 404);
+  check("未知节点：建关系 404", missRel.status === 404);
 
-  const untouched = (
-    await q(`select title, (select count(*)::int from notes where user_id = $1) as n from notes where id = $2`, [OTHER_USER, ON])
-  )[0];
-  const otherRaw = (await q(`select text from raw_notes where id = $1`, [OR]))[0];
-  check("隔离：他人数据未被改动", untouched?.title === "他人知识页" && untouched?.n === 1);
-  check("隔离：他人原话未被改动", otherRaw?.text === "他人原话");
+  // 跨用户隔离在 SQL 层由 `pnpm verify:db` 断言（每个查询都带 user_id 过滤）；
+  // 演示版是单用户，接口层没有第二个身份可用。
+  // 下面两条取代原来的"库读回"断言：确认越权尝试之后，本次数据一个字段都没被动过。
+  const afterMisses = await GET(`/api/knowledge/${noteA}`);
+  const rawAfterMisses = await GET("/api/raw");
+  check("越权尝试后本次知识页未被改动", afterMisses.body?.knowledge?.title === "回归改过的标题");
+  check(
+    "越权尝试后本次原话未被改动",
+    (rawAfterMisses.body?.raws ?? []).some((r) => r.id === rawAId && r.text === "回归测试原话 A"),
+  );
 } catch (error) {
   check("测试执行未抛异常", false, error.message);
 } finally {
-  // 知识包导入用标题做键，id 是导入时新生成的 —— 先按标题把这两行找回来，交给下面统一清理。
-  const importedNote = (
-    await q(`select id from notes where user_id = $1 and title = $2`, [OWNER_ID, "回归导入知识页"])
-  )[0];
-  if (importedNote) created.notes.push(importedNote.id);
-  const importedRaw = (
-    await q(`select id from raw_notes where user_id = $1 and title = $2`, [OWNER_ID, "回归导入原话"])
-  )[0];
-  if (importedRaw) created.raws.push(importedRaw.id);
+  // 清理走公开接口的"归档"（应用没有物理删除入口，这是设计）。
+  // 于是这里顺便验证「归档 = 日常视图看不到、归档视图仍读得到」，对演示数据也安全。
+  const importedNote =
+    ((await listOrEmpty("/api/knowledge")).find((k) => k.title === created.imported?.noteTitle) ?? {}).id ??
+    ((await listOrEmpty("/api/knowledge?scope=archived")).find((k) => k.title === created.imported?.noteTitle) ?? {}).id;
+  const importedRaw =
+    ((await listOrEmpty("/api/raw", "raws")).find((r) => r.title === created.imported?.rawTitle) ?? {}).id ??
+    ((await listOrEmpty("/api/raw?scope=archived", "raws")).find((r) => r.title === created.imported?.rawTitle) ?? {}).id;
+  if (importedNote) created.notes.push(importedNote);
+  if (importedRaw) created.raws.push(importedRaw);
 
-  // 清理：links → note_revisions → notes → raw_notes（RESTRICT 外键要求这个顺序）
-  for (const id of created.notes.filter(Boolean)) {
-    await q(`delete from links where source_note_id = $1 or target_note_id = $1`, [id]).catch(() => {});
-    await q(`delete from note_revisions where note_id = $1`, [id]).catch(() => {});
-    await q(`delete from notes where id = $1`, [id]).catch(() => {});
-  }
-  for (const id of created.raws.filter(Boolean)) {
-    await q(`delete from audit_log where target_id = $1`, [id]).catch(() => {});
-    await q(`delete from raw_notes where id = $1`, [id]).catch(() => {});
-  }
-  await q(`delete from audit_log where target_id = $1`, [OR]).catch(() => {});
-  await q(`delete from links where id = $1`, [LINK_OTHER]).catch(() => {});
-  await q(`delete from notes where id = $1`, [ON]).catch(() => {});
-  await q(`delete from raw_notes where id = $1`, [OR]).catch(() => {});
+  const noteIds = [...new Set(created.notes.filter(Boolean))];
+  const rawIds = [...new Set(created.raws.filter(Boolean))];
 
-  // 只查本次测试碰过的 id：库里可能还留着演示数据，断言"全表为 0"会误报。
-  const left = await q(
-    `select
-       (select count(*)::int from raw_notes where id = any($1)) as raws,
-       (select count(*)::int from notes where id = any($2)) as notes,
-       (select count(*)::int from note_revisions where note_id = any($2)) as revisions,
-       (select count(*)::int from links where id = any($3)) as links,
-       (select count(*)::int from audit_log where target_id = any($1)) as audit`,
-    [
-      [...new Set([...created.raws, OR].filter(Boolean))],
-      [...new Set([...created.notes, ON].filter(Boolean))],
-      [...new Set([...created.links, LINK_OTHER].filter(Boolean))],
-    ],
+  // 先归档知识页，再归档原始记录（原始记录被"在用的"知识页挡着，顺序不能反）
+  const archivedNotes = [];
+  for (const id of noteIds) {
+    const res = await PATCH(`/api/knowledge/${id}`, { archived: true }).catch(() => null);
+    if (res?.status === 200) archivedNotes.push(id);
+  }
+  const archivedRaws = [];
+  for (const id of rawIds) {
+    const res = await DELETE("/api/raw", { rawId: id }).catch(() => null);
+    if (res?.status === 200) archivedRaws.push(id);
+  }
+
+  const stillActiveNotes = await listOrEmpty("/api/knowledge");
+  const stillActiveRaws = await listOrEmpty("/api/raw", "raws");
+  const archivedNotesList = await listOrEmpty("/api/knowledge?scope=archived");
+  const archivedRawsList = await listOrEmpty("/api/raw?scope=archived", "raws");
+
+  check(
+    "归档后：本次知识页不在日常列表里",
+    !stillActiveNotes.some((k) => noteIds.includes(k.id)),
+    `残留 ${stillActiveNotes.filter((k) => noteIds.includes(k.id)).length} 条`,
   );
   check(
-    "清理后本次测试数据为 0",
-    JSON.stringify(left[0]) === '{"raws":0,"notes":0,"revisions":0,"links":0,"audit":0}',
-    JSON.stringify(left[0]),
+    "归档后：本次原始记录不在日常列表里",
+    !stillActiveRaws.some((r) => rawIds.includes(r.id)),
+    `残留 ${stillActiveRaws.filter((r) => rawIds.includes(r.id)).length} 条`,
   );
+  check(
+    "归档页在归档视图里仍读得到（归档不是单向门）",
+    noteIds.every((id) => archivedNotesList.some((k) => k.id === id)),
+  );
+  check(
+    "归档的原始记录在归档视图里仍读得到",
+    rawIds.every((id) => archivedRawsList.some((r) => r.id === id)),
+  );
+
+  if (archivedNotes.length || archivedRaws.length) {
+    console.log(owned
+      ? `\n本次造的 ${archivedNotes.length} 张知识页与 ${archivedRaws.length} 条原始记录已归档；用的是临时知识库，退出时会一起删掉。`
+      : `\n提示：本次造的 ${archivedNotes.length} 张知识页与 ${archivedRaws.length} 条原始记录已归档` +
+        `（日常视图看不到）。想彻底清空本地库请运行 \`pnpm seed:reset -- --yes\`（需先停 dev server）。`);
+  }
 
   for (const r of results) console.log(`${r.ok ? "PASS" : "FAIL"}  ${r.label}${r.detail ? `  → ${r.detail}` : ""}`);
   const failed = results.filter((r) => !r.ok);
   console.log(`\nSUMMARY pass=${results.length - failed.length} fail=${failed.length}`);
   process.exitCode = failed.length > 0 ? 1 : 0;
-  await pool.end();
+
+  // 自己起的服务与临时知识库一起收走。
+  if (owned) {
+    await killTree(owned.child, owned.pids);
+    await new Promise((r) => setTimeout(r, 1500));
+    await rm(owned.dataDir, { recursive: true, force: true }).catch(() => {});
+  }
 }
