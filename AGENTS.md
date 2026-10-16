@@ -46,7 +46,7 @@ pnpm dev                     # http://localhost:3000
 
 **验证与测试（2026-10-11 新增）**：
 
-- `pnpm test` —— 回归测试（**需先跑 `pnpm dev`**）：覆盖全部 10 个 API 路由 + 跨用户归属隔离，带 pass/fail 与退出码；当前 **47/47 通过**。
+- `pnpm test` —— 回归测试（**需先跑 `pnpm dev`**）：覆盖全部 10 个 API 路由 + 跨用户归属隔离，带 pass/fail 与退出码；脚本内当前有 **61 项断言**（数 `check(` 调用点即得；下面的 2026-10-11 记录里写 47、60 是当时的数字，已过时）。
 - `pnpm verify:db` —— 表 / 约束 / 外键删除行为 / 枚举 CHECK / RESTRICT 验证（写入测试全部在事务内回滚，不需要服务）。
 - `pnpm test:cleanup` —— 安全网：清理验证脚本可能遗留的测试数据。
 - 契约文档：[`docs/schema.md`](docs/schema.md) —— 英文契约 + 中文注解，**只描述已实现状态**，未实现的统一标注 `NOT IMPLEMENTED`。
