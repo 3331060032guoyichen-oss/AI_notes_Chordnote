@@ -5,7 +5,7 @@
 //   2) `pnpm seed:demo`
 //
 // 打线上（给校赛截图用）：
-//   SEED_BASE_URL=https://hilarious-kheer-89a440.netlify.app pnpm seed:demo
+//   SEED_BASE_URL=<部署地址> pnpm seed:demo
 //
 // 为什么走 HTTP 而不是直接写库：
 //   一张知识页要同时写 raw_notes + notes + note_revisions 三处，还要满足
@@ -61,9 +61,9 @@ const main = async () => {
   if (ping.status >= 500) {
     console.error(`\n✗ ${BASE} 有响应，但后端报错（GET /api/raw → ${ping.status}）。`);
     console.error("  服务本身起来了，问题在数据这一层。按顺序查：");
-    console.error("   1) 项目根目录有没有 .env.local，里面有没有 DATABASE_URL（Neon dev 分支的池化串）");
-    console.error("   2) `pnpm verify:db` —— 它会区分「连不上库」和「表没建」");
-    console.error("   3) 若表没建：`pnpm exec drizzle-kit migrate`");
+    console.error("   1) `pnpm verify:db` —— 用一份干净的内存库跑迁移并检查表与约束");
+    console.error("   2) 本地数据目录（默认 data/pglite）是否可写");
+    console.error("   3) 看 dev server 终端的报错：迁移失败会打在那里");
     console.error("  注意：此时页面会显示「知识网络还没有内容」，那不是图谱的问题。\n");
     process.exitCode = 1;
     return;

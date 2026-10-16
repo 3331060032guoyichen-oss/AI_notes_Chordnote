@@ -1,5 +1,0 @@
-[build]
-  # Run pnpm through Corepack so the build works even where a global `pnpm`
-  # binary isn't on PATH; Corepack resolves the version from `packageManager`.
-  command = "corepack pnpm run build"
-  publish = ".next"

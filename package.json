@@ -9,25 +9,22 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "test": "node --env-file=.env.local scripts/regression.mjs",
-    "verify:db": "node --env-file=.env.local scripts/db-verify.mjs",
-    "test:cleanup": "node --env-file=.env.local scripts/cleanup-verify-rows.mjs",
+    "test": "node scripts/regression.mjs",
+    "verify:db": "node scripts/db-verify.mjs",
     "seed:demo": "node scripts/seed-demo.mjs",
-    "seed:reset": "node --env-file=.env.local scripts/reset-demo-data.mjs"
+    "seed:reset": "node scripts/reset-demo-data.mjs"
   },
   "dependencies": {
-    "@neondatabase/serverless": "^1.2.0",
+    "@electric-sql/pglite": "^0.5.10",
     "@tsparticles/engine": "^4.4.0",
     "@tsparticles/react": "^4.4.0",
     "@tsparticles/slim": "^4.4.0",
-    "bufferutil": "^4.1.0",
     "d3-force": "^3.0.0",
     "drizzle-orm": "0.45.4",
     "next": "^15.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "three": "0.186.0",
-    "ws": "^8.22.0"
+    "three": "0.186.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.7",
@@ -38,7 +35,6 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@types/three": "0.186.0",
-    "@types/ws": "^8.18.2",
     "@typescript-eslint/eslint-plugin": "^8.0.0",
     "@typescript-eslint/parser": "^8.0.0",
     "drizzle-kit": "0.31.11",

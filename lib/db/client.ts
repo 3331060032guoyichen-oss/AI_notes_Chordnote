@@ -1,5 +1,9 @@
-import { drizzle } from "drizzle-orm/neon-serverless";
-import { neonConfig, Pool } from "@neondatabase/serverless";
+import { mkdir } from "node:fs/promises";
+import { dirname, resolve } from "node:path";
+
+import { PGlite } from "@electric-sql/pglite";
+import { drizzle } from "drizzle-orm/pglite";
+import { migrate } from "drizzle-orm/pglite/migrator";
 
 import * as schema from "./schema";
 
@@ -15,46 +19,68 @@ export type DbTransaction = Parameters<Parameters<Database["transaction"]>[0]>[0
 
 export interface DbHandle {
   db: Database;
-  pool: Pool;
+  client: PGlite;
   close: () => Promise<void>;
 }
 
 /**
  * 连接工厂 —— 全项目唯一知道"用哪个驱动"的地方。
  *
- * 默认：@neondatabase/serverless（WebSocket 传输）。
- *   - Netlify Functions 属 serverless，Neon 官方推荐该驱动；
- *   - WebSocket 传输支持交互式事务（HTTP 传输只支持非交互式事务，不使用）。
+ * 用的是 PGlite：把 PostgreSQL 编译成 WASM，直接在 Node 进程里跑，
+ * 数据落在本地目录（默认 `data/pglite`）。因此：
+ *   - 不需要连接串、不需要外部数据库服务、不需要联网；
+ *   - SQL 方言仍是 PostgreSQL，schema 与 drizzle 迁移原样可用；
+ *   - 备份 = 拷走 `data/` 目录（或走「导出知识包」）。
  *
- * 驱动替换只发生在本文件：若将来部署到长驻服务器（VPS / 容器），可改为
- * `drizzle-orm/node-postgres` + `pg`，业务层与服务层不出现驱动专属 API。
+ * 单写者：同一时刻只允许一个进程写这份数据目录（WASM 版 Postgres 的固有约束）。
+ * 所以不要在应用运行时再开第二个进程去连同一个 `PGLITE_DATA_DIR`；
+ * 需要脚本检查数据时，请走 HTTP 接口（见 scripts/regression.mjs）。
  *
- * 连接串：
- *   - 应用运行期：池化串（DATABASE_URL，hostname 含 -pooler）
- *   - 迁移 / pg_dump：直连串（DATABASE_URL_UNPOOLED）
+ * 驱动替换只发生在本文件：服务层只用 `getDb()` 与 `DbTransaction`，
+ * 不出现驱动专属 API。
  */
-export async function createDb(connectionString = process.env.DATABASE_URL): Promise<DbHandle> {
-  if (!connectionString) {
-    throw new Error("DATABASE_URL is not set.");
-  }
+export const DEFAULT_DATA_DIR = "./data/pglite";
+const MIGRATIONS_FOLDER = "./drizzle";
 
-  // Node.js 没有全局 WebSocket；WebSocket 传输需要显式构造器（ws + bufferutil）。
-  if (typeof WebSocket === "undefined") {
-    const ws = await import("ws");
-    neonConfig.webSocketConstructor = ws.default as unknown as typeof WebSocket;
-  }
+/** 数据目录；可用 PGLITE_DATA_DIR 覆盖（测试脚本会指到别处，避免和应用抢同一份数据）。 */
+export function resolveDataDir(): string {
+  return resolve(process.env.PGLITE_DATA_DIR ?? DEFAULT_DATA_DIR);
+}
 
-  const pool = new Pool({ connectionString });
-  const db = drizzle(pool, { schema });
-  return { db, pool, close: () => pool.end() };
+export async function createDb(): Promise<DbHandle> {
+  const dataDir = resolveDataDir();
+  // PGlite 不会自己建父目录（`data/` 在仓库里存在，但 `data/pglite` 是新建的）。
+  await mkdir(dirname(dataDir), { recursive: true });
+
+  const client = new PGlite(dataDir);
+  const db = drizzle(client, { schema });
+
+  // 建表 / 补列：drizzle 迁移按 journal 增量执行，已应用过的会跳过，每个进程跑一次。
+  await migrate(db, { migrationsFolder: MIGRATIONS_FOLDER });
+
+  return {
+    db,
+    client,
+    close: async () => {
+      await client.close();
+    },
+  };
 }
 
 let dbPromise: Promise<DbHandle> | null = null;
 
-/** 进程内复用的数据库句柄（serverless 冷启动后首调创建，后续复用）。 */
+/** 进程内复用的数据库句柄（首次调用时打开数据目录并补齐迁移，之后一直复用）。 */
 export function getDb(): Promise<DbHandle> {
   if (!dbPromise) {
     dbPromise = createDb();
   }
   return dbPromise;
+}
+
+/** 显式关闭（脚本收尾用；Next 运行期不需要调用）。 */
+export async function closeDb(): Promise<void> {
+  if (!dbPromise) return;
+  const handle = await dbPromise;
+  dbPromise = null;
+  await handle.close();
 }

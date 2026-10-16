@@ -65,11 +65,14 @@ Raw 原始记录 → 整理助手 Draft → 用户确认 → Knowledge 知识页
 git clone https://github.com/3331060032guoyichen-oss/ai-notes_demo.git
 cd ai-notes_demo
 pnpm install
-cp .env.example .env.local   # 填 DATABASE_URL（Neon dev 分支，必填）与 DEEPSEEK_API_KEY（可选）
 pnpm dev
 ```
 
-打开 <http://localhost:3000>，从左侧「新建笔记」开始。数据在 PostgreSQL 里，`DATABASE_URL` 指向 Neon 的 **dev 分支**；没有配置 `DEEPSEEK_API_KEY` 时，除 AI 相关功能外其余界面仍可使用。环境变量说明见 [`.env.example`](.env.example) 与 [`docs/DEV_WORKFLOW.md`](docs/DEV_WORKFLOW.md)。
+打开 <http://localhost:3000>，从左侧「新建笔记」开始。**零配置**：知识库就在本机 —— PGlite（编译成 WASM 的 PostgreSQL，跑在应用进程里），数据落在 `data/pglite`，首次启动自动建目录、补齐 `drizzle/` 里的迁移；不需要数据库服务，也不需要联网。
+
+想要「AI 整理」和右侧 AI 问答，再把 `.env.example` 复制成 `.env.local`，填上 `DEEPSEEK_API_KEY`；不填时这两个端点返回 503，其余功能照常。变量说明见 [`.env.example`](.env.example) 与 [`docs/DEV_WORKFLOW.md`](docs/DEV_WORKFLOW.md)。
+
+本地知识库的两条边界：同一份数据目录**同一时刻只能有一个进程写**（PGlite 是单写者，别一边跑 `pnpm dev` 一边让另一个进程连同一目录）；数据只在这台机器上，没有多设备与多云同步。**备份 = 拷走 `data/` 目录，或用设置里的「导出知识包」**；换数据目录用环境变量 `PGLITE_DATA_DIR`。
 
 想直接看到有内容的界面：`pnpm seed:demo`（幂等写入一批演示笔记，见 [`AGENTS.md`](AGENTS.md)）。
 
@@ -85,7 +88,7 @@ pnpm dev
 
 ## 技术栈与项目结构
 
-Next.js 15（App Router） · React 19 · TypeScript · pnpm · 手写 CSS · Drizzle ORM + Neon PostgreSQL · Three.js 0.186.0（首屏）· d3-force（图谱力学）· tsParticles（背景星尘）
+Next.js 15（App Router） · React 19 · TypeScript · pnpm · 手写 CSS · Drizzle ORM + PGlite（本地嵌入式 PostgreSQL） · Three.js 0.186.0（首屏） · d3-force（图谱力学） · tsParticles（背景星尘）
 
 ```text
 app/          Next.js 页面与 API 路由（含 export / import / proposals / agent）

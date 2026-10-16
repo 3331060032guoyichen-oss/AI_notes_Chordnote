@@ -2,7 +2,7 @@
 
 > English identifiers are the stable contract. 中文注解用于解释业务语义与设计取舍。
 > 本文只描述**已实现**的状态；未实现的部分统一标注 `NOT IMPLEMENTED`，不要按本文当作已完成。
-> 数据库：PostgreSQL（Neon）· ORM：Drizzle · 迁移：`drizzle/`
+> 数据库：本机 **PGlite**（PostgreSQL 的 WASM 版，跑在应用进程内，数据在 `data/pglite`）· ORM：Drizzle · 迁移：`drizzle/`
 
 ---
 
@@ -15,12 +15,14 @@ Services (lib/services/*)        ← 业务规则 + 归属过滤的唯一落点
         ↓
 Drizzle (lib/db/schema.ts)       ← 表定义、约束、枚举
         ↓
-Neon PostgreSQL
+PGlite（本机，data/pglite）
 ```
 
-**中文注解 · 为什么归属过滤必须在服务层**：路由只负责 HTTP 语义，MCP / 内置 Agent / 网页前端将来都调用同一套服务函数。把 `user_id` 条件写在服务层，任何新入口都自动继承隔离规则；写在路由里就会漏。
+**中文注解 · 为什么归属过滤必须在服务层**：路由只负责 HTTP 语义，MCP / 整理助手 / 网页前端都调用同一套服务函数。把 `user_id` 条件写在服务层，任何新入口都自动继承隔离规则；写在路由里就会漏。
 
-`NOT IMPLEMENTED`：MCP server（本地 stdio / 远程 HTTP）、内置 Agent、自动写入白名单策略引擎、变更提议（proposals）流程。
+`NOT IMPLEMENTED`：MCP server（本地 stdio / 远程 HTTP）、自动写入白名单策略引擎。
+
+**已实现的两条 AI 写入路径**：整理助手（`POST /api/agent/organize`）与编辑助理（`POST /api/assistant/propose`）。两者都只**提议**——真正写库要等 `/api/proposals/:id` 批下来再 `apply`（见 §4）。
 
 **已实现的一处审计写入**：修改原始记录正文（`PATCH /api/raw/:id`）会在同一事务里写一条 `audit_log`（`operation = 'raw.update'`，`detail = { before, after, version }`）作为修订记录。除此之外没有其他审计写入。
 
@@ -83,14 +85,14 @@ All business tables carry `user_id text NOT NULL`. 所有时间列为 `timestamp
 
 ### 其余表
 
-- `proposals`（提议）：字段齐全，`kind` / `status` / `risk_level` / `origin` 均有 CHECK，`target_note_id → notes.id ON DELETE RESTRICT`。`NOT IMPLEMENTED`：流程与 API。
+- `proposals`（提议）：字段齐全，`kind` / `status` / `risk_level` / `origin` 均有 CHECK，`target_note_id → notes.id ON DELETE RESTRICT`。流程与 API 都已实现（`/api/proposals*`，状态流转见 §4）。
 - `audit_log`：**没有任何外键**，因此任何级联都影响不到它。当前唯一写入方是 `PATCH /api/raw/:id`（原始记录修改的修订记录，见 §1 与 §4）。
-- `idempotency_keys`：`PRIMARY KEY (user_id, key)`。`NOT IMPLEMENTED`：使用。
+- `idempotency_keys`：`PRIMARY KEY (user_id, key)`。唯一使用方是 `/api/proposals/:id/apply`（幂等键优先取 `Idempotency-Key` 请求头，其次取请求体里的 `idempotencyKey`）。
 - `agent_tokens`：远程 MCP 凭据（`token_hash` 唯一）。`NOT IMPLEMENTED`：签发与校验。
 
 **枚举的唯一来源是 `lib/db/enums.ts`**：数据库 CHECK、列的 TS 联合类型、以及后续 API 校验都从它引用。
 
-**`.neon` 里另有 Neon Auth 的 9 张表，位于独立的 `neon_auth` schema**，与本契约无关。
+**本机库里只有 `public` 一个 schema、11 张表**（`pnpm verify:db` 在内存库上实测）。除 `drizzle/` 里的迁移外没有额外 schema、扩展或初始化脚本；换机器时把 `data/` 拷过去即可，无需再做任何数据库侧准备。
 
 ---
 
@@ -112,6 +114,7 @@ All business tables carry `user_id text NOT NULL`. 所有时间列为 `timestamp
 | Method & Path | Request | Success | Notes |
 |---|---|---|---|
 | `GET /api/raw` | — | `200 { raws: Raw[] }` | 排除已归档 |
+| `GET /api/raw?scope=archived` | — | `200 { raws: Raw[] }` | 只返回已归档的原始记录（左栏「已归档」分组用），与 `/api/knowledge?scope=archived` 同口径 |
 | `POST /api/raw` | `{ text, title? }` | `201 { raw }` | 空 / 超长 → 400；`title` 可选，非字符串或超长 → 400 |
 | `DELETE /api/raw` | `{ rawId }` | `200 { deleted, archived: true }` | **归档**，非物理删除；被**未归档的**知识页引用 → `409 RAW_REFERENCED_BY_KNOWLEDGE`（那一页归档后即可移除）|
 | `PATCH /api/raw/:id` | `{ text }` | `200 { raw, changed }` | `user_edit`：只有 `user` 主体可用（Agent → `403 USE_PROPOSAL_FLOW`）；每次改动写一条 `audit_log` 修订记录；正文相同 → `changed: false` 且不写库；不存在 / 已归档 / 非本人 → `404 RAW_NOT_FOUND` |
@@ -155,26 +158,32 @@ All business tables carry `user_id text NOT NULL`. 所有时间列为 `timestamp
 - `notes.version` 每次更新 +1；`PATCH` 可带 `version` 做乐观并发（不匹配 → 409，不写入）。**当前界面尚未发送 `version`**（不带则 last-write-wins）。
 - `POST /api/knowledge` 按 `raw_id` 幂等；`POST /api/relations` 按**无序对**幂等。
 - `DELETE /api/raw` / `DELETE /api/relations/:id` 天然幂等：重复操作影响 0 行 → 404。
-- `idempotency_keys` 表已建但**未被使用**。
+- `idempotency_keys` 的唯一使用方是 `/api/proposals/:id/apply`：首次执行会记下 `(user_id, key)` 与响应，同键重放直接返回当时的响应，不会重复写正式数据。
 
 ---
 
-## 7. Migration and Deployment
+## 7. Migration and Local Database
 
-- 迁移文件：`drizzle/0000`–`0005`。**已在 dev 分支执行**；**production 分支未执行任何迁移**。
-- 应用运行期使用**池化**连接串（`DATABASE_URL`）；迁移与 `pg_dump` 使用**直连**串（`DATABASE_URL_UNPOOLED`）。
-- 环境变量：本地 `.env.local`（已 gitignore）；部署平台在站点设置里配置（不要写进仓库）。
-- `NOT IMPLEMENTED`：部署、Neon 连接在生产环境的验证、备份机制（当前依赖 Neon 免费套餐的 6 小时即时恢复窗口）。
+- 迁移文件：`drizzle/0000`–`0005`（6 个 SQL）。应用启动时由 `lib/db/client.ts` 的 `migrate()` 按 journal **增量**执行，已应用过的跳过 —— 所以首次 `pnpm dev` 就自动建好表，不存在"记得手动跑迁移"这一步。
+- 数据目录：`data/pglite`（可用 `PGLITE_DATA_DIR` 改）。本机数据不进版本库，仓库里只有 `data/.gitkeep`。
+- **单写者**：同一份数据目录同一时刻只能有一个进程写。不要一边跑 `pnpm dev` 一边让别的进程去连同一目录 —— 它读到的是打开那一刻的快照，写回去的内容还会被应用随后的写入覆盖（"删了像没删"）。脚本要跟库打交道，要么走 HTTP 接口（`scripts/regression.mjs`），要么自己起一份内存库（`scripts/db-verify.mjs`）。
+- 备份与恢复：**拷走 `data/` 目录就是完整备份**；界面里的「导出知识包」（`GET /api/export`）给出可读、可再导入的快照。没有云端历史窗口，恢复能力等于你手上那份拷贝。
+- 环境变量只有两个，都可选：`DEEPSEEK_API_KEY`（AI 端点）与 `PGLITE_DATA_DIR`（数据目录）。**没有任何连接串**。
+- `NOT IMPLEMENTED`：多设备 / 多人共享同一份知识库的同步机制。
 
-**中文注解 · 恢复能力的真实边界**：Neon 免费套餐的历史窗口上限是 **6 小时**（实测该项目 `history_retention_seconds = 21600`）。超过 6 小时的误操作没有内容级恢复手段，这也是 purge 必须有二次确认的原因。
+**中文注解 · 为什么 purge 要二次确认**：本地库没有历史窗口，误删之后只能靠之前的 `data/` 拷贝或知识包还原，中间没有"回滚 6 小时"这种东西。
 
 ---
 
 ## 8. Verification
 
-| 脚本 | 作用 |
-|---|---|
-| `scripts/db-verify.mjs` | 表 / 约束 / 外键行为 / 新增列 / 枚举 CHECK / RESTRICT（写入测试全部回滚）|
-| `scripts/b1–b4-verify.mjs` | 四个批次的端到端验证（需 `pnpm dev`）|
-| `scripts/isolation-verify.mjs` | 跨用户归属隔离（覆盖全部入口）|
-| `scripts/cleanup-verify-rows.mjs` | 安全网：清理验证遗留数据 |
+| 脚本 | 命令 | 作用 |
+|---|---|---|
+| `scripts/db-verify.mjs` | `pnpm verify:db` | 在**内存库**上跑一遍迁移，断言 11 张表 / 11 个 CHECK / 8 个外键（含 RESTRICT 行为）/ 索引落地 / jsonb 真为数组 / 非法关系类型被拒 / 归属隔离在 SQL 层成立。不需要 dev server，也不碰本机数据 |
+| `scripts/regression.mjs` | `pnpm test` | 端到端：**纯 HTTP** 打全部路由（含知识包导出 / 导入、归档视图、404 面），当前 75 条断言。需先 `pnpm dev` |
+| `scripts/seed-demo.mjs` | `pnpm seed:demo` | 按 `seed/demo-notes.json` 幂等写入演示数据。需先 `pnpm dev` |
+| `scripts/reset-demo-data.mjs` | `pnpm seed:reset` | 清空业务表。默认 dry-run，`-- --yes` 才执行；**必须先停掉 `pnpm dev`**，删除前把九张表备份到 `.tmp/` |
+
+回归脚本**不连数据库**，因为 PGlite 是单写者（见 §7）。副作用：它造的数据只能归档清场，会在库里留下已归档行（日常视图看不到）。
+
+验证入口只有 `pnpm test` 与 `pnpm verify:db` 两条；`pnpm seed:*` 两条只负责准备与清理演示数据。2026-10-17 之前那种"另开一个进程直接写库造夹具"的一次性脚本已随存储层改动一并删除——本地库不允许第二个写者，那条路走不通了。

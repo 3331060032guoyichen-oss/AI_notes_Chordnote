@@ -1,45 +1,73 @@
-// 演示数据重置：清空知识库业务表，让 seed/demo-notes.json 可以重新灌一遍。
+// 演示数据重置：清空本地知识库的业务表，让 seed/demo-notes.json 可以重新灌一遍。
 //
 // 用法：
-//   1) 另开终端 `pnpm dev`（重置本身不依赖服务，但紧接着要跑 seed:demo）
-//   2) `pnpm seed:reset`        —— 只预览：列出将要删除的行数，不动数据库
-//   3) `pnpm seed:reset -- --yes` —— 真的删除（先备份，再删）
-//   4) `pnpm seed:demo`         —— 按 seed/demo-notes.json 重新写入
+//   1) **先停掉 `pnpm dev`**（原因见下）
+//   2) `pnpm seed:reset`            —— 只预览：列出将要删除的行数，不动数据库
+//   3) `pnpm seed:reset -- --yes`   —— 真的删除（先备份，再删）
+//   4) `pnpm dev` + `pnpm seed:demo`
 //
-// 为什么需要它：`seed:demo` 按 title 幂等创建，**只增不删**。换一批演示内容时，
-// 旧内容会留在库里和新内容混在一起，所以需要一次显式的清空。
+// 为什么必须先停 dev server：
+//   知识库是 PGlite（PostgreSQL 的 WASM 版），**同一份数据目录同一时刻只允许一个进程写**。
+//   应用运行期间它把这份库握在自己进程里；这时另一个进程再打开同一目录，读到的是打开那一刻的
+//   快照，写回去的内容还会被应用随后的写入覆盖 —— 也就是"删了像没删"。
+//   所以本脚本先探测 3000 端口，发现服务还活着就直接拒绝运行。
+//
+// 为什么不是"归档"而是物理删除：
+//   DEMO 换一批内容时，旧内容必须真的消失。归档只是从日常列表里隐藏，
+//   而 `seed:demo` 是按 title 幂等创建的（存在就复用），归档过的内容会让重灌直接跳过。
+//   界面上没有物理删除入口，这个脚本就是唯一的"推倒重来"开关。
 //
 // 安全性：
 //   - 默认 dry-run，必须显式 `--yes` 才删除；
-//   - 删除前把九张表的完整内容备份到 .tmp/（已被 .gitignore 挡住），打印绝对路径；
-//   - 只在 DATABASE_URL 指向的库上操作。请务必使用 Neon **dev** 分支的连接串
-//     （production 分支从未迁移、不属于本地开发流程）。
+//   - 删除前把九张表的完整内容备份成 JSON 放到 .tmp/（已被 .gitignore 挡住），并打印绝对路径；
+//   - 只动 PGLITE_DATA_DIR 指向的那份本地库，不涉及任何远端服务。
 //
 // 删除顺序按外键策略推导，不能随意调整：
-//   notes 被 links / note_revisions / proposals 以 RESTRICT 引用，
-//   必须先删引用方；raw_notes 被 notes 以 RESTRICT 引用，必须最后删。
+//   notes 被 links / note_revisions / proposals 以 RESTRICT 引用，必须先删引用方；
+//   raw_notes 被 notes 以 RESTRICT 引用，必须最后删。
 
 import { mkdir, writeFile } from "node:fs/promises";
+import { createConnection } from "node:net";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { Pool } from "@neondatabase/serverless";
+
+import { PGlite } from "@electric-sql/pglite";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const BACKUP_DIR = join(here, "..", ".tmp");
+const DATA_DIR = process.env.PGLITE_DATA_DIR ?? join(here, "..", "data", "pglite");
 
 const apply = process.argv.includes("--yes");
 
-const connectionString = process.env.DATABASE_URL;
-if (!connectionString) {
-  console.error("\n✗ 缺少 DATABASE_URL。用法：`pnpm seed:reset`（脚本已带 --env-file=.env.local）。\n");
+/** 3000 端口有人监听就说明 dev server 还开着。 */
+function serverAlive(port = 3000, host = "127.0.0.1") {
+  return new Promise((resolve) => {
+    const socket = createConnection({ port, host });
+    const done = (alive) => {
+      socket.destroy();
+      resolve(alive);
+    };
+    socket.once("connect", () => done(true));
+    socket.once("error", () => done(false));
+    socket.setTimeout(1500, () => done(false));
+  });
+}
+
+if (await serverAlive()) {
+  console.error(
+    "\n✗ 3000 端口有服务在跑。请先停掉 `pnpm dev` 再重置：\n" +
+      "  PGlite 是单写者，应用运行期间它对本地库的写入会覆盖掉这个脚本删掉的内容。\n",
+  );
   process.exitCode = 1;
   process.exit();
 }
 
-const pool = new Pool({ connectionString });
-const q = async (sql, params) => (await pool.query(sql, params)).rows;
+const db = new PGlite(DATA_DIR);
+await db.waitReady;
 
-/** 表名 → 备份用的主键列无关，整表 select 即可。顺序即删除顺序（先引用方，后被引用方）。 */
+const q = async (sql, params) => (await db.query(sql, params)).rows;
+
+/** 表名 → 整表 select 即备份内容。顺序即删除顺序（先引用方，后被引用方）。 */
 const TABLES = [
   "proposals",
   "links",
@@ -60,55 +88,44 @@ for (const table of TABLES) {
 const counts = Object.fromEntries(TABLES.map((table) => [table, snapshot[table].length]));
 const total = Object.values(counts).reduce((sum, n) => sum + n, 0);
 
-let host = "unknown";
-try {
-  host = new URL(connectionString).host;
-} catch {
-  // 连接串形态异常时不影响备份判断，只是打印不出库名。
-}
+console.log(`数据目录：${DATA_DIR}`);
+console.log("将要删除的行数：");
+for (const table of TABLES) console.log(`  ${table.padEnd(20)} ${counts[table]}`);
+console.log(`  ${"合计".padEnd(19)} ${total}`);
 
-console.log(`\n目标库：${host}`);
-console.log("将要清空的表：");
-for (const table of TABLES) console.log(`  ${String(counts[table]).padStart(5)}  ${table}`);
-console.log(`  ${String(total).padStart(5)}  合计`);
-
-if (total === 0) {
-  console.log("\n库已经是空的，无需重置。直接 `pnpm seed:demo` 即可。\n");
-  await pool.end();
+if (!apply) {
+  console.log("\n这是预览（dry-run）。确认无误后运行：`pnpm seed:reset -- --yes`\n");
+  await db.close();
   process.exit();
 }
 
-if (!apply) {
-  console.log("\n这是预览模式，**没有删除任何数据**。");
-  console.log("确认无误后执行：`pnpm seed:reset -- --yes`\n");
-  await pool.end();
+if (total === 0) {
+  console.log("\n库里没有数据，无需重置。\n");
+  await db.close();
   process.exit();
 }
 
 await mkdir(BACKUP_DIR, { recursive: true });
 const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-const backupPath = join(BACKUP_DIR, `demo-backup-${stamp}.json`);
-await writeFile(
-  backupPath,
-  JSON.stringify({ backedUpAt: new Date().toISOString(), host, counts, tables: snapshot }, null, 2),
-  "utf8",
-);
+const backupPath = join(BACKUP_DIR, `demo-reset-backup-${stamp}.json`);
+await writeFile(backupPath, JSON.stringify({ dataDir: DATA_DIR, counts, snapshot }, null, 2), "utf8");
 console.log(`\n已备份到：${backupPath}`);
 
 for (const table of TABLES) {
   await q(`delete from ${table}`);
 }
 
-const remaining = await q(
-  `select
-     (select count(*)::int from raw_notes)      as raws,
-     (select count(*)::int from notes)          as notes,
-     (select count(*)::int from note_revisions) as revisions,
-     (select count(*)::int from links)          as links,
-     (select count(*)::int from proposals)      as proposals`,
-);
+const left = {};
+for (const table of TABLES) {
+  left[table] = (await q(`select count(*)::int as n from ${table}`))[0].n;
+}
 
-console.log("已清空。remaining=" + JSON.stringify(remaining[0]));
-console.log("\n下一步：`pnpm seed:demo`（需要 `pnpm dev` 已在运行）\n");
+const residue = Object.entries(left).filter(([, n]) => n > 0);
+if (residue.length) {
+  console.error("\n✗ 清理不完整：", residue.map(([t, n]) => `${t}=${n}`).join(" "));
+  process.exitCode = 1;
+} else {
+  console.log("✓ 九张业务表已清空。接下来：`pnpm dev`，然后 `pnpm seed:demo`。\n");
+}
 
-await pool.end();
+await db.close();

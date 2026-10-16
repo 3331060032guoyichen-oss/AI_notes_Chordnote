@@ -4,6 +4,7 @@ import { getActiveNoteByRawId } from "../../../lib/services/notes";
 import {
   archiveSource,
   createSource,
+  listArchivedSources,
   listSources,
   MAX_RAW_TEXT_LENGTH,
   MAX_RAW_TITLE_LENGTH,
@@ -17,9 +18,17 @@ function errorResponse(message: string, status: number, code: string) {
   return NextResponse.json({ error: { code, message } }, { status });
 }
 
-export async function GET() {
+/**
+ * 原始记录列表。
+ *
+ * `?scope=archived` 读已归档的那些 —— 与 `GET /api/knowledge?scope=archived` 同口径：
+ * 归档是「日常看不到」，得有回去看的路，否则归档就成了单向门。
+ */
+export async function GET(request: Request) {
   try {
-    return NextResponse.json({ raws: await listSources() });
+    const scope = new URL(request.url).searchParams.get("scope");
+    const raws = scope === "archived" ? await listArchivedSources() : await listSources();
+    return NextResponse.json({ raws });
   } catch {
     return errorResponse(
       "原始记录暂时没有载入。已保存的数据没有改变，请稍后重试。",

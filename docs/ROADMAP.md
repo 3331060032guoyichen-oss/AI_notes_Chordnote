@@ -75,10 +75,10 @@ AI Notes 是面向大学生的生长式 AI 知识系统：把原始学习材料�
 
 ### 工程与协作
 
-- 存储层统一 `node:fs/promises` 读写 `data/*.json`，文件缺失（`ENOENT`）时返回空而非抛错
+- 存储层是 Drizzle ORM + 本机 PGlite（PostgreSQL 方言，跑在应用进程内），数据在 `data/pglite`；迁移随启动自动增量补齐
 - 全部 API 路由 `export const runtime = "nodejs"`
 - 样式为 `app/globals.css` 手写 CSS + CSS 变量，**未引入** CSS 框架或 UI 组件库
-- 无自动化测试；验证方式是 `pnpm build` + 手动走查 + 接口实测
+- 自动化验证有三条：`pnpm test`（75 条 HTTP 断言，需先跑 `pnpm dev`）、`pnpm verify:db`（内存库跑迁移并验证表 / 约束 / 外键 / 归属隔离，离线）、`pnpm build`（生产构建）。界面改动仍必须手动走查
 
 ---
 
