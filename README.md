@@ -63,7 +63,7 @@ Raw 原始记录 → 整理助手 Draft → 用户确认 → Knowledge 知识页
 
 ```bash
 git clone https://github.com/3331060032guoyichen-oss/ai-notes_demo.git
-cd ai-notes_demo
+cd AI_notes_Chordnote
 pnpm install
 pnpm dev
 ```
