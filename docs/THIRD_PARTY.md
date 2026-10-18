@@ -19,6 +19,11 @@
 | @tsparticles/react | https://github.com/tsparticles/tsparticles | ^4.4.0 | 4.4.0 | MIT | 落地页星尘粒子（React 封装） | 用于 `components/landing-stardust.tsx` |
 | @tsparticles/slim | https://github.com/tsparticles/tsparticles | ^4.4.0 | 4.4.0 | MIT | 落地页星尘粒子（精简特性包） | |
 | **d3-force** | https://github.com/d3/d3-force | **^3.0.0** | 3.0.0 | **ISC** | **知识网络的力导向布局计算** | **仅用力学计算，渲染由 `components/graph-view.tsx` 自绘 Canvas** |
+| @deepseek-ai/dsh-sdk-client、dsh-llm、dsh-tools（及同版 peers） | https://github.com/deepseek-ai/dsh | 0.2.1-rc.2 | 0.2.1-rc.2 | MIT | 统一多模型 Agent Harness | 本地受控工具循环；原生 shell / 文件工具保持禁用 |
+| @agentclientprotocol/sdk | https://github.com/agentclientprotocol/agent-client-protocol | 1.9.0 | 1.9.0 | Apache-2.0 | ACP 外部 Agent 协议客户端 | 外部进程不继承 Chordnote 密钥，只能通过受控 MCP 桥调用工具 |
+| @codemirror/* | https://codemirror.net | ^6.x | 见 lockfile | MIT | 单文档 Markdown 编辑器、补全和 Live Preview | 不使用 UI 组件库 |
+| @lezer/common、@lezer/markdown | https://lezer.codemirror.net | ^1.x | 见 lockfile | MIT | Markdown / wikilink 语法树 | 前后端共用解析语义 |
+| yaml | https://eemeli.org/yaml/ | ^2.9.1 | 2.9.1 | ISC | 保留 frontmatter 的未知字段和注释 | |
 
 ### 关于 d3-force
 
@@ -31,7 +36,7 @@
 | 项目 | Version | 实测版本 | License | 用途 |
 |------|---------|---------|---------|------|
 | typescript | ^5.0.0 | 5.9.3 | Apache-2.0 | 类型系统 |
-| eslint | ^10.12.0 | 10.12.0 | MIT | 代码检查（`pnpm lint` 当前因 `eslint-config-next` 的补丁不兼容 ESLint 10 而失败，属已知问题） |
+| eslint | ^9.39.5 | 9.39.5 | MIT | 代码检查 |
 | eslint-config-next | ^15.0.0 | 15.5.26 | MIT | Next 官方 lint 规则 |
 | @next/eslint-plugin-next | ^15.5.26 | 15.5.26 | MIT | 同上（插件本体） |
 | @eslint/eslintrc | ^3.3.7 | 3.3.7 | MIT | ESLint 旧版配置兼容 |
@@ -72,10 +77,3 @@
 | Obsidian Web Clipper | https://obsidian.md/clipper | 未引入 | **待确认** | 一键剪切网页内容 | Skills 线，阶段二 |
 | taste-skill | https://github.com/Leonxlnx/taste-skill | 未引入 | **待确认** | 优化 AI 生成 UI 的 skill | UI 线辅助工具，不进入产物 |
 | impeccable | https://github.com/pbakaus/impeccable | 未引入 | **待确认** | 同上 | UI 线辅助工具，不进入产物 |
-# 2026-10 笔记文档与 Agent 运行时
-
-- `@deepseek-ai/dsh-sdk-client`, `dsh-llm-pi-ai`, `dsh-tools` 及同版本 peers：MIT，固定 0.2.1-rc.2；统一多模型运行时。原生终端工具禁用，只有 Chordnote 受控工具。
-- `@codemirror/state`, `view`, `commands`, `autocomplete`, `lang-markdown`：MIT，连续 Markdown 编辑器。
-- `@lezer/common`, `@lezer/markdown`：MIT，编辑器与服务端共用的语法树。
-- `yaml`：ISC，保留未知 frontmatter 字段和注释的 YAML 文档编辑。
-

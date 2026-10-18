@@ -22,13 +22,13 @@
 | 组 | 内容 | 状态 |
 |---|---|---|
 | 0 | 基线与迁移保护 | 已提交 3117c7a |
-| 1 | dsh 统一 Agent 运行时、元信息与权限 | 已提交 db2c4d2；ACP 后续补齐 |
-| 2 | Markdown 文档、frontmatter、路径与引用索引 | 已提交 5b0c022；79 项 HTTP 回归通过 |
-| 3 | CM6 连续编辑、Live Preview、补全 | 编辑器组件已验收；工作区接线随第 4 组 |
-| 4 | 固定 Ribbon、目录、右侧 Agent、搜索与白板 | 待实施 |
-| 5 | 三类模型配置、发现与输入区选择 | 待实施 |
-| 6 | Archive、恢复与归档内永久删除 | 待实施 |
-| 7 | 属性折叠、只读 Schema、指南、图谱选项收敛 | 待实施 |
+| 1 | dsh 统一 Agent 运行时、元信息与权限 | 已提交 db2c4d2；ACP 在后续提交补齐 |
+| 2 | Markdown 文档、frontmatter、路径与引用索引 | 已提交 5b0c022 |
+| 3 | CM6 连续编辑、Live Preview、补全 | 已提交 fbfcb1d；工作区接线在第 4 组 |
+| 4 | 固定 Ribbon、目录、右侧 Agent、搜索与白板 | 已完成 |
+| 5 | 三类模型配置、发现与输入区选择 | 已完成 |
+| 6 | Archive、恢复与归档内永久删除 | 已完成 |
+| 7 | 属性折叠、只读 Schema、指南、图谱选项收敛 | 已完成 |
 # 第一组验收记录
 
 - Git 署名已在本仓库配置；基线提交 3117c7a。
@@ -56,4 +56,39 @@
 - 保存有乐观版本校验，未保存编辑保留本机恢复副本；Wiki 属性默认折叠并直接修改 YAML。
 - 浏览器实测：连续输入自动保存；移出链接后显示虚线链接；点击未解析链接创建 Raw 并打开；粗体/高亮/任务框呈现正常。
 - TypeScript 检查通过。新编辑器工作区入口与 CSS 在下一组一起提交。
-- 尚需后续验收：ACP 结果提议、属性回写全链路、打包后的运行时。
+- 属性回写、Agent 提议写入 wikilink 与打包运行时在后续组已复验。
+
+## 第四组验收记录
+
+- `AppShell` 重构为固定 56px Ribbon、可折叠左树、中央单文档工作区和可折叠右侧 Agent 对话；CSS grid 让两侧展开时压缩中央区。
+- Ribbon 顺序为 logo、查找、图谱、白板、Agent；左树为 `raw`、`wilki`、`Schema`、`readme`，设置入口在底部。知识页右侧出链/入链面板已移除。
+- 新增命令式文档搜索、白板工作区和版本冲突保护；`/api/bootstrap` 合并工作区首屏读取，避免 PGlite 冷启动时的并发路由竞争。
+- 浏览器验收：在 861px 时中央区 325px，在 760px 时中央区 274px；两侧均未覆盖正文。白板写入显示“已保存”。
+- 记录：`components/{shell,workspace-tree,document-search,canvas-workspace}.tsx`、`app/page.tsx`、`app/globals.css`、`/api/bootstrap`、`/api/canvas`、`lib/services/{canvases,graph}.ts`、迁移 0007。
+
+## 第五组验收记录
+
+- 模型设置拆分为本地模型、模型厂商和自定义模型；厂商/自定义可发现模型，模型选择移到右侧 Agent 输入区，已删除 `system` 设置。
+- dsh 新增 ACP 适配器。外部 Agent 通过 ACP 运行，子进程移除所有 `CHORDNOTE_*` 环境变量，仅可通过一次性令牌的 MCP 桥使用白名单工具。
+- 定向运行时测试通过：本地 dsh 子进程完成多轮模型/工具调用；本地 ACP fixture 完成相同 MCP 边界测试。没有使用用户密钥或外部订阅。
+- 剩余边界：真实 Codex/Claude Code ACP 程序需要使用者在设置中配置并完成自己的登录；本次未对第三方账号发起调用。
+
+## 第六组验收记录
+
+- 所有普通删除仍是归档。Archive 支持 Raw / Knowledge 的恢复与永久清除；清除只接受已归档对象，要求理由和依赖确认，并写审计记录。
+- 永久清除保留 Raw 与 Knowledge 的外键/修订保护：有依赖时先返回冲突，只有用户确认后才清理允许清理的历史行。
+- HTTP 回归覆盖归档、未确认永久删除被拒绝、确认后清除成功。
+
+## 第七组验收记录
+
+- Wiki 笔记顶部增加默认折叠的 frontmatter 属性区，读取并回写 `title`、`source`、`created`、`description`、`tags`，没有额外属性存储。
+- `/api/agent/schema` 和 Schema 视图只读取 `lib/agent/manual.ts`；Agent runtime 加载同一份字符串。应用内不能编辑。
+- 图谱移除孤立节点、方向箭头和重新布局选项；编辑器移除块状输入框，首行 H1 是标题。
+- 回归新增“待确认提议应用后保留 `[[...]]` 并立即重建引用”断言。编辑器和设置的浏览器验收截图见 `ui-editor-proof.png`、`ui-settings-proof.png`。
+
+## 最终验证与冲突
+
+- `pnpm lint`、`pnpm exec tsc --noEmit`、`pnpm test:unit`（24 项）、Markdown/dsh 定向测试（7 项）、`pnpm verify:db`（8 条迁移/12 张表）均通过。
+- `pnpm test`：83 项 HTTP 断言通过；使用临时 PGlite 数据目录。
+- `pnpm build` 通过；`pnpm desktop:verify:runtime` 在临时数据目录通过健康检查和受控关闭。
+- Windows standalone 曾因完整 dsh/ACP 包树 glob 追踪而长时间停滞，已收窄为本地运行时插件；生产构建和桌面 runtime 已随后通过。

@@ -82,17 +82,18 @@ pnpm dev                     # http://localhost:3000
 
 ```
 app/
-  page.tsx            唯一页面：应用外壳 + 五个入口，"use client"
+  page.tsx            唯一页面：Ribbon、文档工作区与 Agent 对话，"use client"
   globals.css         全部设计令牌与组件样式
   layout.tsx          根布局
   api/**/route.ts     每个路由均声明 runtime = "nodejs"
 middleware.ts         /api/* 只接受回环 Host；写请求要求本机 Origin
 components/
-  shell/              应用外壳：AppShell / PrimaryNav / SecondaryNav / InspectorHost
-  knowledge/          Knowledge 空间的二级导航（文件树）
-  agent/              Agent 空间的二级导航（本次任务）
-  settings/           独立设置窗口、八个分类入口与内容
-  home/               Home 的原始记录目录与写作入口
+  shell/              固定 Ribbon、可折叠左树、可折叠 Agent 面板与中央工作区网格
+  settings/           设置弹层、模型面板与 Archive
+  markdown-editor.tsx CM6 连续 Markdown / Live Preview 编辑器
+  document-session.tsx 文档保存、frontmatter 属性折叠与版本冲突恢复
+  workspace-tree.tsx  Raw / wilki / Schema / readme 左树
+  canvas-workspace.tsx 本地持久白板
   ui/                 共享内联图标
   landing-page.tsx            完整落地页（首次进入时出现）
   landing-constellation.tsx   首屏星座
@@ -103,38 +104,40 @@ components/
 lib/
   ai/                模型调用：provider.ts 传输与统一错误、config.ts 服务端配置、tasks.ts 提示词与形状校验
   api/               路由层小工具（本机写请求来源检查）
-  inline-refs.ts      正文内联知识点标记（按标题匹配）
+  documents/          Markdown/frontmatter、wikilink 解析与兼容迁移
   text-diff.ts        逐行 LCS，供编辑助理的 Diff 卡使用
   zip.ts              手写 zip 写入器（store 模式），仅用于 markdown 知识包
-  agent/              Agent 工具循环（loop.ts）与工具手册（manual.ts）
+  agent/              dsh 运行时、受控工具循环、ACP 桥接与唯一手册（manual.ts）
   services/           服务层，业务规则与归属过滤的唯一落点
     sources.ts        原始记录：读、创建、归档、编辑
     notes.ts          知识页：读、手动提升、更新（版本检查 + 修订）
     links.ts          正式关系：读、建立/复活、软删除
     proposals.ts      提议状态机（pending → approved → applied / rejected / stale）
     bundle.ts         知识包导出 / 导入
+    archive.ts        归档、恢复与归档内永久清除
+    canvases.ts       白板工作区版本化保存
   auth/               用户上下文与归属校验
   db/                 Drizzle schema、枚举、连接工厂
 types/                raw / organize / knowledge / relation / graph / proposal / agent
 seed/                 演示数据（`demo-notes.json`）
 scripts/              构建、桌面暂存、回归、迁移校验与数据脚本
 src-tauri/            Windows 桌面宿主（Tauri 2 / Rust）
-drizzle/              迁移 0000–0005，只能增量追加
+drizzle/              迁移 0000–0007，只能增量追加
 deliverables/         校赛提交材料（PPT / 文档 / 界面预览）
 docs/                 产品、设计、数据文档（见第 11 节）
 ```
 
 ## 6. 前端约定
 
-**单页应用 + 五个入口。** 页面仍是单一客户端页，不引入路由；一级空间由 `activeSpace` 驱动：
+**单页文档工作区。** 页面仍是单一客户端页，不引入页面路由；`activeSpace` 只控制当前工作区视图：
 
 ```ts
 type Space = "home" | "knowledge" | "graph" | "agent" | "settings";
 ```
 
-- Home 与 Knowledge 各自渲染自己的 Tab：Home 只放新建、原始记录与整理稿；Knowledge 只放知识页。Graph 与 Agent 不渲染 Tab。
-- Home 的原始记录显示整理助手；Knowledge / Graph / Agent 的检查器由 `InspectorHost` 按空间选择；Home 新建页与 Settings 不显示检查器。
-- 跨空间打开知识内容（例如 Agent 检查器里点知识页）时，先切到 Knowledge 再打开对应 Tab。
+- 每个 Raw 或 Knowledge 详情都通过 `DocumentSession` 打开；标题就是文档的第一个 Markdown heading，不能另造块状标题输入框。
+- Markdown 与 frontmatter 是正文和属性的唯一来源。CM6 装饰只负责 Live Preview，不能改写原始 `[[...]]` 语法。
+- 跨空间打开内容时先切换空间，再打开对应文档。
 
 ```ts
 type Tab =
@@ -144,39 +147,27 @@ type Tab =
   | { kind: "draft"; rawId: string; ... }                  // Draft 审阅
 ```
 
-- 左侧一级导航是 Home / Knowledge / Graph / Agent；Settings 使用侧栏底部齿轮打开独立窗口。
-- 工具类视图用 `navigate(viewKey)` 打开或激活；Knowledge 的目录在 `components/knowledge/knowledge-tree.tsx`。
-- 新增某类**详情页**：加一个 Tab 变体和一个 `renderXxxTab()`，不要新增路由。
-- 新增一级**空间**：同时改 `components/shell/`（PrimaryNav / SecondaryNav / InspectorHost）与本文件这一节。
-
-**右栏是检查器，不是聊天框。** 内容随空间与当前标签变化：
-
-- Knowledge：知识页显示入链、出链、未链接提及与编辑助理。
-- Graph：显示知识网络，右栏显示图谱参数。
-- Agent：显示本次任务的整理摘要与守则。
-- Home：原始记录显示整理助手；新建与整理稿不显示检查器。
-- Settings：**不显示检查器**，以独立设置窗口覆盖在当前工作区上。
-
-不要改回全局聊天框，也不要为 AI 另做一套视觉语言。
+- 最左侧 Ribbon 始终可见，顺序固定为 logo（开合左树）、查找、图谱、白板、Agent。左树顺序固定为 `raw`、`wilki`、`Schema`、`readme`，底部设置入口。
+- `Schema` 是 `lib/agent/manual.ts` 的只读渲染；应用内不得复制或编辑它。开发者只改这一份源文件。
+- 右栏固定为可收起的 Agent 对话与模型选择。不得恢复 Knowledge 的常驻出链/入链/未链接提及面板；这些查询走命令搜索或 Agent `@mention`。
+- 工作区使用 Ribbon + 可折叠左右 panel + 中央编辑器的 CSS grid。开面板必须压缩中央区域，不能覆盖正文。
 
 **界面约定（已拍板，推翻前先确认是有意为之）：**
 
-- 左栏折叠为功能图标条，保留 Home / Knowledge / Graph / Agent、展开按钮和底部 Settings 齿轮。
-- 右栏收起为右边缘图标条（56px）：Knowledge 有入链 / 出链 / 未链接提及 / 编辑助理四个入口与计数角标；Home 原始记录、Graph 与 Agent 只有开合按钮。
+- Ribbon 宽度固定 56px；左树由 logo 开合，右侧 Agent 开关与 logo 同高。
 - 右栏在 860px 及以下变为抽屉，861px 及以上为常驻列。抽屉收起方式：内部 ×、Esc、打开任意标签、再次点击入口。新增一级导航后需重新实测这一断点。
-- 写作区的位置、内边距、圆角、边框宽度不要动，只改颜色。去框线时把 `border-color` 和背景改为透明。
+- 连续编辑器不显示 Markdown 标记，只有选中或光标进入语法时 reveal；`[[` 打开补全，未解析链接只能由用户显式创建 Raw。
 - `.content-section` / `.capture-panel` 半透明（surface 42%），星尘从纸后透出，正文区保持可读。
 - 毛玻璃仅用于浮层（命令面板、弹层、抽屉）。正文、侧栏、面板一律不透明。
 - 深色主题：底色 `#030712`，强调色紫 `#7c3aed`。全文件只有一套深色令牌，不要再加第二套外观。
 - 中文正文：16px、行高 1.75、段距 1em、行宽上限 700px。
 - 导航与列表字号 15px、行高 34–36px，每屏可见条目不少于 12 条。
-- 新建笔记只写原始记录：没有「创建笔记」按钮，停笔 2 秒自动收下。
+- 新建笔记只写 Raw；自动保存不绕过 Raw → Draft → 用户确认 → Knowledge 的管线。
 - 没有 title 的原始记录按创建顺序显示为「未命名 1 / 2 / 3」。
 - 助手形象是一把会呼吸的竖琴（内联 SVG，细线，无渐变），左栏 Agent 入口、右栏编辑助理、Agent 页面共用。不要换成星芒、头像或发光圆球。
 - 助手状态四态：空闲 / 整理中 / 已收录 / 已归档，只动 `transform` 与 `opacity`，`prefers-reduced-motion` 下整体停掉。
 - 界面声音开关在「Settings → Voice」，顶栏与侧栏底部都不放。
-- Home 左栏放原始记录；Knowledge 左栏只放知识页与标签；已归档知识页统一放在 Settings → 归档。不做「最近编辑 / 最近查看」。
-- 图谱交互：单击选中出卡片，双击打开知识页，拖动即固定。
+- 已归档内容统一放在 Settings → Archive。图谱不提供孤立节点、方向箭头或重新布局选项。
 
 **已删除的功能，不要重建：**
 
@@ -209,11 +200,17 @@ type Tab =
 | `/api/assistant` | POST | AI 问答，服务端按 contextType + contextId 重新读取内容 |
 | `/api/assistant/propose` | POST | 针对知识页生成改写提议（`note_update`），只落 pending 提议，不写正文 |
 | `/api/agent/organize` | POST | Agent 工具循环，返回步骤与待确认提议 |
+| `/api/agent/schema` | GET | 从 `lib/agent/manual.ts` 读取同一份只读 LLM Wiki Schema |
+| `/api/bootstrap` | GET | 一次读取工作区启动所需的 Raw、Knowledge、图谱和提议，避免 PGlite 并发冷启动 |
+| `/api/documents` | GET / POST | Markdown 文档引用索引 / 用户显式创建未解析 Raw 链接目标 |
+| `/api/canvas` | GET / PUT | 白板工作区，`version` 乐观并发 |
+| `/api/archive` | GET / POST / DELETE | 归档列表、恢复、归档内永久清除；永久清除需要理由与依赖确认 |
 | `/api/proposals` | GET / POST | 提议列表（可按 status、targetNoteId 过滤）/ 提交 |
 | `/api/proposals/[id]/approve` `reject` `apply` | POST | 决议与执行。apply 需先 approved，支持 `Idempotency-Key` |
 | `/api/export` | GET | 默认 JSON 全量快照；`?format=markdown` 返回 markdown + YAML frontmatter 的 zip |
 | `/api/import` | POST | 导入知识包。`?dryRun=1` 只校验不写库；同名项保留已有、跳过导入 |
 | `/api/settings/model` | GET / PATCH | 模型配置（脱敏读取 / 保存）。密钥只进不出，空串=保持、`null`=清除 |
+| `/api/settings/model/models` | POST | 按本地、厂商或自定义配置发现模型列表 |
 | `/api/settings/model/test` | POST | 真实连接测试：可访问 / 模型存在 / 对话 / 工具调用四项分别报告 |
 | `/api/health` | GET | 桌面宿主轮询的存活检查，同时验证 PGlite 初始化与迁移 |
 | `/api/desktop/shutdown` | POST | 仅 Tauri 宿主调用；校验 `x-chordnote-shutdown-token` 后关闭进程 |
@@ -244,11 +241,11 @@ jsonb 列直接传数组或对象，**不要手动 `JSON.stringify`**。Drizzle 
 - `note_revisions`、`proposals`、`links` 两端对 `notes` 的外键为 RESTRICT：删除不会静默带走历史或关系。因此每条笔记都有 v1 修订，无法被物理删除，这是预期行为。
 - `links` 普通删除是可恢复软删除（`deleted_at`）。`links_pair_idx` 是完整唯一索引，重建同一关系时必须复活已有行，不能插入新行。
 - `raw_notes` 没有 `deleted_at`，目前只有归档。
-- Agent 没有 purge 路径，最多建议归档。永久清除只能由用户在 UI 手动发起，须填写原因（写入 `audit_log.detail.reason`），purge 时 `raw_notes` 不级联删除。该流程尚未实现。
+- Agent 没有 purge 路径，最多建议归档。用户只能在 Archive 中发起永久清除，必须填写理由并确认依赖；理由写入 `audit_log.detail.reason`，Raw 不级联清除。
 
 ## 8. 数据库与迁移
 
-- `drizzle/0000` 至 `0005` 必须按序执行。0001 把 0000 的 cascade 外键改为 restrict，只跑 0000 会留下危险的中间状态。
+- `drizzle/0000` 至 `0007` 必须按序执行。0001 把 0000 的 cascade 外键改为 restrict，只跑 0000 会留下危险的中间状态。
 - 迁移只能追加新文件，不能修改历史迁移。
 - 改 Knowledge 字段结构时，同步修改：`types/knowledge.ts`、`lib/services/notes.ts` 的映射、PATCH 路由的校验。
 - 改 schema 后运行 `pnpm verify:db`，再运行 `pnpm test`。
@@ -335,6 +332,10 @@ jsonb 列直接传数组或对象，**不要手动 `JSON.stringify`**。Drizzle 
 **通用**
 - AI 的产出只能是草稿或提议。不得直接写 Raw，不得直接写知识页。
 - `manual.ts` 与本节冲突时以本节为准，并同步修改手册。
+- Agent 统一经 dsh 多轮工具运行时调度。兼容 API、Ollama 与 ACP 外部 Agent 由服务端运行时配置注入；不得把 provider、模型名或工具清单硬编码到 prompt。
+- dsh 原生文件、shell、数据库工具保持关闭。Chordnote 工具桥只可读取受限上下文并创建 pending 提议；运行时元信息必须能回答 provider、model、tools 与权限。
+- ACP 子进程不继承 `CHORDNOTE_*` 凭据，只能经一次性令牌的 MCP 工具桥访问白名单工具。
+- Agent 输出中的 `[[...]]` 是原始 Markdown，确认应用后必须经共享 Markdown 服务更新并重建引用装饰。
 
 **Ingest（摄入）**
 - 原文先落库，再调用 AI。AI 步骤失败时不回滚原文，错误信息需指出原文位置。
@@ -351,7 +352,7 @@ jsonb 列直接传数组或对象，**不要手动 `JSON.stringify`**。Drizzle 
 - 只产出报告和提议，不自动修改任何内容。
 - 能由代码确定的检查（孤立页、断链、近似重复、来源过期）用代码实现，不交给模型。
 - 需要模型判断的检查（矛盾、陈旧结论、缺失概念）只能作为建议，并标注"待人工核实"。
-- 未链接提及已由右栏面板覆盖，不重复实现。
+- 未链接提及不常驻显示；需要时由命令搜索或 Agent 工具读取。
 
 **写作与日志**
 - 新旧结论冲突时两者并列保留并注明来源，不静默覆盖。
