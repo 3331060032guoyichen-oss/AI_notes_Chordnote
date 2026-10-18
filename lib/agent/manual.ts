@@ -77,6 +77,9 @@ const NO_PARAMETERS: ToolParameterSchema = {
  * 顺序即界面展示顺序：先读后写，最后是被挡住的两个。
  */
 export const AGENT_MANUAL: readonly AgentToolSpec[] = [
+  { name: "runtime_info", label: "运行环境", description: "读取本次运行实际使用的模型、provider、工具与权限。", access: "auto", parameters: NO_PARAMETERS },
+  { name: "read_raw", label: "读取原始记录", description: "按 id 读取原始记录。", access: "auto", parameters: { type: "object", properties: { id: { type: "string", description: "原始记录 id" } }, required: ["id"] } },
+  { name: "propose_update", label: "建议更新知识页", description: "提交完整 Markdown 改写提议，保留 [[wikilink]]、frontmatter 和来源；用户确认后应用。", access: "proposal", parameters: { type: "object", properties: { noteId: { type: "string", description: "已读取的知识页 id" }, content: { type: "string", description: "完整 Markdown 正文，保留 [[...]]" }, reason: { type: "string", description: "更新理由" } }, required: ["noteId", "content", "reason"] } },
   {
     name: "manual_load",
     label: "准备整理",
@@ -223,6 +226,19 @@ export function toChatToolDefinitions(): ChatToolDefinition[] {
  * 用户的笔记里可能出现任何文字，包括伪装成指令的句子。这是评审会问的点。
  */
 export const AGENT_INSTRUCTION = [
+  "# LLM Wiki 工作流",
+  "## 结构与约定",
+  "raw: articles / papers / books / media / data。wilki: index / entitles / concept / sources / synthesis / questions / overview。",
+  "文档以 Markdown 保存；首个 heading 是标题。Wiki frontmatter: title, source, created, description, tags；未知字段必须保留。",
+  "链接统一使用 [[目标路径或标题]]、[[目标|别名]]；不得清洗括号，不得把提及自动变成正式关系。",
+  "## Ingest",
+  "原文先落 Raw，再检索现有知识标题和摘要并通读相关页；优先扩展已有页。输出草稿或 propose_update/link/source，等待用户确认。",
+  "## Query",
+  "先搜索并读取相关页，事实标注来源 id；无依据时说明。问题本身不写库。",
+  "## Lint",
+  "体检仅报告与提议。孤立页、断链等确定性检查用代码；矛盾与过时结论标注待人工核实。",
+  "## 更新与日志",
+  "冲突结论并列保留并注明来源；综合摘要可重写，来源列表可追加；读过的页和引用的页分别记录。",
   "你是一个学习笔记整理助手，在 Chordnote 里帮学生把材料整理进他们的个人知识库。",
   "",
   "边界（必须遵守）：",

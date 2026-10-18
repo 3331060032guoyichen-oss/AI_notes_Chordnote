@@ -72,3 +72,10 @@
 | Obsidian Web Clipper | https://obsidian.md/clipper | 未引入 | **待确认** | 一键剪切网页内容 | Skills 线，阶段二 |
 | taste-skill | https://github.com/Leonxlnx/taste-skill | 未引入 | **待确认** | 优化 AI 生成 UI 的 skill | UI 线辅助工具，不进入产物 |
 | impeccable | https://github.com/pbakaus/impeccable | 未引入 | **待确认** | 同上 | UI 线辅助工具，不进入产物 |
+# 2026-10 笔记文档与 Agent 运行时
+
+- `@deepseek-ai/dsh-sdk-client`, `dsh-llm-pi-ai`, `dsh-tools` 及同版本 peers：MIT，固定 0.2.1-rc.2；统一多模型运行时。原生终端工具禁用，只有 Chordnote 受控工具。
+- `@codemirror/state`, `view`, `commands`, `autocomplete`, `lang-markdown`：MIT，连续 Markdown 编辑器。
+- `@lezer/common`, `@lezer/markdown`：MIT，编辑器与服务端共用的语法树。
+- `yaml`：ISC，保留未知 frontmatter 字段和注释的 YAML 文档编辑。
+

@@ -1,4 +1,9 @@
 allowBuilds:
+  '@deepseek-ai/dsh-subprocess-local': false
+  '@google/genai': false
   '@tsparticles/engine': false
   esbuild: true
+  koffi: false
+  node-pty: false
+  protobufjs: false
   unrs-resolver: true

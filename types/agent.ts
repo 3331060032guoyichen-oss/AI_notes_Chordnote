@@ -57,6 +57,7 @@ export type AgentRunCounters = {
 };
 
 export type AgentRunTrace = {
+  runtime?: { engine: string; version: string; provider: string; model: string; tools: string[]; permissions: Record<string, unknown> };
   id: string;
   manualVersion: string;
   /**

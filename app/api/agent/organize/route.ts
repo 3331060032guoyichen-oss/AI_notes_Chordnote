@@ -61,6 +61,7 @@ export async function POST(request: Request) {
   try {
     const trace = await runOrganizeAgent({
       question: body.question.trim(),
+      signal: request.signal,
       contextType: body.contextType,
       contextId: typeof body.contextId === "string" ? body.contextId : null,
       draftContext: typeof body.draftContext === "string" ? body.draftContext : null,

@@ -29,3 +29,12 @@
 | 5 | 三类模型配置、发现与输入区选择 | 待实施 |
 | 6 | Archive、恢复与归档内永久删除 | 待实施 |
 | 7 | 属性折叠、只读 Schema、指南、图谱选项收敛 | 待实施 |
+# 第一组验收记录
+
+- Git 署名已在本仓库配置；基线提交 3117c7a。
+- dsh 0.2.1-rc.2 真实子进程已通过离线双轮模型/工具集成测试（本地模拟模型，无付费调用）。
+- 注入实际 provider/model/tool registry；policy 未激活时 JSON-RPC 服务不能启动。
+- 原生终端/文件编辑工具禁用；工具桥只接受单次令牌和白名单，写操作仅产生 pending 提议。
+- 修改：lib/agent/{runtime.ts,dsh-policy.mjs,loop.ts,manual.ts,runtime.test.ts}、Agent API/types、依赖、Next 打包配置。
+- 待后续组解决：ACP 外部 Agent 设置与隔离、对话统一入口、打包后子进程追踪验证。未把这些记为已完成。
+
