@@ -1,5 +1,7 @@
 import { listNotes } from "./notes";
-import { listSources, createSource, updateSource } from "./sources";
+import { listSources, createSource } from "./sources";
+import { requireUserActor } from "../auth/authorize";
+import { getUserContext } from "../auth/context";
 import { parseWikiReferences, resolveReference, safeDocumentPath, makeMarkdown } from "../documents/markdown";
 
 /** Derived on every query from canonical Markdown, so edits, proposals and restores cannot leave stale backlinks. */
@@ -16,6 +18,7 @@ export async function documentReferences() {
 }
 /** Explicit user action only. Unresolved targets create Raw, preserving the new-note boundary. */
 export async function createLinkedDocument(target: string) {
+  requireUserActor(getUserContext());
   const documents = await listDocuments();
   const existing = resolveReference(target, documents);
   if (existing) return existing;
@@ -23,8 +26,6 @@ export async function createLinkedDocument(target: string) {
   if (documents.some(doc => doc.path.toLocaleLowerCase() === path.toLocaleLowerCase())) throw new Error("PATH_EXISTS");
   const title = path.split("/").at(-1)!.replace(/\.md$/i, "");
   const markdown = makeMarkdown(title, "");
-  const raw = await createSource(markdown, title);
-  const result = await updateSource(raw.id, markdown, { markdown, path });
-  if (result.status !== "ok") throw new Error("CREATE_FAILED");
-  return { ...result.raw, kind: "raw" as const };
+  const raw = await createSource(markdown, title, {markdown,path});
+  return { ...raw, kind: "raw" as const };
 }

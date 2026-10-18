@@ -1,5 +1,7 @@
 "use client";
 
+import { ModelPanel } from "./model-panel";
+import { ArchivePanel } from "./archive-panel";
 import { useEffect, useState } from "react";
 
 import { AGENT_MANUAL, MANUAL_VERSION } from "../../lib/agent/manual";
@@ -15,21 +17,6 @@ import type { SettingsSection } from "./sections";
 export type Studio = "darkroom" | "editorial" | "tactile";
 
 const STUDIO_KEY = "chordnote:studio";
-
-type ProviderId = "deepseek" | "ollama" | "custom";
-
-type PublicSettings = {
-  provider: ProviderId;
-  model: string;
-  baseUrl: string;
-  timeoutMs: number;
-  apiKeyConfigured: boolean;
-  locked: string[];
-};
-
-type ProviderDefaults = Pick<PublicSettings, "provider" | "model" | "baseUrl" | "timeoutMs">;
-
-type TestCheck = { id: string; label: string; status: "ok" | "failed" | "skipped"; detail: string };
 
 const STUDIOS: { id: Studio; name: string; en: string; desc: string; swatches: string[] }[] = [
   {
@@ -53,12 +40,6 @@ const STUDIOS: { id: Studio; name: string; en: string; desc: string; swatches: s
     desc: "利落的工程网格与高对比度信号提示，步骤分明、反馈干脆，适合考前集中整理错题、密集梳理概念结构。",
     swatches: ["#141619", "#ff5722", "#f3f4f6"],
   },
-];
-
-const PROVIDERS: { id: ProviderId; name: string; desc: string }[] = [
-  { id: "deepseek", name: "DeepSeek", desc: "外部 API，需要密钥" },
-  { id: "ollama", name: "Ollama 本地模型", desc: "本机服务，默认 qwen3:4b" },
-  { id: "custom", name: "自定义兼容接口", desc: "自己填地址与模型名" },
 ];
 
 const ACCESS_LABEL: Record<string, string> = {
@@ -103,25 +84,10 @@ type SettingsSpaceProps = {
   onRestoreNote: (note: Knowledge) => void;
 };
 
-function formatArchiveDate(value?: string | null) {
-  if (!value) return "归档时间未记录";
-  return new Intl.DateTimeFormat("zh-CN", { year: "numeric", month: "short", day: "numeric" }).format(new Date(value));
-}
-
-export function SettingsSpace({ section, archivedNotes, onRestoreNote }: SettingsSpaceProps) {
+export function SettingsSpace({ section }: SettingsSpaceProps) {
   const { enabled: soundEnabled, preference: soundPreference, toggle: toggleSound } = useInterfaceSound();
   const [bundleNote, setBundleNote] = useState("");
   const [studio, setStudio] = useState<Studio>("darkroom");
-  const [settings, setSettings] = useState<PublicSettings | null>(null);
-  const [defaults, setDefaults] = useState<Record<ProviderId, ProviderDefaults> | null>(null);
-  const [modelDraft, setModelDraft] = useState("");
-  const [baseUrlDraft, setBaseUrlDraft] = useState("");
-  const [timeoutDraft, setTimeoutDraft] = useState(30000);
-  const [apiKeyDraft, setApiKeyDraft] = useState("");
-  const [saveNote, setSaveNote] = useState("");
-  const [testChecks, setTestChecks] = useState<TestCheck[]>([]);
-  const [testing, setTesting] = useState(false);
-
   useEffect(() => {
     const savedStudio = readStorage(STUDIO_KEY) as Studio | null;
     if (savedStudio && ["darkroom", "editorial", "tactile"].includes(savedStudio)) {
@@ -134,151 +100,9 @@ export function SettingsSpace({ section, archivedNotes, onRestoreNote }: Setting
     writeStorage(STUDIO_KEY, studio);
   }, [studio]);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    void (async () => {
-      try {
-        const response = await fetch("/api/settings/model");
-        const body = (await response.json()) as {
-          settings?: PublicSettings;
-          defaults?: ProviderDefaults[];
-          error?: { message?: string };
-        };
-
-        if (!response.ok || !body.settings) {
-          throw new Error(body.error?.message ?? "模型配置读不出来。");
-        }
-
-        if (cancelled) return;
-
-        setSettings(body.settings);
-        setModelDraft(body.settings.model);
-        setBaseUrlDraft(body.settings.baseUrl);
-        setTimeoutDraft(body.settings.timeoutMs);
-        setDefaults(
-          (body.defaults ?? []).reduce(
-            (acc, item) => ({ ...acc, [item.provider]: item }),
-            {} as Record<ProviderId, ProviderDefaults>,
-          ),
-        );
-      } catch (error) {
-        if (!cancelled) setSaveNote(error instanceof Error ? error.message : "模型配置读不出来。");
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const locked = settings?.locked ?? [];
-  const lockedNote = "由环境变量设置，界面不能修改。";
-
-  async function patchSettings(patch: Record<string, unknown>) {
-    setSaveNote("");
-
-    const response = await fetch("/api/settings/model", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(patch),
-    });
-    const body = (await response.json()) as {
-      settings?: PublicSettings;
-      warnings?: string[];
-      error?: { message?: string };
-    };
-
-    if (!response.ok || !body.settings) {
-      throw new Error(body.error?.message ?? "设置没有保存。");
-    }
-
-    setSettings(body.settings);
-    setModelDraft(body.settings.model);
-    setBaseUrlDraft(body.settings.baseUrl);
-    setTimeoutDraft(body.settings.timeoutMs);
-    setSaveNote(body.warnings?.join(" ") ?? "已保存。");
-    return body.settings;
-  }
-
-  const selectProvider = (provider: ProviderId) => {
-    if (locked.includes("provider")) return;
-
-    const preset = defaults?.[provider];
-    setSettings((current) => (current ? { ...current, provider } : current));
-
-    if (preset) {
-      setModelDraft(preset.model);
-      setBaseUrlDraft(preset.baseUrl);
-      setTimeoutDraft(preset.timeoutMs);
-    }
-  };
-
   return (
     <div className="settings-space">
-      {section === "models" ? (
-        <>
-          <SectionHeader title="模型提供者" body="决定 AI 整理、编辑助理与 Agent 用哪个模型。配置由服务端保存，浏览器只看到脱敏状态。" />
-          <section className="content-section settings-panel-body">
-            <div className="model-list">
-              {PROVIDERS.map((provider) => (
-                <button
-                  key={provider.id}
-                  type="button"
-                  className={`model-option${settings?.provider === provider.id ? " is-active" : ""}`}
-                  disabled={locked.includes("provider")}
-                  onClick={() => selectProvider(provider.id)}
-                >
-                  <span className="model-radio" aria-hidden="true" />
-                  <span className="model-name">{provider.name}</span>
-                  <span className="model-desc">{provider.desc}</span>
-                </button>
-              ))}
-            </div>
-
-            <label className="field">
-              <span className="field-label">模型名</span>
-              <input className="text-input" type="text" value={modelDraft} disabled={locked.includes("model")} placeholder="如 qwen3:4b" onChange={(event) => setModelDraft(event.target.value)} />
-              {locked.includes("model") ? <span className="settings-note">{lockedNote}</span> : null}
-            </label>
-
-            <label className="field">
-              <span className="field-label">服务地址</span>
-              <input className="text-input" type="text" value={baseUrlDraft} disabled={locked.includes("baseUrl")} spellCheck={false} placeholder="https://api.deepseek.com 或 http://localhost:11434/v1" onChange={(event) => setBaseUrlDraft(event.target.value)} />
-              {locked.includes("baseUrl") ? <span className="settings-note">{lockedNote}</span> : null}
-            </label>
-
-            <label className="field">
-              <span className="field-label">超时（毫秒）</span>
-              <input className="text-input" type="number" min={1000} max={600000} value={timeoutDraft} disabled={locked.includes("timeoutMs")} onChange={(event) => setTimeoutDraft(Number(event.target.value))} />
-            </label>
-
-            <button
-              type="button"
-              className="button-secondary settings-test-btn"
-              onClick={async () => {
-                try {
-                  const patch: Record<string, unknown> = {};
-                  if (!locked.includes("provider") && settings?.provider) patch.provider = settings.provider;
-                  if (!locked.includes("model")) patch.model = modelDraft;
-                  if (!locked.includes("baseUrl")) patch.baseUrl = baseUrlDraft;
-                  if (!locked.includes("timeoutMs")) patch.timeoutMs = timeoutDraft;
-                  await patchSettings(patch);
-                } catch (error) {
-                  setSaveNote(error instanceof Error ? error.message : "设置没有保存。");
-                }
-              }}
-            >
-              保存模型设置
-            </button>
-
-            <p className="settings-note">
-              这里只保存连接配置，不管理本地模型的生命周期：Ollama 的启动、拉取与卸载仍在应用之外完成。
-            </p>
-            {saveNote ? <p className="settings-note" role="status">{saveNote}</p> : null}
-          </section>
-        </>
-      ) : null}
+      {section === "models" ? <ModelPanel /> : null}
 
       {section === "tools" ? (
         <>
@@ -371,140 +195,7 @@ export function SettingsSpace({ section, archivedNotes, onRestoreNote }: Setting
         </>
       ) : null}
 
-      {section === "archive" ? (
-        <>
-          <SectionHeader title="归档" body="这里保存已经从日常知识列表中收起的知识页。恢复后，它会重新回到 Knowledge。" />
-          <section className="content-section settings-panel-body">
-            {archivedNotes.length > 0 ? (
-              <div className="archive-list">
-                {archivedNotes.map((note) => (
-                  <article className="archive-row" key={note.id}>
-                    <div className="archive-row-copy">
-                      <strong>{note.title}</strong>
-                      <p>{note.summary || "这篇知识页没有摘要。"}</p>
-                      <small>{formatArchiveDate(note.archivedAt)}</small>
-                    </div>
-                    <button className="button-secondary" type="button" data-sound="press" onClick={() => onRestoreNote(note)}>恢复</button>
-                  </article>
-                ))}
-              </div>
-            ) : (
-              <div className="settings-empty">
-                <b>归档里没有内容</b>
-                <p>在 Knowledge 中归档的知识页会出现在这里，并可以随时恢复。</p>
-              </div>
-            )}
-          </section>
-        </>
-      ) : null}
-
-      {section === "system" ? (
-        <>
-          <SectionHeader title="System" body="管理 API 密钥并检查当前模型连接。密钥只保存在服务端，不会回到浏览器。" />
-          <section className="content-section settings-panel-body">
-            <div className="settings-section">
-              <div className="settings-section-title">API Key</div>
-              <label className="field">
-                <span className="field-label">密钥</span>
-                <input
-                  className="text-input"
-                  type="password"
-                  value={apiKeyDraft}
-                  disabled={locked.includes("apiKey")}
-                  placeholder={settings?.apiKeyConfigured ? "已配置 · 留空保持不变" : "sk-… 或留空（Ollama 通常不需要）"}
-                  autoComplete="off"
-                  onChange={(event) => setApiKeyDraft(event.target.value)}
-                />
-                <span className="settings-note">
-                  {locked.includes("apiKey")
-                    ? lockedNote
-                    : settings?.apiKeyConfigured
-                      ? "当前已保存密钥。留空保存不会改动它。"
-                      : "当前没有保存密钥。"}
-                </span>
-              </label>
-
-              <div className="review-actions">
-                <button
-                  type="button"
-                  className="button-secondary settings-test-btn"
-                  disabled={locked.includes("apiKey")}
-                  onClick={async () => {
-                    if (!apiKeyDraft.trim()) {
-                      setSaveNote("输入新的 API Key 后再保存；留空不会改动现有密钥。");
-                      return;
-                    }
-                    try {
-                      await patchSettings({ apiKey: apiKeyDraft });
-                      setApiKeyDraft("");
-                    } catch (error) {
-                      setSaveNote(error instanceof Error ? error.message : "密钥没有保存。");
-                    }
-                  }}
-                >
-                  保存 API Key
-                </button>
-                <button
-                  type="button"
-                  className="button-secondary settings-test-btn"
-                  disabled={locked.includes("apiKey")}
-                  onClick={async () => {
-                    try {
-                      await patchSettings({ apiKey: null });
-                      setApiKeyDraft("");
-                      setSaveNote("已清除服务端保存的 API Key。");
-                    } catch (error) {
-                      setSaveNote(error instanceof Error ? error.message : "密钥没有清除。");
-                    }
-                  }}
-                >
-                  清除 API Key
-                </button>
-                <button
-                  type="button"
-                  className="button-secondary settings-test-btn"
-                  disabled={testing}
-                  onClick={async () => {
-                    setTesting(true);
-                    setTestChecks([]);
-                    try {
-                      const response = await fetch("/api/settings/model/test", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: "{}",
-                      });
-                      const body = (await response.json()) as {
-                        ok?: boolean;
-                        checks?: TestCheck[];
-                        error?: { message?: string };
-                      };
-                      if (!response.ok) throw new Error(body.error?.message ?? "连接测试没有完成。");
-                      setTestChecks(body.checks ?? []);
-                    } catch (error) {
-                      setSaveNote(error instanceof Error ? error.message : "连接测试没有完成。");
-                    } finally {
-                      setTesting(false);
-                    }
-                  }}
-                >
-                  {testing ? "正在测试连接…" : "测试连接"}
-                </button>
-              </div>
-
-              {testChecks.length > 0 ? (
-                <ul className="settings-note" role="status">
-                  {testChecks.map((check) => (
-                    <li key={check.id}>
-                      {check.status === "ok" ? "✓" : check.status === "skipped" ? "–" : "✕"} {check.label}：{check.detail}
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-            </div>
-
-          </section>
-        </>
-      ) : null}
+      {section === "archive" ? <ArchivePanel /> : null}
 
       {section === "data" ? (
         <>

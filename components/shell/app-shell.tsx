@@ -8,6 +8,7 @@ type AppShellProps = {
   /** 当前空间没有检查器时，隐藏右栏并把网格收成两列。 */
   showInspector: boolean;
   sidebar: ReactNode;
+  ribbon?: ReactNode;
   main: ReactNode;
   inspector: ReactNode;
   mobileTopbar: ReactNode;
@@ -26,6 +27,7 @@ export function AppShell({
   railHidden,
   showInspector,
   sidebar,
+  ribbon,
   main,
   inspector,
   mobileTopbar,
@@ -33,7 +35,7 @@ export function AppShell({
   overlays,
 }: AppShellProps) {
   const className = [
-    "app-shell",
+    "app-shell chordnote-workspace",
     sidebarOpen ? "" : "sidebar-collapsed",
     showInspector ? (railHidden ? "rail-collapsed" : "") : "no-inspector",
   ]
@@ -44,6 +46,7 @@ export function AppShell({
     <main className={className}>
       <AppStardust />
       {mobileTopbar}
+      {ribbon}
       {sidebar}
       {main}
       {showInspector ? inspector : null}

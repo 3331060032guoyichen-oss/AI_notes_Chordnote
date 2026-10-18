@@ -1,5 +1,5 @@
 /** Settings 的分类入口。能力状态：real = 真实可用，readonly = 只读，planned = 未实现。 */
-export type SettingsSection = "models" | "tools" | "schedules" | "voice" | "themes" | "data" | "system" | "archive";
+export type SettingsSection = "models" | "tools" | "schedules" | "voice" | "themes" | "data" | "archive";
 
 export const SETTINGS_SECTIONS: Array<{
   id: SettingsSection;
@@ -14,6 +14,5 @@ export const SETTINGS_SECTIONS: Array<{
   { id: "themes", label: "外观主题", hint: "阅读与工作区风格", group: "界面偏好", state: "real" },
   { id: "voice", label: "界面声音", hint: "操作反馈音效", group: "界面偏好", state: "real" },
   { id: "data", label: "Data", hint: "导入、导出与本地存储", group: "数据与连接", state: "real" },
-  { id: "system", label: "System", hint: "API 密钥与连接检查", group: "数据与连接", state: "real" },
   { id: "archive", label: "归档", hint: "已收起的知识页", group: "数据与连接", state: "real" },
 ];

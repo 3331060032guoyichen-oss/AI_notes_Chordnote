@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 import { EditorState, StateField, StateEffect } from "@codemirror/state";
 import { Decoration, EditorView, WidgetType, keymap, type DecorationSet } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
-import { autocompletion } from "@codemirror/autocomplete";
+import { autocompletion, startCompletion } from "@codemirror/autocomplete";
 import { markdown } from "@codemirror/lang-markdown";
 import { noteParser, noteSyntax, resolveReference, splitFrontmatter, type LinkCandidate } from "../lib/documents/markdown";
 
@@ -26,6 +26,7 @@ class TaskWidget extends WidgetType {
   eq(other: TaskWidget) { return this.checked === other.checked && this.from === other.from; }
   toDOM(view: EditorView) {
     const input = document.createElement("input"); input.type = "checkbox"; input.checked = this.checked;
+    input.disabled = view.state.readOnly;
     input.setAttribute("aria-label", "切换任务完成状态");
     input.addEventListener("change", () => view.dispatch({ changes: { from: this.from + 1, to: this.from + 2, insert: input.checked ? "x" : " " } }));
     return input;
@@ -34,7 +35,7 @@ class TaskWidget extends WidgetType {
 }
 
 const rebuildPreview = StateEffect.define<void>();
-function preview(getLinks: () => readonly LinkCandidate[], open: (target: string) => void) {
+function preview(getLinks: () => readonly LinkCandidate[], open: (target: string) => void, focused:()=>boolean) {
   return StateField.define<DecorationSet>({
     create: build, update(value, tr) { return tr.docChanged || tr.selection || tr.effects.some(e => e.is(rebuildPreview)) ? build(tr.state) : value; },
     provide: field => EditorView.decorations.from(field),
@@ -44,7 +45,7 @@ function preview(getLinks: () => readonly LinkCandidate[], open: (target: string
     const { body, offset } = splitFrontmatter(text);
     const decorations: { from: number; to: number; value: Decoration }[] = [];
     const add = (from: number, to: number, value: Decoration) => decorations.push({ from, to, value });
-    if (offset) add(0, offset, Decoration.replace({ block: true }));
+    if (offset) add(0, offset, Decoration.replace({ block: true, inclusive:false }));
     if (body.split("\n")[0] === "# ") {
       add(offset, offset + 2, Decoration.replace({}));
       add(offset, offset, Decoration.line({ class: "md-heading md-h1" }));
@@ -52,9 +53,10 @@ function preview(getLinks: () => readonly LinkCandidate[], open: (target: string
     noteParser.parse(body).iterate({ enter(node) {
       const from = node.from + offset, to = node.to + offset;
       const source = text.slice(from, to);
-      const selected = state.selection.ranges.some(r => r.from <= to && r.to >= from);
+      const selected = focused() && state.selection.ranges.some(r => r.from <= to && r.to >= from);
       if (/^ATXHeading[1-6]$/.test(node.name)) {
         add(state.doc.lineAt(from).from, state.doc.lineAt(from).from, Decoration.line({ class: `md-heading md-h${node.name.slice(-1)}` }));
+        add(from,to,Decoration.mark({class:`md-heading-text md-h${node.name.slice(-1)}`}));
       }
       if (node.name === "HeaderMark" && (state.doc.lineAt(from).number === state.doc.lineAt(offset).number || !selected)) {
         add(from, Math.min(to + 1, state.doc.length), Decoration.replace({})); return false;
@@ -106,14 +108,22 @@ export function MarkdownEditor({ value, onChange, candidates, onOpenLink, readOn
           v.dispatch({ changes: { from, to, insert: target + suffix }, selection: { anchor: from + target.length + 2 } });
         } })) };
       }] }),
-      preview(() => linkCandidates.current, target => callbacks.current.onOpenLink(target)),
+      preview(() => linkCandidates.current, target => callbacks.current.onOpenLink(target),()=>Boolean(view.current?.hasFocus)),
       EditorState.transactionFilter.of(tr => {
         if (!tr.docChanged || readOnly || externalUpdate.current) return tr;
         const offset = splitFrontmatter(tr.newDoc.toString()).offset;
         if (tr.newDoc.lineAt(offset).text.startsWith("# ")) return tr;
         return [tr, { changes: { from: offset, insert: "# " }, sequential: true }];
       }),
-      EditorView.updateListener.of(update => { if (update.docChanged && !externalUpdate.current) callbacks.current.onChange?.(update.state.doc.toString()); }),
+      EditorView.updateListener.of(update => {
+        if(update.focusChanged)queueMicrotask(()=>{if(view.current===update.view)update.view.dispatch({effects:rebuildPreview.of()});});
+        if (!update.docChanged || externalUpdate.current) return;
+        callbacks.current.onChange?.(update.state.doc.toString());
+        const cursor=update.state.selection.main.head;
+        if (!readOnly && update.state.sliceDoc(Math.max(0,cursor-2),cursor)==="[[") queueMicrotask(()=>{
+          if(view.current===update.view)startCompletion(update.view);
+        });
+      }),
     ] }) });
     view.current = editor;
     return () => { editor.destroy(); view.current = null; };

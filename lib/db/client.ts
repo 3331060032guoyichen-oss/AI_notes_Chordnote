@@ -75,20 +75,32 @@ export async function createDb(): Promise<DbHandle> {
   };
 }
 
-let dbPromise: Promise<DbHandle> | null = null;
+/**
+ * App Router may evaluate different route bundles independently in development.
+ * Keep the PGlite owner on Node's process object rather than in a module-local
+ * variable. App Router route bundles can have separate VM globals in development,
+ * but they share the process object. Without this, one request can hold PGlite
+ * open while a second route attempts a conflicting writer connection.
+ */
+type DbProcess = typeof process & { __chordnoteDbPromise?: Promise<DbHandle> };
+const dbProcess = process as DbProcess;
 
 /** 进程内复用的数据库句柄（首次调用时打开数据目录并补齐迁移，之后一直复用）。 */
 export function getDb(): Promise<DbHandle> {
-  if (!dbPromise) {
-    dbPromise = createDb();
+  if (!dbProcess.__chordnoteDbPromise) {
+    dbProcess.__chordnoteDbPromise = createDb().catch((error) => {
+      // A failed first open must not poison future retries.
+      dbProcess.__chordnoteDbPromise = undefined;
+      throw error;
+    });
   }
-  return dbPromise;
+  return dbProcess.__chordnoteDbPromise;
 }
 
 /** 显式关闭（脚本收尾用；Next 运行期不需要调用）。 */
 export async function closeDb(): Promise<void> {
-  if (!dbPromise) return;
-  const handle = await dbPromise;
-  dbPromise = null;
+  if (!dbProcess.__chordnoteDbPromise) return;
+  const handle = await dbProcess.__chordnoteDbPromise;
+  dbProcess.__chordnoteDbPromise = undefined;
   await handle.close();
 }

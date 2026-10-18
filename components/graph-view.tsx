@@ -48,17 +48,13 @@ interface GraphViewProps {
   edges: GraphEdge[];
   /** 力场与显示参数；缺省用 DEFAULT_PARAMS。变化时重建仿真。 */
   params?: GraphParams;
-  /** 是否在连线上画方向箭头。 */
-  showArrows?: boolean;
   /** 点击节点时打开对应知识页。 */
   onOpenNote: (noteId: string) => void;
   /**
    * 被固定的节点数量变化时回调（拖动会让节点固定在落点）。
-   * 右栏据此显示「已固定 N 个」并提供「重新布局」。
+   * 拖动固定数量由工作区显示。
    */
   onPinnedChange?: (count: number) => void;
-  /** 这个数字每次自增 = 请求放开所有固定、回到自动布局。 */
-  resetPinnedSignal?: number;
 }
 
 /** 力学计算用的节点：在 API 返回的基础上补上画图需要的字段。 */
@@ -109,7 +105,7 @@ function physicsKeyOf(p: GraphParams): string {
  *   2）常驻流动 —— 连线呼吸 + 沿边行进的脉冲点，独立于力学，靠 rAF 一直在跑。
  *      布局静止不等于画面静止，这是"网络是活的"那部分观感。
  */
-export function GraphView({ nodes, edges, params, showArrows, onOpenNote, onPinnedChange, resetPinnedSignal }: GraphViewProps) {
+export function GraphView({ nodes, edges, params, onOpenNote, onPinnedChange }: GraphViewProps) {
   const P = params ?? DEFAULT_PARAMS;
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
@@ -236,22 +232,6 @@ export function GraphView({ nodes, edges, params, showArrows, onOpenNote, onPinn
     if (reducedMotion) drawRef.current();
   }, [reducedMotion]);
 
-  /** 放开所有固定 —— 右栏那个「重新布局」按钮。 */
-  const releaseAllPins = useCallback(() => {
-    for (const id of pinnedRef.current) {
-      const node = simNodesRef.current.find((item) => item.id === id);
-      if (node) {
-        node.fx = null;
-        node.fy = null;
-      }
-    }
-    pinnedRef.current.clear();
-    setPinnedIds([]);
-    onPinnedChangeRef.current?.(0);
-    simRef.current?.alpha(0.6).restart();
-    if (reducedMotion) drawRef.current();
-  }, [reducedMotion]);
-
   useEffect(() => {
     const canvas = canvasRef.current;
     const wrap = wrapRef.current;
@@ -353,20 +333,6 @@ export function GraphView({ nodes, edges, params, showArrows, onOpenNote, onPinn
         // 从 ref 读：绘制循环是长驻的，闭包里的 P 会是第一次渲染的旧值
         ctx.lineWidth = (hot ? 1.8 : 1) * paramsRef.current.lineWidth / k;
         ctx.stroke();
-        if (showArrows) {
-          // 箭头画在目标节点边缘之外一点，避免被节点盖住
-          const angle = Math.atan2(g.y - s.y, g.x - s.x);
-          const headLen = 7 / k;
-          const tx = g.x - Math.cos(angle) * (g.radius + 3);
-          const ty = g.y - Math.sin(angle) * (g.radius + 3);
-          ctx.beginPath();
-          ctx.moveTo(tx, ty);
-          ctx.lineTo(tx - headLen * Math.cos(angle - 0.5), ty - headLen * Math.sin(angle - 0.5));
-          ctx.lineTo(tx - headLen * Math.cos(angle + 0.5), ty - headLen * Math.sin(angle + 0.5));
-          ctx.closePath();
-          ctx.fillStyle = color;
-          ctx.fill();
-        }
       });
 
       // 2) 沿边行进的脉冲：这是"网络活着"的主要信号
@@ -737,7 +703,7 @@ export function GraphView({ nodes, edges, params, showArrows, onOpenNote, onPinn
 
     return () => {
       // 记住这一轮的坐标：下次数据变化重建仿真时沿用它，布局不会整体重排
-      for (const n of simNodes) posRef.current.set(n.id, { x: n.x, y: n.y });
+      for (const n of simNodes) previous.set(n.id, { x: n.x, y: n.y });
 
       simulation.stop();
       window.cancelAnimationFrame(rafId);
@@ -819,12 +785,6 @@ export function GraphView({ nodes, edges, params, showArrows, onOpenNote, onPinn
     },
     [applyView],
   );
-
-  // 父组件点「重新布局」时自增这个数字。初始值不触发（`!resetPinnedSignal` 直接返回）。
-  useEffect(() => {
-    if (!resetPinnedSignal) return;
-    releaseAllPins();
-  }, [resetPinnedSignal, releaseAllPins]);
 
   return (
     <div className="graph-view" ref={wrapRef}>

@@ -70,7 +70,7 @@ export function patchProperties(markdown: string, patch: Partial<DocumentPropert
   if (document.errors.length) throw new Error("属性格式有误，请先修复后保存。");
   for (const [key, value] of Object.entries(patch)) document.set(key, value);
   const nextBody = patch.title !== undefined
-    ? /^#\s+.+$/m.test(body) ? body.replace(/^#\s+.+$/m, `# ${patch.title}`) : `# ${patch.title}\n\n${body}`
+    ? /^# [^\n]*$/m.test(body) ? body.replace(/^# [^\n]*$/m, () => `# ${patch.title}`) : `# ${patch.title}\n\n${body}`
     : body;
   return `---\n${document.toString()}---\n${nextBody}`;
 }
@@ -79,8 +79,10 @@ export function makeMarkdown(title: string, body: string, properties: Record<str
   const existing = splitFrontmatter(body);
   // Existing YAML is preserved; only absent metadata is supplied on conversion.
   const parsed = readMarkdown(body);
-  const missing = Object.fromEntries(Object.entries({ title, ...properties }).filter(([key]) => !(key in parsed.data)));
-  const withHeading = /^#\s+.+$/m.test(existing.body) ? body : `${existing.offset ? body.slice(0, existing.offset) : ""}# ${title || "未命名"}\n\n${existing.body}`;
+  const firstHeading = existing.body.match(/^# ([^\n]+)/)?.[1];
+  const effectiveTitle = (existing.offset && firstHeading ? firstHeading : title || firstHeading) || "未命名";
+  const missing = Object.fromEntries(Object.entries({ title:effectiveTitle, ...properties }).filter(([key]) => !(key in parsed.data)));
+  const withHeading = firstHeading === effectiveTitle ? body : `${existing.offset ? body.slice(0, existing.offset) : ""}# ${effectiveTitle}\n\n${existing.body}`;
   return patchProperties(withHeading, missing);
 }
 
@@ -110,6 +112,6 @@ export function resolveReference(target: string, candidates: readonly LinkCandid
 
 export function safeDocumentPath(path: string) {
   const normalized = path.normalize("NFC").replace(/\\/g, "/").trim();
-  if (!normalized || normalized.startsWith("/") || normalized.split("/").some(p => !p || p === "." || p === ".." || /[<>:"|?*\u0000-\u001f]/.test(p))) throw new Error("笔记路径无效。");
-  return normalized.endsWith(".md") ? normalized : `${normalized}.md`;
+  if (!normalized || normalized.startsWith("/") || normalized.split("/").some(p => !p || p === "." || p === ".." || /[. ]$/.test(p) || /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(p) || /[<>:"|?*\u0000-\u001f]/.test(p))) throw new Error("笔记路径无效。");
+  return /\.md$/i.test(normalized) ? normalized : `${normalized}.md`;
 }

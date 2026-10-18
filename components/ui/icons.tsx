@@ -32,6 +32,10 @@ export function IconSource() {
   return <svg {...TREE_ICON_PROPS}><path d="M4 6h16M4 12h16M4 18h10" /></svg>;
 }
 
+export function IconSearch() {
+  return <svg {...RAIL_ICON_PROPS}><circle cx="10.5" cy="10.5" r="6.5" /><path d="m16 16 5 5" /></svg>;
+}
+
 export function IconNote() {
   return <svg {...TREE_ICON_PROPS}><rect x="4" y="4" width="16" height="16" rx="3" /><path d="M8 9h8M8 13h5" /></svg>;
 }

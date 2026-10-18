@@ -41,6 +41,11 @@ const userId = text("user_id").notNull();
 const createdAt = timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
 const updatedAt = timestamp("updated_at", { withTimezone: true }).notNull().defaultNow();
 
+export const canvases = pgTable("canvases", {
+  id, userId, title: text("title").notNull(), document: jsonb("document").notNull(),
+  version: integer("version").notNull().default(1), archivedAt: timestamp("archived_at", { withTimezone: true }), createdAt, updatedAt,
+}, table => ({ userIndex: index("canvases_user_id_idx").on(table.userId) }));
+
 // ---- 原始记录（用户可改、AI 不可改）------------------------------------
 export const rawNotes = pgTable(
   "raw_notes",
@@ -50,6 +55,8 @@ export const rawNotes = pgTable(
     // 笔记名：可选。留空时列表回退为正文预览（记录原话的门槛不该被标题抬高）
     title: text("title"),
     text: text("text").notNull(),
+    markdown: text("markdown"),
+    path: text("path"),
     version: integer("version").notNull().default(1),
     // 归档优先：删除治理统一为"先归档"，永久删除属独立高风险流程
     archivedAt: timestamp("archived_at", { withTimezone: true }),
@@ -70,6 +77,8 @@ export const notes = pgTable(
     rawId: text("raw_id")
       .notNull()
       .references(() => rawNotes.id, { onDelete: "restrict" }),
+    markdown: text("markdown"),
+    path: text("path"),
     title: text("title").notNull(),
     summary: text("summary").notNull(),
     content: text("content").notNull(),
@@ -103,6 +112,8 @@ export const noteRevisions = pgTable(
     noteId: text("note_id")
       .notNull()
       .references(() => notes.id, { onDelete: "restrict" }),
+    markdown: text("markdown"),
+    path: text("path"),
     version: integer("version").notNull(),
     title: text("title").notNull(),
     summary: text("summary").notNull(),

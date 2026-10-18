@@ -1,18 +1,20 @@
-import { and, desc, eq } from "drizzle-orm";
+import { desc,eq } from "drizzle-orm";
 
 import { getUserContext } from "../auth/context";
 import { getDb } from "../db/client";
-import { links, noteRevisions, notes, rawNotes } from "../db/schema";
-import { createOrReviveLink, listLinks } from "./links";
-import { listArchivedNotes, listNotes, promoteFromSource, updateNote, setNoteArchived } from "./notes";
-import { createSource, listArchivedSources, listSources, updateSource, archiveSource } from "./sources";
-import { rawMarkdown, knowledgeMarkdown } from "../documents/compat";
-import { safeDocumentPath } from "../documents/markdown";
-import { createZip, type ZipEntry } from "../zip";
+import { noteRevisions,notes,rawNotes } from "../db/schema";
+import { knowledgeMarkdown,rawMarkdown } from "../documents/compat";
+import { parseWikiReferences,patchProperties,readMarkdown,safeDocumentPath } from "../documents/markdown";
+import { createZip,type ZipEntry } from "../zip";
+import { readCanvas,saveCanvas,validCanvas,type CanvasDocument } from "./canvases";
+import { createOrReviveLink,listLinks } from "./links";
+import { listArchivedNotes,listNotes,promoteFromSource,setNoteArchived,updateNote } from "./notes";
+import { archiveSource,createSource,listArchivedSources,listSources,updateSource } from "./sources";
 
 // 知识包（Bundle）—— "数据是你的"这条承诺的兑现方式。
 //
-// 为什么以 title 作为可移植的键：`id` 是 build-local 的（`raw_<uuid>` 由本机生成），
+// v1 使用标题判重；v2 使用路径、来源 id 和关系端点映射，允许不同路径同名。
+// 历史说明：为什么以 title 作为可移植的键：`id` 是 build-local 的（`raw_<uuid>` 由本机生成），
 // 换一台机器、换一个库就失去意义；title 是用户自己认得的名字，跨实例能对上。
 // 代价是同名冲突只能"保留已有、跳过导入"，这一点在返回值里明说，不静默覆盖。
 //
@@ -45,6 +47,7 @@ export type BundleNote = {
 };
 
 export type BundleLink = {
+  fromId?: string; toId?: string;
   from: string;
   to: string;
   reason: string;
@@ -70,6 +73,7 @@ export type KnowledgeBundle = {
   notes: BundleNote[];
   links: BundleLink[];
   revisions: BundleRevision[];
+  canvases?: {title:string; document:CanvasDocument}[];
 };
 
 function toStringArray(value: unknown): string[] {
@@ -101,6 +105,7 @@ export async function exportBundle(): Promise<KnowledgeBundle> {
       .orderBy(desc(noteRevisions.createdAt)),
   ]);
 
+  const canvas = await readCanvas();
   const titleById = new Map(noteRows.map((row) => [row.id, row.title]));
   const rawTitleById = new Map(rawRows.map((row) => [row.id, row.title]));
 
@@ -108,6 +113,7 @@ export async function exportBundle(): Promise<KnowledgeBundle> {
     format: BUNDLE_FORMAT,
     version: BUNDLE_VERSION,
     exportedAt: new Date().toISOString(),
+    canvases: canvas ? [{title:canvas.title,document:canvas.document as CanvasDocument}] : [],
     counts: {
       sources: rawRows.length,
       notes: noteRows.length,
@@ -134,6 +140,7 @@ export async function exportBundle(): Promise<KnowledgeBundle> {
       updatedAt: row.updatedAt.toISOString(),
     })),
     links: linkRows.map((row) => ({
+      fromId:row.sourceId,toId:row.targetId,
       from: titleById.get(row.sourceId) ?? row.sourceId,
       to: titleById.get(row.targetId) ?? row.targetId,
       reason: row.reason,
@@ -336,149 +343,89 @@ export async function importBundle(
    * 导出包含已归档内容（归档是"我不想在日常里看到它"，不是"它不是我的数据"），
    * 只看未归档那一份，重导自己的包就会把已归档的原话/知识页当成新的再建一遍。
    */
-  const existingSources = [...(await listSources()), ...(await listArchivedSources())];
-  const sourceTitleSet = new Set(
-    existingSources.map((source) => source.title?.trim()).filter((title): title is string => Boolean(title)),
-  );
-  /**
-   * 没有标题的原始记录只能按正文去重。
-   *
-   * 这是实测出来的：课堂随手记大多没有标题，导出再导入时会因为"没有标题可比"
-   * 被整批重新创建 —— 自己导出的包再导回来反而让原始记录翻倍，"可带走"就成了半句话。
-   * 正文完全一样视为同一条，与"同名跳过"是同一个口径。
-   */
-  const existingUntitledTexts = new Set(
-    existingSources.filter((source) => !source.title?.trim()).map((source) => source.text.trim()),
-  );
-  const sourceByTitle = new Map(
-    existingSources
-      .filter((source) => source.title)
-      .map((source) => [source.title as string, source]),
-  );
-
+  const existingSources = [...await listSources(), ...await listArchivedSources()];
+  const existingNotes = [...await listNotes(), ...await listArchivedNotes()];
+  const sourceMap = new Map<string, string>();
+  const noteMap = new Map<string, string>();
+  const sourcesByTitle = new Map(existingSources.map(s=>[s.title,s.id]));
+  const notesByTitle = new Map(existingNotes.map(n=>[n.title,n.id]));
+  const paths = new Map([...existingSources.map(s=>({id:s.id,path:s.path,kind:"raw"})),...existingNotes.map(n=>({id:n.id,path:n.path,kind:"knowledge"}))].filter(d=>d.path).map(d=>[d.path!.toLowerCase(),d]));
+  const importedNotes: {id:string;markdown:string}[]=[];
+  function validateDocument(item: {path?:string;markdown?:string}) {
+    if(item.path) safeDocumentPath(item.path);
+    if(item.markdown !== undefined) readMarkdown(item.markdown);
+  }
+  // Validate all canonical documents before creating anything.
+  for (const item of [...incomingSources,...incomingNotes]) validateDocument(item);
   for (const source of incomingSources) {
-    const title = typeof source?.title === "string" ? source.title.trim() : "";
-    const text = asString(source?.text);
-
-    if (!text.trim()) {
-      result.problems.push("有一条原始记录没有正文，已跳过。");
-      continue;
-    }
-
-    if (title ? sourceTitleSet.has(title) : existingUntitledTexts.has(text.trim())) {
-      result.sources.skipped += 1;
-      continue;
-    }
-
-    if (plan.dryRun) {
-      result.sources.created += 1;
-      if (title) sourceTitleSet.add(title);
-      else existingUntitledTexts.add(text.trim());
-      continue;
-    }
-
-    const created = await createSource(text, title || null);
-    if (typeof source.markdown === "string") await updateSource(created.id, text, { markdown: source.markdown, path: typeof source.path === "string" ? safeDocumentPath(source.path) : undefined });
-    if (source.archived === true) await archiveSource(created.id);
-    result.sources.created += 1;
-    if (title) {
-      sourceTitleSet.add(title);
-      sourceByTitle.set(title, created);
-    } else {
-      existingUntitledTexts.add(text.trim());
-    }
+    const title=asString(source?.title).trim(), text=asString(source?.text);
+    if(!text.trim()){result.problems.push("有一条原始记录没有正文，已跳过。");continue;}
+    const path=source.path ? safeDocumentPath(source.path) : undefined;
+    const byPath=path ? paths.get(path.toLowerCase()) : undefined;
+    const existing=byPath?.kind === "raw" ? byPath.id : path && bundle.version === 2 ? undefined : title ? sourcesByTitle.get(title) : existingSources.find(s=>!s.title && s.text.trim()===text.trim())?.id;
+    if (byPath && byPath.kind !== "raw") {result.problems.push("原始记录路径被知识页占用："+path);result.sources.skipped++;continue;}
+    if(existing){if(source.id)sourceMap.set(source.id,existing);result.sources.skipped++;continue;}
+    const created=plan.dryRun ? {id:"planned-raw-"+result.sources.created} : await createSource(text,title||null);
+    if(!plan.dryRun && typeof source.markdown === "string") await updateSource(created.id,text,{markdown:source.markdown,path});
+    if(!plan.dryRun && source.archived===true) await archiveSource(created.id);
+    if(source.id)sourceMap.set(source.id,created.id);
+    sourcesByTitle.set(title,created.id);
+    if(path)paths.set(path.toLowerCase(),{id:created.id,path,kind:"raw"});
+    result.sources.created++;
   }
-
-  /** 同上：已归档的知识页也要参与判重，否则导入会把它们重新建一遍。 */
-  const existingNotes = [...(await listNotes()), ...(await listArchivedNotes())];
-  const noteTitleSet = new Set(existingNotes.map((note) => note.title));
-  const noteByTitle = new Map(existingNotes.map((note) => [note.title, note]));
-
-  for (const note of incomingNotes) {
-    const title = asString(note?.title).trim();
-    const content = asString(note?.content);
-
-    if (!title || !content.trim()) {
-      result.problems.push("有一条知识页缺少标题或正文，已跳过。");
-      continue;
-    }
-
-    if (noteTitleSet.has(title)) {
-      result.notes.skipped += 1;
-      continue;
-    }
-
-    if (plan.dryRun) {
-      result.notes.created += 1;
-      noteTitleSet.add(title);
-      continue;
-    }
-
-    // 知识页必须挂在一条原始记录上：优先按出处标题找回，找不到就用正文补建。
-    const sourceTitle = asString(note?.sourceTitle).trim();
-    let source = sourceTitle ? sourceByTitle.get(sourceTitle) : undefined;
-
-    if (!source) {
-      source = await createSource(content, sourceTitle || title);
-      if (sourceTitle) {
-        sourceTitleSet.add(sourceTitle);
-        sourceByTitle.set(sourceTitle, source);
+  for(const note of incomingNotes){
+    const title=asString(note?.title).trim(),content=asString(note?.content);
+    if(!title||!content.trim()){result.problems.push("有一条知识页缺少标题或正文，已跳过。");continue;}
+    const path=note.path ? safeDocumentPath(note.path) : undefined;
+    const byPath=path ? paths.get(path.toLowerCase()) : undefined;
+    const existing=byPath?.kind === "knowledge" ? byPath.id : path && bundle.version===2 ? undefined : notesByTitle.get(title);
+    if(byPath && byPath.kind!=="knowledge"){result.problems.push("知识页路径被原始记录占用："+path);result.notes.skipped++;continue;}
+    if(existing){if(note.id)noteMap.set(note.id,existing);result.notes.skipped++;continue;}
+    let sourceId=note.sourceId ? sourceMap.get(note.sourceId) : undefined;
+    if(!sourceId)sourceId=sourcesByTitle.get(asString(note.sourceTitle));
+    if(!sourceId && !plan.dryRun){sourceId=(await createSource(content,asString(note.sourceTitle)||title)).id;result.sources.created++;}
+    const promoted=plan.dryRun ? {created:true,knowledge:{id:"planned-note-"+result.notes.created}} : await promoteFromSource({rawId:sourceId!,title,summary:asString(note.summary)||"（导入的知识页未带摘要）",content,keyPoints:toStringArray(note.keyPoints),concepts:toStringArray(note.concepts),keywords:toStringArray(note.keywords),origin:"user"});
+    if(promoted.created){
+      if(!plan.dryRun && note.markdown !== undefined){
+        let markdown=note.markdown;
+        const oldSource=readMarkdown(markdown).properties.source;
+        if(sourceMap.has(oldSource))markdown=patchProperties(markdown,{source:sourceMap.get(oldSource)!});
+        await updateNote(promoted.knowledge.id,{markdown,...(path?{path}:{})});
+        importedNotes.push({id:promoted.knowledge.id,markdown});
       }
-    }
-
-    const promoted = await promoteFromSource({
-      rawId: source.id,
-      title,
-      summary: asString(note?.summary, "（导入的知识页未带摘要）") || "（导入的知识页未带摘要）",
-      content,
-      keyPoints: toStringArray(note?.keyPoints),
-      concepts: toStringArray(note?.concepts),
-      keywords: toStringArray(note?.keywords),
-      origin: "user",
-    });
-
-    if (promoted.created && typeof note.markdown === "string") await updateNote(promoted.knowledge.id, { markdown: note.markdown, ...(typeof note.path === "string" ? { path: safeDocumentPath(note.path) } : {}) });
-    if (promoted.created && note.archived === true) await setNoteArchived(promoted.knowledge.id, true);
-    if (promoted.created) {
-      result.notes.created += 1;
-      noteTitleSet.add(title);
-      noteByTitle.set(title, promoted.knowledge);
-    } else {
-      result.notes.skipped += 1;
+      if(!plan.dryRun && note.archived===true)await setNoteArchived(promoted.knowledge.id,true);
+      result.notes.created++;
+    }else result.notes.skipped++;
+    if(note.id)noteMap.set(note.id,promoted.knowledge.id);
+    notesByTitle.set(title,promoted.knowledge.id);
+    if(path)paths.set(path.toLowerCase(),{id:promoted.knowledge.id,path,kind:"knowledge"});
+  }
+  if(!plan.dryRun){
+    const ids=new Map([...sourceMap,...noteMap]);
+    for(const item of importedNotes){
+      let markdown=item.markdown;
+      for(const ref of parseWikiReferences(markdown).reverse()){
+        const mapped=ids.get(ref.target);
+        if(mapped)markdown=markdown.slice(0,ref.from+2)+mapped+markdown.slice(ref.from+2+ref.target.length);
+      }
+      if(markdown!==item.markdown)await updateNote(item.id,{markdown});
     }
   }
-
-  const existingLinkKeys = new Set((await listLinks()).map((link) => `${link.sourceId}→${link.targetId}`));
-
-  for (const link of incomingLinks) {
-    const from = asString(link?.from).trim();
-    const to = asString(link?.to).trim();
-    const source = noteByTitle.get(from);
-    const target = noteByTitle.get(to);
-
-    if (!source || !target) {
-      result.problems.push(`关联「${from} → ${to}」找不到两端知识页，已跳过。`);
-      continue;
-    }
-
-    if (source.id === target.id || existingLinkKeys.has(`${source.id}→${target.id}`) || existingLinkKeys.has(`${target.id}→${source.id}`)) {
-      result.links.skipped += 1;
-      continue;
-    }
-
-    if (plan.dryRun) {
-      result.links.created += 1;
-      continue;
-    }
-
-    await createOrReviveLink({
-      sourceId: source.id,
-      targetId: target.id,
-      reason: asString(link?.reason, "导入的知识包关联") || "导入的知识包关联",
-    });
-    existingLinkKeys.add(`${source.id}→${target.id}`);
-    result.links.created += 1;
+  const existingLinkKeys=new Set((await listLinks()).map(l=>[l.sourceId,l.targetId].sort().join("→")));
+  for(const link of incomingLinks){
+    const from=link.fromId ? noteMap.get(link.fromId) : notesByTitle.get(link.from);
+    const to=link.toId ? noteMap.get(link.toId) : notesByTitle.get(link.to);
+    if(!from||!to){result.problems.push("关联找不到两端知识页："+link.from+" → "+link.to);continue;}
+    const key=[from,to].sort().join("→");
+    if(from===to||existingLinkKeys.has(key)){result.links.skipped++;continue;}
+    if(!plan.dryRun)await createOrReviveLink({sourceId:from,targetId:to,reason:asString(link.reason)||"导入的知识包关联"});
+    existingLinkKeys.add(key);result.links.created++;
   }
-
+  if(bundle.canvases?.length){
+    const incoming=bundle.canvases[0].document;
+    if(!validCanvas(incoming))result.problems.push("白板格式无效，已跳过。");
+    else if((await readCanvas())?.document)result.problems.push("已有白板保留；导入白板已跳过。");
+    else if(!plan.dryRun)await saveCanvas({...incoming,cards:incoming.cards.map(c=>({...c,...(c.noteId?{noteId:noteMap.get(c.noteId)??sourceMap.get(c.noteId)??c.noteId}:{})}))},0);
+  }
   return result;
 }

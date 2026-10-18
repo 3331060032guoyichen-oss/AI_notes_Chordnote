@@ -141,12 +141,10 @@ async function killTree(child, pids = []) {
     );
     return;
   }
-  for (const pid of targets) {
-    try {
-      child?.kill("SIGTERM");
-    } catch {
-      /* 已经退出了 */
-    }
+  try {
+    child?.kill("SIGTERM");
+  } catch {
+    /* 已经退出了 */
   }
 }
 
@@ -159,6 +157,12 @@ try {
     process.exitCode = 1;
     process.exit(1);
   }
+
+  const bootstrap = await GET("/api/bootstrap");
+  check(
+    "工作区初始化一次读取资料、图谱和待确认提议",
+    bootstrap.status === 200 && Array.isArray(bootstrap.body?.raws) && Array.isArray(bootstrap.body?.knowledges) && Array.isArray(bootstrap.body?.proposals) && Array.isArray(bootstrap.body?.graph?.nodes),
+  );
 
   // ---- raw --------------------------------------------------------------
   const rawA = await POST("/api/raw", { text: "回归测试原话 A" });
@@ -507,8 +511,6 @@ try {
     "越权尝试后本次原话未被改动",
     (rawAfterMisses.body?.raws ?? []).some((r) => r.id === rawAId && r.text === "回归测试原话 A"),
   );
-} catch (error) {
-  check("测试执行未抛异常", false, error.message);
   // Canonical Markdown survives proposal application; references are derived immediately.
   const mdRaw = await POST("/api/raw", { text: "文档管线夹具", title: `md-${RUN}` });
   created.raws.push(mdRaw.body?.raw?.id);
@@ -519,11 +521,54 @@ try {
   check("Markdown 保存保留未知 YAML 与 wikilink", mdSaved.status === 200 && mdSaved.body.knowledge.markdown.includes("custom: {preserved: true}") && mdSaved.body.knowledge.markdown.includes("[[回归改过的标题|可读链接]]"));
   const refs = await GET("/api/documents");
   check("双向链接按语法解析并忽略转义", refs.body.references.filter(r => r.sourceId === mdId).length === 1 && refs.body.references.some(r => r.sourceId === mdId && r.targetId === noteA));
+  const wikiProposal = await POST("/api/proposals", {
+    kind: "note_update",
+    targetNoteId: mdId,
+    baseVersion: mdSaved.body?.knowledge?.version,
+    reason: "验证 Agent 提议写入后保留 wikilink 原文",
+    payload: {
+      noteId: mdId,
+      content: "由待确认提议写入的正文：[[回归改过的标题|提议链接]]",
+      reason: "验证 Agent 提议写入后保留 wikilink 原文",
+    },
+  });
+  const wikiProposalId = wikiProposal.body?.proposal?.id;
+  const wikiApproval = wikiProposalId ? await POST(`/api/proposals/${wikiProposalId}/approve`, {}) : { status: 0 };
+  const wikiApply = wikiProposalId ? await POST(`/api/proposals/${wikiProposalId}/apply`, {}) : { status: 0 };
+  const afterProposal = await GET(`/api/knowledge/${mdId}`);
+  const refsAfterProposal = await GET("/api/documents");
+  check(
+    "提议应用保留 wikilink 原文并立即重建引用",
+    wikiApproval.status === 200 &&
+      wikiApply.status === 200 &&
+      afterProposal.body?.knowledge?.markdown?.includes("[[回归改过的标题|提议链接]]") &&
+      refsAfterProposal.body.references.some(r => r.sourceId === mdId && r.targetId === noteA),
+  );
   const target = await POST("/api/documents", { target: `raw/articles/new-${RUN}` });
   created.raws.push(target.body?.document?.id);
   check("未解析链接显式创建 Raw 并保存路径", target.status === 201 && target.body?.document?.kind === "raw" && target.body.document.path === `raw/articles/new-${RUN}.md`);
   const forbiddenPath = await POST("/api/documents", { target: "../escape" });
   check("路径不能越出知识库", forbiddenPath.status === 409);
+
+  // 白板是一份单用户工作区文档。仅在测试自己启动的临时库里写它，避免复用开发服务时覆盖用户画布。
+  if (owned) {
+    const blankCanvas = await GET("/api/canvas");
+    const canvasWrite = await call("PUT", "/api/canvas", { version: 0, document: { cards: [{ id: "card-a", x: 0, y: 0, text: "回归卡片" }], edges: [] } });
+    const canvasConflict = await call("PUT", "/api/canvas", { version: 0, document: { cards: [], edges: [] } });
+    check("白板可建立并保存版本", blankCanvas.status === 200 && canvasWrite.status === 200 && canvasWrite.body?.canvas?.version === 1);
+    check("白板拒绝旧版本覆盖", canvasConflict.status === 409);
+  } else {
+    check("白板版本写入回归（复用开发库时跳过）", true);
+  }
+
+  const purgeRaw = await POST("/api/raw", { text: `永久清除夹具 ${RUN}`, title: `purge-${RUN}` });
+  const purgeRawId = purgeRaw.body?.raw?.id;
+  const purgeArchive = purgeRawId ? await DELETE("/api/raw", { rawId: purgeRawId }) : { status: 0 };
+  const purgeWithoutConsent = purgeRawId ? await DELETE("/api/archive", { kind: "raw", id: purgeRawId, reason: "回归夹具", confirmDependencies: false }) : { status: 0 };
+  const purged = purgeRawId ? await DELETE("/api/archive", { kind: "raw", id: purgeRawId, reason: "回归夹具", confirmDependencies: true }) : { status: 0 };
+  check("永久删除只允许归档内、确认原因后执行", purgeArchive.status === 200 && purgeWithoutConsent.status === 409 && purged.status === 200);
+} catch (error) {
+  check("测试执行未抛异常", false, error.message);
 } finally {
   // 清理走公开接口的"归档"（应用没有物理删除入口，这是设计）。
   // 于是这里顺便验证「归档 = 日常视图看不到、归档视图仍读得到」，对演示数据也安全。

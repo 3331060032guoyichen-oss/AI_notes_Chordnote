@@ -1,4 +1,5 @@
 import { makeMarkdown, patchProperties, readMarkdown, splitFrontmatter } from "./markdown";
+import { parseDocument } from "yaml";
 
 export function rawMarkdown(row: { markdown?: string | null; title: string | null; text: string }) {
   return row.markdown ?? makeMarkdown(row.title ?? "", row.text, {});
@@ -16,7 +17,13 @@ export function applyLegacyPatch(markdown: string, patch: { title?: string; summ
   let doc = markdown;
   if (patch.content !== undefined) {
     const incoming = splitFrontmatter(patch.content);
-    doc = incoming.offset ? patch.content :
+    if (incoming.offset) {
+      const previous = parseDocument(splitFrontmatter(doc).yaml);
+      const replacement = parseDocument(incoming.yaml);
+      if (replacement.errors.length) throw new Error("属性格式有误。");
+      for (const [key, value] of Object.entries(readMarkdown(patch.content).data)) previous.set(key, value);
+      doc = `---\n${previous.toString()}---\n${incoming.body}`;
+    } else doc =
       `${splitFrontmatter(doc).offset ? `---\n${splitFrontmatter(doc).yaml}\n---\n` : ""}${/^# /m.test(incoming.body) ? incoming.body : `# ${readMarkdown(doc).properties.title}\n\n${incoming.body}`}`;
   }
   return patchProperties(doc, { ...(patch.title !== undefined ? { title: patch.title } : {}),

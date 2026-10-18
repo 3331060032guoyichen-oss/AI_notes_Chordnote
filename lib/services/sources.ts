@@ -1,5 +1,6 @@
 import { rawMarkdown } from "../documents/compat";
-import { readMarkdown, safeDocumentPath } from "../documents/markdown";
+import { readMarkdown, patchProperties } from "../documents/markdown";
+import { availableDocumentPath } from "./document-path";
 import { randomUUID } from "node:crypto";
 
 import { and, desc, eq, isNotNull, isNull } from "drizzle-orm";
@@ -90,10 +91,10 @@ export async function getSource(id: string): Promise<Raw | null> {
  * 新建原始记录。
  * `title` 可选：原始记录允许先只有正文，笔记名后补（也允许一直不填）。
  */
-export async function createSource(text: string, title?: string | null): Promise<Raw> {
+export async function createSource(text: string, title?: string | null, document?: {markdown:string;path:string}): Promise<Raw> {
   const { db } = await getDb();
 
-  return db.transaction((tx) => createSourceInTx(tx, text, title));
+  return db.transaction((tx) => createSourceInTx(tx, text, title, document));
 }
 
 /**
@@ -108,12 +109,15 @@ export async function createSourceInTx(
   tx: DbTransaction,
   text: string,
   title?: string | null,
+  document?: {markdown:string;path:string},
 ): Promise<Raw> {
   const { userId } = getUserContext();
+  const id = `raw_${randomUUID()}`;
+  const path = document ? await availableDocumentPath(tx,document.path,id) : undefined;
   const normalizedTitle = typeof title === "string" && title.trim() ? title.trim() : null;
   const rows = await tx
     .insert(rawNotes)
-    .values({ id: `raw_${randomUUID()}`, userId, text, title: normalizedTitle })
+    .values({ id, userId, text, title: normalizedTitle, markdown:document?.markdown, path })
     .returning();
 
   return toSource(rows[0]);
@@ -126,16 +130,18 @@ export async function createSourceInTx(
  */
 export async function archiveSource(id: string): Promise<Raw | null> {
   const { db } = await getDb();
-  const { userId } = getUserContext();
+  const { userId,actor } = getUserContext();
   const now = new Date();
-  const rows = await db
+  return db.transaction(async tx => {
+  const rows = await tx
     .update(rawNotes)
     .set({ archivedAt: now, updatedAt: now })
     .where(and(eq(rawNotes.id, id), eq(rawNotes.userId, userId), isNull(rawNotes.archivedAt)))
     .returning();
   const [row] = rows;
-
+  if(row) await tx.insert(auditLog).values({id:`audit_${randomUUID()}`,userId,actorType:actor.type,actorId:actor.id,operation:"raw.archive",targetType:"raw",targetId:id,result:"ok",detail:{title:row.title,path:row.path}});
   return row ? toSource(row) : null;
+  });
 }
 
 export type UpdateSourceResult =
@@ -181,10 +187,12 @@ export async function updateSource(id: string, text: string, document?: { markdo
       return { status: "unchanged" as const, raw: toSource(current) };
     }
 
+    const canonical = document ? patchProperties(document.markdown, {title:readMarkdown(document.markdown).properties.title}) : null;
+    const path = document?.path ? await availableDocumentPath(tx,document.path,id) : undefined;
     const updated = (
       await tx
         .update(rawNotes)
-        .set({ text, ...(document ? { markdown: document.markdown, title: readMarkdown(document.markdown).properties.title || null, ...(document.path ? { path: safeDocumentPath(document.path) } : {}) } : { markdown: null }), version: current.version + 1, updatedAt: new Date() })
+        .set({ text, ...(document ? { markdown: canonical, title: readMarkdown(document.markdown).properties.title || null, ...(path ? { path } : {}) } : { markdown: null }), version: current.version + 1, updatedAt: new Date() })
         .where(and(eq(rawNotes.id, id), eq(rawNotes.userId, userId)))
         .returning()
     )[0];

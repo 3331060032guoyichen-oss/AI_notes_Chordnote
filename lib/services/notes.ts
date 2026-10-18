@@ -1,14 +1,14 @@
-import { knowledgeMarkdown, applyLegacyPatch, bodyWithoutTitle } from "../documents/compat";
-import { readMarkdown, safeDocumentPath } from "../documents/markdown";
 import { randomUUID } from "node:crypto";
+import { applyLegacyPatch,bodyWithoutTitle,knowledgeMarkdown } from "../documents/compat";
+import { patchProperties,readMarkdown } from "../documents/markdown";
+import { availableDocumentPath } from "./document-path";
 
-import { and, desc, eq, isNotNull, isNull } from "drizzle-orm";
+import { and,desc,eq,isNotNull,isNull } from "drizzle-orm";
 
 import type { Knowledge } from "../../types/knowledge";
-import type { Raw } from "../../types/raw";
 import { getUserContext } from "../auth/context";
-import { getDb, type DbTransaction } from "../db/client";
-import { auditLog, noteRevisions, notes, rawNotes } from "../db/schema";
+import { getDb,type DbTransaction } from "../db/client";
+import { auditLog,noteRevisions,notes } from "../db/schema";
 
 // 知识页（notes）服务层。
 // 读路径默认只返回"未归档且未软删除"的行；按 id / rawId 单条读取不过滤（与旧存储行为一致）。
@@ -294,11 +294,12 @@ export async function updateNoteInTx(
     return { status: "conflict" as const, knowledge: toKnowledge(current) };
   }
 
-  const markdown = patch.markdown ?? applyLegacyPatch(knowledgeMarkdown(current), patch);
+  let markdown = patch.markdown ?? applyLegacyPatch(knowledgeMarkdown(current), patch);
   const properties = readMarkdown(markdown).properties;
+  if (readMarkdown(markdown).data.title !== properties.title) markdown = patchProperties(markdown, {title:properties.title});
   const normalizedPatch = { ...patch, markdown, title: properties.title || patch.title || current.title,
     summary: properties.description, keywords: properties.tags, content: bodyWithoutTitle(markdown),
-    ...(patch.path ? { path: safeDocumentPath(patch.path) } : {}) };
+    ...(patch.path ? { path: await availableDocumentPath(tx, patch.path, id) } : {}) };
   const updated = (
     await tx
       .update(notes)
