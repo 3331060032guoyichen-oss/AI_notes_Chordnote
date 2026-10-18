@@ -7,6 +7,9 @@ node_modules/
 .next/
 out/
 
+# Windows desktop staging output (recreated by desktop:prepare)
+.desktop/
+
 # Production
 build/
 dist/
@@ -46,3 +49,6 @@ tsconfig.tsbuildinfo
 # Local scratch（截图、工具输出，不进版本库）
 .tmp/
 .pnpm-store/
+
+# Rust / Tauri build output
+src-tauri/target/

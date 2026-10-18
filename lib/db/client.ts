@@ -40,11 +40,19 @@ export interface DbHandle {
  * 不出现驱动专属 API。
  */
 export const DEFAULT_DATA_DIR = "./data/pglite";
-const MIGRATIONS_FOLDER = "./drizzle";
+const DEFAULT_MIGRATIONS_FOLDER = "./drizzle";
 
 /** 数据目录；可用 PGLITE_DATA_DIR 覆盖（测试脚本会指到别处，避免和应用抢同一份数据）。 */
 export function resolveDataDir(): string {
   return resolve(process.env.PGLITE_DATA_DIR ?? DEFAULT_DATA_DIR);
+}
+
+/**
+ * 桌面安装包把迁移文件放在只读资源目录。网页开发仍沿用项目根目录的 drizzle/。
+ * 通过环境变量传入绝对路径，避免 standalone 进程的工作目录影响迁移发现。
+ */
+export function resolveMigrationsFolder(): string {
+  return resolve(process.env.CHORDNOTE_MIGRATIONS_DIR ?? DEFAULT_MIGRATIONS_FOLDER);
 }
 
 export async function createDb(): Promise<DbHandle> {
@@ -56,7 +64,7 @@ export async function createDb(): Promise<DbHandle> {
   const db = drizzle(client, { schema });
 
   // 建表 / 补列：drizzle 迁移按 journal 增量执行，已应用过的会跳过，每个进程跑一次。
-  await migrate(db, { migrationsFolder: MIGRATIONS_FOLDER });
+  await migrate(db, { migrationsFolder: resolveMigrationsFolder() });
 
   return {
     db,

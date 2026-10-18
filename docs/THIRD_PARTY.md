@@ -48,6 +48,15 @@
 | @types/react | ^19.0.0 | 19.3.0 | MIT | React 类型 |
 | @types/react-dom | ^19.0.0 | 19.3.0 | MIT | ReactDOM 类型 |
 | @types/three | 0.186.0 | 0.186.0 | MIT | three 类型 |
+| @tauri-apps/cli | 2.12.3 | 2.12.3 | MIT / Apache-2.0 | Tauri 2 开发、编译和 NSIS 打包命令 | 仅用于 Windows 桌面宿主；Node 服务仍由 Next.js Standalone 提供 |
+
+### Windows 桌面宿主的 Rust 依赖
+
+| 项目 | URL | Version | License | 用途 |
+|------|-----|---------|---------|------|
+| tauri | https://tauri.app | ^2 | MIT / Apache-2.0 | Windows WebView 宿主、安装包与窗口生命周期 |
+| tauri-build | https://tauri.app | ^2 | MIT / Apache-2.0 | Tauri 编译期资源处理 |
+| getrandom | https://crates.io/crates/getrandom | ^0.3 | MIT OR Apache-2.0 | 为受控服务关闭请求生成一次性随机令牌 |
 
 > **不存在**的依赖（历史文档曾误列，请勿据此写代码）：Tailwind CSS、shadcn/ui、react-force-graph-2d、GSAP。
 

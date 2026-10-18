@@ -1,0 +1,13 @@
+[package]
+name = "chordnote-desktop"
+version = "0.2.0"
+description = "Chordnote Windows desktop shell"
+authors = ["Chordnote"]
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "2" }
+
+[dependencies]
+getrandom = "0.3"
+tauri = { version = "2" }

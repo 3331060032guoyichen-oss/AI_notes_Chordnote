@@ -10,9 +10,14 @@
     "start": "next start",
     "lint": "eslint .",
     "test": "node scripts/regression.mjs",
+    "test:unit": "node --import ./scripts/ts-resolve.mjs --test lib/ai/provider.test.ts lib/ai/config.test.ts",
     "verify:db": "node scripts/db-verify.mjs",
     "seed:demo": "node scripts/seed-demo.mjs",
-    "seed:reset": "node scripts/reset-demo-data.mjs"
+    "seed:reset": "node scripts/reset-demo-data.mjs",
+    "desktop:dev:server": "next dev --hostname 127.0.0.1 --port 3210",
+    "desktop:dev": "tauri dev",
+    "desktop:prepare": "pnpm build && node scripts/prepare-desktop.mjs",
+    "desktop:build": "tauri build --bundles nsis"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.10",
@@ -29,6 +34,7 @@
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.7",
     "@next/eslint-plugin-next": "^15.5.26",
+    "@tauri-apps/cli": "2.12.3",
     "@types/d3-force": "^3.0.10",
     "@types/node": "^22.0.0",
     "@types/pg": "^8.23.1",
