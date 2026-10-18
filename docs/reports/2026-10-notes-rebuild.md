@@ -21,10 +21,10 @@
 
 | 组 | 内容 | 状态 |
 |---|---|---|
-| 0 | 基线与迁移保护 | 离线基线通过；提交待署名 |
-| 1 | dsh 统一 Agent 运行时、元信息与权限 | 进行中 |
-| 2 | Markdown 文档、frontmatter、路径与引用索引 | 待实施 |
-| 3 | CM6 连续编辑、Live Preview、补全 | 待实施 |
+| 0 | 基线与迁移保护 | 已提交 3117c7a |
+| 1 | dsh 统一 Agent 运行时、元信息与权限 | 已提交 db2c4d2；ACP 后续补齐 |
+| 2 | Markdown 文档、frontmatter、路径与引用索引 | 已提交 5b0c022；79 项 HTTP 回归通过 |
+| 3 | CM6 连续编辑、Live Preview、补全 | 编辑器组件已验收；工作区接线随第 4 组 |
 | 4 | 固定 Ribbon、目录、右侧 Agent、搜索与白板 | 待实施 |
 | 5 | 三类模型配置、发现与输入区选择 | 待实施 |
 | 6 | Archive、恢复与归档内永久删除 | 待实施 |
@@ -48,3 +48,12 @@
 - 修改：lib/documents、lib/services/{notes,sources,documents,bundle}、Raw/Knowledge API 与 types、drizzle/0006、scripts/regression.mjs。
 - 待解决：同名内容导入仍沿用保留已有策略，需要补齐 v2 路径判重与来源映射；不能把跳过项当作已恢复。
 
+
+## 第三组验收记录
+
+- 修改：components/markdown-editor.tsx、components/document-session.tsx。
+- CM6 单文档、共享 Lezer 语法、选区 reveal、wikilink 补全与链接装饰重建、任务框、标签/高亮/强调均已接入。
+- 保存有乐观版本校验，未保存编辑保留本机恢复副本；Wiki 属性默认折叠并直接修改 YAML。
+- 浏览器实测：连续输入自动保存；移出链接后显示虚线链接；点击未解析链接创建 Raw 并打开；粗体/高亮/任务框呈现正常。
+- TypeScript 检查通过。新编辑器工作区入口与 CSS 在下一组一起提交。
+- 尚需后续验收：ACP 结果提议、属性回写全链路、打包后的运行时。
