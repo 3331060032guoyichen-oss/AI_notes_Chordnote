@@ -76,7 +76,31 @@ pnpm dev
 
 想直接看到有内容的界面：`pnpm seed:demo`（幂等写入一批演示笔记，见 [`AGENTS.md`](AGENTS.md)）。
 
-想用桌面窗口：`pnpm desktop:dev` 启动 Tauri 开发窗（本机服务固定 `127.0.0.1:3210`）；`pnpm desktop:build` 生成 Windows NSIS 安装包，需要 Rust 工具链。安装包版的数据在 `%LOCALAPPDATA%\Chordnote`，与网页版的 `data/` 互不影响。
+### 桌面端（Windows）
+
+桌面版把 Next.js 与本机 Node 运行时一起打包，安装后双击图标就能用，不需要另开浏览器或终端。
+
+**直接安装**
+
+1. 装好 Node.js 与 pnpm，并准备 Rust（stable）与 Visual Studio C++ 生成工具。
+2. 在仓库根目录运行 `pnpm install`，再运行 `pnpm desktop:build`。
+3. 安装包生成在 `src-tauri/target/release/bundle/nsis/`，文件名形如 `Chordnote_0.2.0_x64-setup.exe`。
+4. 双击安装，然后从开始菜单启动 Chordnote。
+
+首次启动时，应用会在本机 `127.0.0.1:3210` 拉起内置服务，并轮询 `/api/health`；30 秒内没通过就弹窗提示。**3210 端口被别的程序占用时无法启动**，先关掉占用者再试。Windows 10/11 一般已带 WebView2；缺失时安装程序会联网下载 bootstrapper。
+
+**开发模式**
+
+```bash
+pnpm desktop:dev   # Tauri 开发窗 + Next.js dev server（127.0.0.1:3210）
+```
+
+**数据、配置与退出**
+
+安装版的数据不在仓库的 `data/`，而在 `%LOCALAPPDATA%\Chordnote\`：知识库是 `db\`，模型配置是 `settings.json`，启动日志是 `logs\desktop.log`。网页版与桌面版的数据互不影响。
+
+AI 密钥在应用内「设置 → System」里填，保存在上面那个 `settings.json`；不需要改 `.env.local`。备份仍然是导出知识包，或直接拷走 `%LOCALAPPDATA%\Chordnote\db`。
+
 
 ## 当前边界与下一步
 
@@ -108,3 +132,5 @@ docs/         产品、数据、设计与开发文档
 ## 许可证
 
 本项目采用 [MIT License](LICENSE)。
+
+
