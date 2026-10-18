@@ -21,6 +21,7 @@ export const runtime = "nodejs";
 const CONTEXT_TYPES: AgentRunContextType[] = ["raw", "knowledge", "draft", "none"];
 
 type RequestBody = {
+  history?: unknown;
   question?: unknown;
   contextType?: unknown;
   contextId?: unknown;
@@ -58,9 +59,11 @@ export async function POST(request: Request) {
     return errorResponse("无法识别引用材料的类型，请重新选择。", 400, "INVALID_CONTEXT_TYPE");
   }
 
+  if (body.question.length > 20_000 || (body.history !== undefined && (!Array.isArray(body.history) || body.history.length > 12 || body.history.some(m=>!m || !["user","assistant"].includes(m.role) || typeof m.text !== "string" || m.text.length > 20_000)))) return errorResponse("对话内容过长或格式无效。",400,"INVALID_HISTORY");
   try {
     const trace = await runOrganizeAgent({
       question: body.question.trim(),
+      history: body.history as {role:"user"|"assistant";text:string}[] | undefined,
       signal: request.signal,
       contextType: body.contextType,
       contextId: typeof body.contextId === "string" ? body.contextId : null,
@@ -79,7 +82,7 @@ export async function POST(request: Request) {
     if (error instanceof ProviderError) {
       if (error.code === "CONFIG_MISSING") {
         return errorResponse(
-          "agent 尚未完成服务配置。你的内容仍然安全，请联系维护者。",
+          "agent 尚未完成服务配置。你的内容仍然安全，请打开设置配置模型。",
           503,
           "DEEPSEEK_CONFIG_MISSING",
         );

@@ -9,11 +9,16 @@ const eslintConfig = [
   ...compat.config({
     extends: ["next/core-web-vitals", "next/typescript"],
   }),
+  { files: ["scripts/**/*.cjs"], rules: { "@typescript-eslint/no-require-imports": "off" } },
 
   globalIgnores([
     ".next/**",
     "out/**",
     "build/**",
+    ".tmp/**",
+    ".desktop/**",
+    "src-tauri/gen/**",
+    "src-tauri/target/**",
     "next-env.d.ts",
   ]),
 ];

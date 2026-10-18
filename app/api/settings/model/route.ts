@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
+import { isAbsolute } from "node:path";
 
 import {
   PROVIDER_DEFAULTS,
@@ -60,7 +61,7 @@ export async function GET() {
   }
 }
 
-const PATCH_KEYS = ["provider", "model", "baseUrl", "timeoutMs", "apiKey"] as const;
+const PATCH_KEYS = ["provider", "model", "baseUrl", "timeoutMs", "apiKey", "category", "vendor", "agentBackend", "acp"] as const;
 const LOCKABLE: LockedField[] = ["provider", "model", "baseUrl", "timeoutMs", "apiKey"];
 
 type PatchBody = Record<string, unknown>;
@@ -91,6 +92,23 @@ export async function PATCH(request: Request) {
   }
 
   const patch: ModelSettingsPatch = {};
+  if (body.agentBackend !== undefined) {
+    if (body.agentBackend !== "api" && body.agentBackend !== "acp") return errorResponse("Agent 运行方式无效",400,"INVALID_BACKEND");
+    patch.agentBackend = body.agentBackend;
+  }
+  if (body.acp !== undefined) {
+    const acp = body.acp as ModelSettingsPatch["acp"];
+    if (!acp || typeof acp.command !== "string" || !isAbsolute(acp.command) || typeof acp.label !== "string" || acp.label.length > 100 || !Array.isArray(acp.args) || acp.args.length > 64 || acp.args.some(a=>typeof a !== "string" || a.length > 4000)) return errorResponse("ACP 需要可执行文件绝对路径和参数数组",400,"INVALID_ACP");
+    patch.acp = {label:acp.label,command:acp.command,args:acp.args};
+  }
+  if (body.category !== undefined) {
+    if (!["local","vendor","custom"].includes(String(body.category))) return errorResponse("配置分类无效",400,"INVALID_CATEGORY");
+    patch.category = body.category as "local"|"vendor"|"custom";
+  }
+  if (body.vendor !== undefined) {
+    if (typeof body.vendor !== "string" || body.vendor.length > 80) return errorResponse("厂商类型无效",400,"INVALID_VENDOR");
+    patch.vendor = body.vendor;
+  }
 
   if (body.provider !== undefined) {
     if (!isProviderId(body.provider)) {

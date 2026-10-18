@@ -164,3 +164,17 @@ test("设置文件路径可被 CHORDNOTE_SETTINGS_FILE 覆盖", () => {
     else process.env.CHORDNOTE_SETTINGS_FILE = previous;
   }
 });
+
+test("更换服务地址不会把旧厂商密钥发给新端点", async()=>{
+  const path=await tempSettingsPath();
+  await updateModelSettings({apiKey:"old-key"},path);
+  await updateModelSettings({baseUrl:"https://different.example/v1"},path);
+  assert.equal((await readModelSettings(path)).apiKey,null);
+});
+
+test("ACP 不要求 API 端点或父模型密钥，公开信息保留程序配置", async()=>{
+  const path=await tempSettingsPath();
+  const settings=await updateModelSettings({provider:"custom",agentBackend:"acp",acp:{label:"ACP",command:process.execPath,args:[]},baseUrl:"",model:"agent-default"},path);
+  assert.equal(settings.apiKey,null);
+  assert.equal(publicModelSettings(settings,[]).agentBackend,"acp");
+});

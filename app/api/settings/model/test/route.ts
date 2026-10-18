@@ -12,6 +12,7 @@ import {
   type ChatToolDefinition,
 } from "../../../../../lib/ai/provider";
 import { isLocalJsonRequest } from "../../../../../lib/api/local-request";
+import { runHarness } from "../../../../../lib/agent/runtime";
 
 export const runtime = "nodejs";
 
@@ -60,6 +61,11 @@ export async function POST(request: Request) {
     const file = await readModelSettings();
     const resolved = resolveModelSettings(file);
     settings = resolved.settings;
+    if(settings.agentBackend === "acp") {
+      let called=false;
+      const result=await runHarness({settings:{...settings,timeoutMs:Math.min(settings.timeoutMs,MAX_TEST_TIMEOUT_MS)},schema:"连接测试：调用 chordnote_probe，marker=chordnote，然后简短回答。",tools:[PROBE_TOOL],input:"请测试工具连接。",signal:request.signal,execute:async(name,args)=>{if(name!=="chordnote_probe"||args.marker!=="chordnote")throw Error("Invalid probe");called=true;return "ok";}});
+      return NextResponse.json({checks:[{id:"reachable",label:"ACP 协议连接",status:"ok",detail:result.runtime.provider},{id:"model",label:"模型",status:"ok",detail:result.runtime.model},{id:"chat",label:"Agent 对话",status:result.message?"ok":"failed",detail:result.message?"已返回回答":"没有文本回答"},{id:"tools",label:"笔记工具桥",status:called?"ok":"failed",detail:called?"MCP 调用通过":"Agent 未调用测试工具"}]});
+    }
     provider = createChatProvider({
       ...toProviderConfig(settings),
       // 连接测试要有人等得住的上限；本地小模型首次加载可能慢，给到 60 秒。

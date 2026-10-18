@@ -1,0 +1,33 @@
+"use client";
+import { useEffect, useState } from "react";
+const VENDORS = {
+  deepseek:{name:"DeepSeek",endpoint:"https://api.deepseek.com",model:"deepseek-chat"},
+  qwen:{name:"通义千问",endpoint:"https://dashscope.aliyuncs.com/compatible-mode/v1",model:"qwen-plus"},
+  glm:{name:"智谱 GLM",endpoint:"https://open.bigmodel.cn/api/paas/v4",model:"glm-4.5"},
+  moonshot:{name:"Moonshot",endpoint:"https://api.moonshot.cn/v1",model:"moonshot-v1-8k"},
+  siliconflow:{name:"硅基流动",endpoint:"https://api.siliconflow.cn/v1",model:"deepseek-ai/DeepSeek-V3"},
+};
+type Category="local"|"vendor"|"custom";
+export function ModelPanel() {
+  const [backend,setBackend]=useState<"api"|"acp">("api");
+  const [acpLabel,setAcpLabel]=useState("外部 Agent"),[command,setCommand]=useState(""),[args,setArgs]=useState("[]");
+  const [category,setCategory]=useState<Category>("vendor"),[vendor,setVendor]=useState<keyof typeof VENDORS>("deepseek");
+  const [endpoint,setEndpoint]=useState(""),[model,setModel]=useState(""),[key,setKey]=useState(""),[configured,setConfigured]=useState(false),[timeout,setTimeoutValue]=useState(120000),[locked,setLocked]=useState<string[]>([]),[status,setStatus]=useState(""),[models,setModels]=useState<string[]>([]),[busy,setBusy]=useState(false);
+  useEffect(()=>{void fetch("/api/settings/model").then(r=>r.json()).then(p=>{if(!p.settings)return;const s=p.settings;setBackend(s.agentBackend??"api");if(s.acp){setAcpLabel(s.acp.label);setCommand(s.acp.command);setArgs(JSON.stringify(s.acp.args));}setCategory(s.category??(s.provider==="ollama"?"local":s.provider==="deepseek"?"vendor":"custom"));if(s.vendor in VENDORS)setVendor(s.vendor);setEndpoint(s.baseUrl);setModel(s.model);setTimeoutValue(s.timeoutMs);setConfigured(s.apiKeyConfigured);setLocked(s.locked);}).catch(()=>setStatus("模型设置读取失败"));},[]);
+  function choose(next:Category){setBackend("api");setCategory(next);setModels([]);setKey("");if(next==="local"){setEndpoint("http://127.0.0.1:11434/v1");setModel("qwen3:4b");}else if(next==="vendor"){setEndpoint(VENDORS[vendor].endpoint);setModel(VENDORS[vendor].model);}}
+  async function save(){const patch:Record<string,unknown>={category,vendor,agentBackend:backend};if(backend==="acp"){const parsed=JSON.parse(args);if(!Array.isArray(parsed)||parsed.some(a=>typeof a!=="string"))throw new Error("参数必须是 JSON 字符串数组");patch.acp={label:acpLabel,command,args:parsed};}const provider=category==="local"?"ollama":category==="vendor"&&vendor==="deepseek"?"deepseek":"custom";
+    for(const [name,value] of Object.entries({provider,baseUrl:endpoint,model:backend==="acp"?(model||"agent-default"):(model||"pending-selection"),timeoutMs:timeout,...(key?{apiKey:key}:{})}))if(!locked.includes(name))patch[name]=value;
+    const r=await fetch("/api/settings/model",{method:"PATCH",headers:{"content-type":"application/json"},body:JSON.stringify(patch)});const p=await r.json();if(!r.ok)throw new Error(p.error?.message??"保存失败");setConfigured(p.settings.apiKeyConfigured);setKey("");window.dispatchEvent(new Event("chordnote-model-changed"));}
+  async function run(action:"save"|"models"|"test"){setBusy(true);try{await save();if(action==="models"){const r=await fetch("/api/settings/model/models");const p=await r.json();if(!r.ok)throw new Error(p.error?.message);setModels(p.models);setStatus(`已获取 ${p.models.length} 个模型，在 Agent 输入框中选择。`);}else if(action==="test"){const r=await fetch("/api/settings/model/test",{method:"POST",headers:{"content-type":"application/json"},body:"{}"});const p=await r.json();if(!r.ok)throw new Error(p.error?.message);setStatus(p.checks.map((c:{label:string;status:string;detail:string})=>`${c.label}：${c.status} ${c.detail}`).join("\n"));}else setStatus("已保存");}catch(e){setStatus(e instanceof Error?e.message:"操作失败");}finally{setBusy(false);}}
+  return <section className="model-settings"><h1>模型提供与服务</h1><div className="model-categories" role="tablist">{([["local","本地模型"],["vendor","模型厂商"],["custom","自定义模型"]] as const).map(([id,label])=><button key={id} role="tab" aria-selected={category===id} disabled={locked.includes("provider")} onClick={()=>choose(id)}>{label}</button>)}</div>
+    {category==="vendor"?<label>厂商类型<select value={vendor} disabled={locked.includes("provider")} onChange={e=>{const next=e.target.value as keyof typeof VENDORS;setVendor(next);setEndpoint(VENDORS[next].endpoint);setModel(VENDORS[next].model);setModels([]);setKey("");}}>{Object.entries(VENDORS).map(([id,v])=><option key={id} value={id}>{v.name}</option>)}</select></label>:null}
+    {category==="custom"?<label>Agent 接入<select aria-label="Agent 接入" value={backend} disabled={locked.includes("provider")} onChange={e=>{setBackend(e.target.value as "api"|"acp");setModel(e.target.value==="acp"?"agent-default":"");}}><option value="api">兼容模型 API</option><option value="acp">ACP 外部 Agent</option></select></label>:null}
+    {backend==="acp"?<><label>Agent 名称<input value={acpLabel} onChange={e=>setAcpLabel(e.target.value)}/></label><label>ACP 程序绝对路径<input value={command} onChange={e=>setCommand(e.target.value)} spellCheck={false}/></label><label>参数（JSON 数组）<textarea value={args} onChange={e=>setArgs(e.target.value)}/></label><p>使用兼容 ACP 的 Codex / Claude Code 桥接程序。程序由用户安装并登录；笔记工具只允许读取和提出待确认建议，额外权限请求拒绝。外部程序自身的本机权限由其配置决定。</p></>:null}
+    {backend==="api"?<><label>{category==="local"?"本地推理端点":"Endpoint"}<input value={endpoint} disabled={locked.includes("baseUrl")} onChange={e=>setEndpoint(e.target.value)} spellCheck={false}/></label>
+    <label>API Key<input type="password" autoComplete="off" value={key} disabled={locked.includes("apiKey")} placeholder={configured?"已配置，留空保持":"输入 API Key"} onChange={e=>setKey(e.target.value)}/></label></>:null}
+    {category==="custom"?<label>Model ID<input value={model} disabled={locked.includes("model")} onChange={e=>setModel(e.target.value)}/></label>:null}
+    <label>请求超时（毫秒）<input type="number" value={timeout} min={1000} max={600000} disabled={locked.includes("timeoutMs")} onChange={e=>setTimeoutValue(Number(e.target.value))}/></label>
+    <div className="review-actions"><button disabled={busy} onClick={()=>void run("save")}>保存</button><button disabled={busy||backend==="acp"} onClick={()=>void run("models")}>获取模型</button><button disabled={busy} onClick={()=>void run("test")}>测试连接</button><button disabled={busy||locked.includes("apiKey")} onClick={async()=>{const r=await fetch("/api/settings/model",{method:"PATCH",headers:{"content-type":"application/json"},body:JSON.stringify({apiKey:null})});if(r.ok){setConfigured(false);setStatus("密钥已清除");}}}>清除密钥</button></div>
+    {models.length?<ul>{models.map(id=><li key={id}>{id}</li>)}</ul>:null}<p role="status" style={{whiteSpace:"pre-wrap"}}>{status}</p>
+  </section>;
+}

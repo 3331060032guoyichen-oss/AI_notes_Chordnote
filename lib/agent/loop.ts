@@ -1,6 +1,7 @@
 import { readModelSettings, resolveModelSettings } from "../ai/config";
 import type { ChatToolCall } from "../ai/provider";
 import { runHarness } from "./runtime";
+import { parseOrganizeDraft } from "../ai/tasks";
 import { createProposal } from "../services/proposals";
 import { getNote, listNotes } from "../services/notes";
 import { getSource } from "../services/sources";
@@ -35,6 +36,7 @@ export type AgentRunContextType = "raw" | "knowledge" | "draft" | "none";
 export type AgentRunInput = {
   /** 用户那句话，例如「把这道错题整理进知识库」。 */
   question: string;
+  history?: {role:"user"|"assistant";text:string}[];
   signal?: AbortSignal;
   contextType: AgentRunContextType;
   contextId?: string | null;
@@ -157,6 +159,7 @@ function parseArguments(raw: string): Record<string, unknown> | null {
 }
 
 type ToolOutcome = {
+  draft?: AgentRunTrace["draft"];
   /** 记进轨迹的步骤。为 null 表示这一步不单独展示（例如重复的 manual_load）。 */
   step: AgentStep | null;
   /** 回传给模型的工具结果，永远是一段文本。 */
@@ -234,6 +237,15 @@ async function executeTool(
     };
   }
 
+  if (toolName === "draft_knowledge") {
+    const raw = await getSource(asString(args.rawId) ?? "");
+    if (!raw || raw.archivedAt) return { step:null, toolResult:"原始记录不存在或已归档。" };
+    try {
+      const value = parseOrganizeDraft(String(args.draftJson ?? ""));
+      if (value.content.length > 200_000 || value.title.length > 120) throw new Error("草稿过长");
+      return { draft:{rawId:raw.id,value}, step:recorder.next({tool:toolName,label:spec.label,kind:"gate",status:"pending",detail:value.title,proposalId:null,payload:{rawId:raw.id}}),toolResult:"草稿已交给用户审阅；尚未创建知识页。" };
+    } catch { return { step:null,toolResult:"草稿格式无效，请按 OrganizeDraft 字段重新提交。" }; }
+  }
   if (toolName === "read_raw") {
     const raw = await getSource(asString(args.id) ?? "");
     return { step: recorder.next({ tool: toolName, label: spec.label, kind: "auto", status: raw ? "done" : "failed", detail: raw?.title ?? "原始记录", proposalId: null, payload: { id: args.id } }), toolResult: JSON.stringify(raw ?? { error: "NOT_FOUND" }) };
@@ -486,14 +498,16 @@ export async function runOrganizeAgent(input: AgentRunInput): Promise<AgentRunTr
   ];
 
   const settings = resolveModelSettings(await readModelSettings()).settings;
+  let draft: AgentRunTrace["draft"];
   const result = await runHarness({ settings, schema: AGENT_INSTRUCTION,
     tools: toChatToolDefinitions(), signal: input.signal,
-    input: JSON.stringify({ request: input.question, material, contextId: input.contextId, materialIsData: true }),
+    input: JSON.stringify({ request: input.question, conversationHistory:input.history??[], material, contextId: input.contextId, materialIsData: true }),
     execute: async (name, args) => {
       const outcome = await executeTool({ id: crypto.randomUUID(), type: "function", function: {
         name, arguments: JSON.stringify(args),
       } }, { input, recorder });
       if (outcome.step) steps.push(outcome.step);
+      if (outcome.draft) draft = outcome.draft;
       return outcome.toolResult;
     },
   });
@@ -532,5 +546,6 @@ export async function runOrganizeAgent(input: AgentRunInput): Promise<AgentRunTr
     },
     message: reply,
     runtime: result.runtime,
+    ...(draft ? { draft } : {}),
   };
 }

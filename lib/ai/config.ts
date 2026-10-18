@@ -8,7 +8,7 @@
  */
 
 import { chmod, mkdir, readFile, rename, writeFile } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { dirname, resolve, isAbsolute } from "node:path";
 
 import { ProviderError, type ChatProviderConfig, type ProviderId } from "./provider";
 
@@ -40,6 +40,10 @@ export const PROVIDER_DEFAULTS: Record<ProviderId, ModelSettings> = {
 };
 
 export type ModelSettings = {
+  agentBackend?: "api" | "acp";
+  acp?: { label: string; command: string; args: string[] };
+  category?: "local" | "vendor" | "custom";
+  vendor?: string;
   provider: ProviderId;
   model: string;
   baseUrl: string;
@@ -57,6 +61,10 @@ export type ResolvedModelSettings = {
 };
 
 export type ModelSettingsPatch = {
+  agentBackend?: "api" | "acp";
+  acp?: { label: string; command: string; args: string[] };
+  category?: "local" | "vendor" | "custom";
+  vendor?: string;
   provider?: ProviderId;
   model?: string;
   baseUrl?: string;
@@ -89,6 +97,11 @@ function assertValidSettled(settings: ModelSettings): ModelSettings {
     throw new ProviderError("CONFIG_INVALID", "模型名不能为空。");
   }
 
+  if(settings.agentBackend === "acp") {
+    if(!settings.acp || !isAbsolute(settings.acp.command) || !Array.isArray(settings.acp.args) || settings.acp.args.some(a=>typeof a!=="string")) throw new ProviderError("CONFIG_INVALID","ACP 需要程序绝对路径与参数数组。");
+    if(!Number.isFinite(settings.timeoutMs)||settings.timeoutMs<MIN_TIMEOUT_MS||settings.timeoutMs>MAX_TIMEOUT_MS)throw new ProviderError("CONFIG_INVALID","请求超时时间无效。");
+    return {...settings,model:settings.model.trim()};
+  }
   let parsed: URL;
 
   try {
@@ -154,6 +167,10 @@ export async function readModelSettings(path = defaultSettingsPath()): Promise<M
 
   return {
     provider,
+    ...(parsed.agentBackend === "acp" || parsed.agentBackend === "api" ? {agentBackend:parsed.agentBackend} : {}),
+    ...(isRecord(parsed.acp) && typeof parsed.acp.command === "string" && typeof parsed.acp.label === "string" && Array.isArray(parsed.acp.args) && parsed.acp.args.every(a=>typeof a === "string") ? {acp:parsed.acp as ModelSettings["acp"]} : {}),
+    ...(parsed.category === "local" || parsed.category === "vendor" || parsed.category === "custom" ? { category: parsed.category } : {}),
+    ...(typeof parsed.vendor === "string" ? { vendor: parsed.vendor } : {}),
     model: typeof parsed.model === "string" && parsed.model.trim() ? parsed.model : defaults.model,
     baseUrl:
       typeof parsed.baseUrl === "string" && parsed.baseUrl.trim() ? parsed.baseUrl : defaults.baseUrl,
@@ -230,6 +247,10 @@ export function publicModelSettings(
 ): Omit<ModelSettings, "apiKey"> & { apiKeyConfigured: boolean; locked: LockedField[] } {
   return {
     provider: settings.provider,
+    ...(settings.agentBackend ? {agentBackend:settings.agentBackend} : {}),
+    ...(settings.acp ? {acp:settings.acp} : {}),
+    ...(settings.category ? { category: settings.category } : {}),
+    ...(settings.vendor ? { vendor: settings.vendor } : {}),
     model: settings.model,
     baseUrl: settings.baseUrl,
     timeoutMs: settings.timeoutMs,
@@ -261,6 +282,10 @@ export async function updateModelSettings(
 ): Promise<ModelSettings> {
   const current = await readModelSettings(path);
   const next: ModelSettings = { ...current };
+  if (patch.agentBackend !== undefined) next.agentBackend = patch.agentBackend;
+  if (patch.acp !== undefined) next.acp = patch.acp;
+  if (patch.category !== undefined) next.category = patch.category;
+  if (patch.vendor !== undefined) next.vendor = patch.vendor;
 
   if (patch.provider !== undefined) {
     if (!isProviderId(patch.provider)) {
@@ -280,6 +305,7 @@ export async function updateModelSettings(
   if (patch.model !== undefined) next.model = patch.model;
   if (patch.baseUrl !== undefined) next.baseUrl = patch.baseUrl;
   if (patch.timeoutMs !== undefined) next.timeoutMs = patch.timeoutMs;
+  if ((next.provider !== current.provider || normalizeUrl(next.baseUrl) !== normalizeUrl(current.baseUrl)) && !patch.apiKey?.trim()) next.apiKey = null;
 
   if (patch.apiKey === null) {
     next.apiKey = null;

@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { runHarness } from "./runtime";
+import { resolve } from "node:path";
 
 test("real dsh subprocess performs multiple model/tool turns with a restricted registry", { timeout: 90_000 }, async () => {
   let requests = 0;
@@ -24,10 +25,17 @@ test("real dsh subprocess performs multiple model/tool turns with a restricted r
   await new Promise<void>(ok => mock.listen(0, "127.0.0.1", ok));
   try {
     const result = await runHarness({ settings: { provider: "ollama", model: "test-model", baseUrl: `http://127.0.0.1:${(mock.address() as {port:number}).port}/v1`, timeoutMs: 45_000, apiKey: null },
-      schema: "Use runtime_info then answer.", input: "What model is running?", tools: [{ type: "function", function: { name: "runtime_info", description: "Current runtime", parameters: { type: "object", properties: {}, required: [] } } }],
+      onDiagnostic:console.error, schema: "Use runtime_info then answer.", input: "What model is running?", tools: [{ type: "function", function: { name: "runtime_info", description: "Current runtime", parameters: { type: "object", properties: {}, required: [] } } }],
       execute: async () => { throw new Error("runtime_info must use trusted metadata"); } });
     assert.equal(result.message, "runtime verified");
     assert.equal(result.runtime.model, "test-model");
     assert.ok(requests >= 2);
   } finally { mock.closeAllConnections(); await new Promise<void>(ok => mock.close(() => ok())); }
+});
+
+test("dsh delegates to a real ACP connection with the same MCP tool boundary and no parent API", {timeout:90_000}, async()=>{
+  const result=await runHarness({settings:{provider:"custom",agentBackend:"acp",acp:{label:"fixture",command:process.execPath,args:[resolve("lib/agent/fixtures/mock-acp.mjs")]},model:"agent-default",baseUrl:"http://127.0.0.1:9",apiKey:null,timeoutMs:45_000},schema:"Read runtime_info using the provided MCP tools.",input:"Verify ACP",tools:[{type:"function",function:{name:"runtime_info",description:"Runtime",parameters:{type:"object",properties:{},required:[]}}}],execute:async()=>{throw Error("Not permitted");}});
+  assert.equal(result.message,"acp verified");
+  assert.equal(result.runtime.provider,"acp:mock-acp");
+  assert.equal(result.runtime.model,"mock-acp-model");
 });
