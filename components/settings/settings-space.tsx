@@ -3,12 +3,13 @@
 import { useEffect, useState } from "react";
 
 import { AGENT_MANUAL, MANUAL_VERSION } from "../../lib/agent/manual";
+import type { Knowledge } from "../../types/knowledge";
 import { useInterfaceSound } from "../interface-sound";
 import type { SettingsSection } from "./sections";
 
 /**
- * Settings 空间。外层不再是抽屉：主工作区直接渲染当前入口的内容。
- * 六个入口的能力状态见 `sections.ts`；未实现的能力只显示空态，不伪造记录。
+ * 设置窗口的内容区。外层窗口与分类导航由 `settings-dialog.tsx` 提供。
+ * 八个入口的能力状态见 `sections.ts`；未实现的能力只显示空态，不伪造记录。
  */
 
 export type Studio = "darkroom" | "editorial" | "tactile";
@@ -96,7 +97,18 @@ function SectionHeader({ title, body }: { title: string; body: string }) {
   );
 }
 
-export function SettingsSpace({ section }: { section: SettingsSection }) {
+type SettingsSpaceProps = {
+  section: SettingsSection;
+  archivedNotes: Knowledge[];
+  onRestoreNote: (note: Knowledge) => void;
+};
+
+function formatArchiveDate(value?: string | null) {
+  if (!value) return "归档时间未记录";
+  return new Intl.DateTimeFormat("zh-CN", { year: "numeric", month: "short", day: "numeric" }).format(new Date(value));
+}
+
+export function SettingsSpace({ section, archivedNotes, onRestoreNote }: SettingsSpaceProps) {
   const { enabled: soundEnabled, preference: soundPreference, toggle: toggleSound } = useInterfaceSound();
   const [bundleNote, setBundleNote] = useState("");
   const [studio, setStudio] = useState<Studio>("darkroom");
@@ -359,9 +371,36 @@ export function SettingsSpace({ section }: { section: SettingsSection }) {
         </>
       ) : null}
 
-      {section === "settings" ? (
+      {section === "archive" ? (
         <>
-          <SectionHeader title="API、数据与系统" body="密钥、知识包与本地存储说明。密钥只保存在服务端，不会回到浏览器。" />
+          <SectionHeader title="归档" body="这里保存已经从日常知识列表中收起的知识页。恢复后，它会重新回到 Knowledge。" />
+          <section className="content-section settings-panel-body">
+            {archivedNotes.length > 0 ? (
+              <div className="archive-list">
+                {archivedNotes.map((note) => (
+                  <article className="archive-row" key={note.id}>
+                    <div className="archive-row-copy">
+                      <strong>{note.title}</strong>
+                      <p>{note.summary || "这篇知识页没有摘要。"}</p>
+                      <small>{formatArchiveDate(note.archivedAt)}</small>
+                    </div>
+                    <button className="button-secondary" type="button" data-sound="press" onClick={() => onRestoreNote(note)}>恢复</button>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <div className="settings-empty">
+                <b>归档里没有内容</b>
+                <p>在 Knowledge 中归档的知识页会出现在这里，并可以随时恢复。</p>
+              </div>
+            )}
+          </section>
+        </>
+      ) : null}
+
+      {section === "system" ? (
+        <>
+          <SectionHeader title="System" body="管理 API 密钥并检查当前模型连接。密钥只保存在服务端，不会回到浏览器。" />
           <section className="content-section settings-panel-body">
             <div className="settings-section">
               <div className="settings-section-title">API Key</div>
@@ -463,6 +502,14 @@ export function SettingsSpace({ section }: { section: SettingsSection }) {
               ) : null}
             </div>
 
+          </section>
+        </>
+      ) : null}
+
+      {section === "data" ? (
+        <>
+          <SectionHeader title="Data" body="导入、导出和了解 Chordnote 的本地数据保存位置。" />
+          <section className="content-section settings-panel-body">
             <div className="settings-section">
               <div className="settings-section-title">知识包</div>
               <p className="settings-hint">

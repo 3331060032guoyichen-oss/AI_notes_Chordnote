@@ -4852,6 +4852,193 @@ input::placeholder {
   border-color: var(--line);
 }
 
+.sidebar-settings-btn.is-active {
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+
+/* 设置是覆盖在工作区上的桌面窗口，关闭后保留原来的空间与标签。 */
+.settings-window-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: grid;
+  place-items: center;
+  padding: 32px;
+  background: rgb(2 6 23 / 68%);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  animation: settings-fade 160ms ease;
+}
+
+.settings-window {
+  display: flex;
+  width: min(1040px, calc(100vw - 64px));
+  height: min(760px, calc(100dvh - 64px));
+  min-height: 520px;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-panel);
+  background: var(--surface);
+  box-shadow: 0 26px 90px rgb(0 0 0 / 38%);
+  animation: settings-window-in 180ms cubic-bezier(.22, 1, .36, 1);
+}
+
+@keyframes settings-window-in {
+  from { opacity: 0; transform: translateY(12px) scale(.985); }
+  to { opacity: 1; transform: none; }
+}
+
+.settings-window:focus { outline: none; }
+
+.settings-window-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 74px;
+  padding: 16px 20px 15px 24px;
+  border-bottom: 1px solid var(--line);
+}
+
+.settings-window-head p {
+  margin: 0 0 3px;
+  color: var(--quiet);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .16em;
+}
+
+.settings-window-head h2 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 20px;
+  letter-spacing: -.02em;
+}
+
+.settings-window-layout {
+  display: grid;
+  min-height: 0;
+  flex: 1;
+  grid-template-columns: 244px minmax(0, 1fr);
+}
+
+.settings-window-nav {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 22px 14px;
+  border-right: 1px solid var(--line);
+  background: var(--surface-raised);
+}
+
+.settings-nav-groups {
+  display: grid;
+  gap: 24px;
+}
+
+.settings-nav-group {
+  display: grid;
+  gap: 3px;
+}
+
+.settings-nav-group h3 {
+  margin: 0 10px 7px;
+  color: var(--quiet);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.settings-window-nav .tree-tool-item {
+  width: 100%;
+  min-height: 52px;
+  padding: 8px 10px;
+  font-size: 13px;
+}
+
+.settings-window-nav .space-nav-label small {
+  margin-top: 2px;
+  font-size: 10px;
+}
+
+.settings-window-content {
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 32px 40px 44px;
+}
+
+.settings-window-content .settings-space {
+  width: 100%;
+  max-width: 760px;
+}
+
+.settings-window-content .workspace-heading {
+  margin-bottom: 22px;
+}
+
+.settings-window-content .workspace-heading .eyebrow {
+  display: none;
+}
+
+.settings-window-content .compact-heading h1 {
+  font-size: clamp(28px, 4vw, 38px);
+}
+
+@media (max-width: 760px) {
+  .settings-window-backdrop { padding: 0; }
+
+  .settings-window {
+    width: 100vw;
+    height: 100dvh;
+    min-height: 0;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .settings-window-layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .settings-window-nav {
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 10px 14px;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .settings-nav-groups {
+    display: flex;
+    width: max-content;
+    gap: 16px;
+  }
+
+  .settings-nav-group {
+    display: flex;
+    gap: 4px;
+  }
+
+  .settings-nav-group h3,
+  .settings-window-nav .space-nav-label small,
+  .settings-window-nav .space-nav-tag {
+    display: none;
+  }
+
+  .settings-window-nav .tree-tool-item {
+    width: auto;
+    min-height: 38px;
+    white-space: nowrap;
+  }
+
+  .settings-window-content {
+    padding: 24px 18px 36px;
+  }
+}
+
 .settings-backdrop {
   position: fixed;
   inset: 0;
@@ -5816,7 +6003,7 @@ input::placeholder {
 /* ------------------------------------------------------------
    空间外壳（2026-10-18）
 
-   Home / Settings 不保留检查器：右栏列宽归零，图标条也不出现。
+   没有上下文检查器的空间：右栏列宽归零，图标条也不出现。
    旧的 `.primary-nav / .nav-item / .nav-label` 曾是无引用样式，现在
    由一级导航重新使用。
    ------------------------------------------------------------ */
@@ -5856,6 +6043,57 @@ input::placeholder {
 
 .settings-empty b { color: var(--ink); font-size: 14px; }
 .settings-empty p { margin: 0; color: var(--quiet); font-size: 12px; line-height: 1.7; }
+
+.archive-list {
+  display: grid;
+  gap: 10px;
+}
+
+.archive-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 18px;
+  align-items: center;
+  padding: 15px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+  background: var(--surface-raised);
+}
+
+.archive-row-copy {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+}
+
+.archive-row-copy strong {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.archive-row-copy p {
+  display: -webkit-box;
+  overflow: hidden;
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.archive-row-copy small {
+  color: var(--quiet);
+  font-size: 10px;
+}
+
+@media (max-width: 560px) {
+  .archive-row { grid-template-columns: 1fr; }
+  .archive-row .button-secondary { justify-self: start; }
+}
 
 /* Settings 二级导航 */
 .space-nav-item {
@@ -5922,4 +6160,146 @@ input::placeholder {
 
 @media (max-width: 760px) {
   .home-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* ============================================================
+   阅读面 · 知识页 / 原始记录（2026-10-18）
+
+   只改"读"与"改"这两件事的手感，不动卡片的位置、内边距、圆角与边框宽度。
+   四个决定：
+     1. 标题与正文共享一条左边线 —— 标题缩进到卡片的文字起点，读起来是一篇文档，
+        不是"一张大卡片上面浮着一个大标题"；
+     2. 正文回到 16px / 1.85（原 14px / 1.9）—— 中文长时间阅读时 14px 偏小，
+        行高已够，补的是字号；摘要作为导语升到 17px；
+     3. 整块紫色悬停底（像被选中）换成 4% 的墨色底 —— 正文首先得读得下去，
+        编辑入口靠光标形状与标题下方那句"点击正文即可编辑"提示；
+     4. 编辑框与正文同字号、同左边线 —— 进入编辑时文字不跳位置。
+   底部三段（出处 / 交叉引用 / 概念）从"一块块紫色面板"退回成细线分栏，
+   把视觉重量还给正文。
+   ============================================================ */
+
+@media (min-width: 761px) {
+  .reading-head { padding: 0 24px; }
+}
+
+@media (max-width: 760px) {
+  .reading-head { padding: 0 19px; }
+}
+
+.reading-head { margin-bottom: 22px; }
+
+.reading-head h1,
+.reading-head .title-edit-input {
+  font-size: clamp(30px, 3.4vw, 40px);
+  letter-spacing: -0.035em;
+  line-height: 1.12;
+}
+
+/* 修订时间与"可编辑"提示：安静地待在标题下面，不和导语抢。 */
+.workspace-heading p.reading-meta {
+  max-width: 700px;
+  margin-top: 8px;
+  color: var(--quiet);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.reading-summary {
+  max-width: 700px;
+  margin: 0 0 20px;
+  color: var(--muted);
+  font-size: 17px;
+  letter-spacing: -0.005em;
+  line-height: 1.75;
+}
+
+.reading-content {
+  max-width: 700px;
+  font-size: 16px;
+  line-height: 1.85;
+}
+
+/* 悬停只留一点点底色：整块紫底会让正文看起来像被选中了。 */
+.editable-field {
+  border-radius: 6px;
+}
+
+.editable-field:hover {
+  background: color-mix(in srgb, var(--ink) 4%, transparent);
+}
+
+/* 编辑态与阅读态同一套字：字号、行高、左边缘都对齐，进入编辑时文字不跳。 */
+.inline-edit-field {
+  padding: 4px 0;
+  font-size: 16px;
+  line-height: 1.85;
+}
+
+.source-reference,
+.backlink-section {
+  gap: 8px;
+  max-width: 700px;
+  margin-top: 26px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.source-reference strong {
+  color: var(--muted);
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.7;
+}
+
+.backlink-section .section-heading-inline h3 {
+  color: var(--muted);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+}
+
+/* 交叉引用：一条一条的细线列表，不再是一排紫色块。 */
+.relation-list {
+  gap: 0;
+}
+
+.relation-row {
+  padding: 9px 0;
+  border-left: 0;
+  background: transparent;
+}
+
+.relation-row + .relation-row {
+  border-top: 1px solid var(--line);
+}
+
+.relation-row .text-button {
+  justify-self: start;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.relation-row .text-button:hover {
+  color: var(--accent-strong);
+}
+
+.relation-row small {
+  color: var(--quiet);
+  font-size: 11px;
+}
+
+.tag {
+  padding: 4px 9px;
+  font-size: 11px;
+}
+
+/* 编辑框与正文同宽：光标换行位置不随编辑态改变。 */
+.inline-edit-field {
+  max-width: 700px;
+  box-sizing: border-box;
+}
+
+/* 按钮默认整行拉伸，标签会居中；出处链接应和正文一样靠左。 */
+.source-reference .text-button {
+  justify-self: start;
 }

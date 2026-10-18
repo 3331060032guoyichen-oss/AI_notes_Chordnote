@@ -5,13 +5,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { AgentNav } from "../components/agent/agent-nav";
 import { GraphView } from "../components/graph-view";
-import { HomeSpace } from "../components/home/home-space";
+import { RawTree } from "../components/home/raw-tree";
 import { useInterfaceSound } from "../components/interface-sound";
 import { KnowledgeTree } from "../components/knowledge/knowledge-tree";
 import { LandingPage } from "../components/landing-page";
-import { SETTINGS_SECTIONS, type SettingsSection } from "../components/settings/sections";
-import { SettingsNav } from "../components/settings/settings-nav";
-import { SettingsSpace } from "../components/settings/settings-space";
+import type { SettingsSection } from "../components/settings/sections";
+import { SettingsDialog } from "../components/settings/settings-dialog";
 import { AppShell } from "../components/shell/app-shell";
 import { InspectorHost } from "../components/shell/inspector-host";
 import { PrimaryNav } from "../components/shell/primary-nav";
@@ -49,7 +48,7 @@ const MAX_RAW_TITLE_LENGTH = 120;
  */
 const AUTO_SAVE_DELAY_MS = 2_000;
 
-type ViewKey = "new-note" | "graph" | "agent";
+type ViewKey = "new-note" | "knowledge-index" | "agent";
 
 type GraphData = { nodes: GraphNode[]; edges: GraphEdge[] };
 type KnowledgeListPayload = { knowledges?: Knowledge[] };
@@ -65,7 +64,7 @@ type Tab =
 
 const viewMeta: Record<ViewKey, { label: string; shortLabel: string }> = {
   "new-note": { label: "新建笔记", shortLabel: "新建" },
-  graph: { label: "知识网络", shortLabel: "网络" },
+  "knowledge-index": { label: "知识页", shortLabel: "知识" },
   agent: { label: "Agent 调用", shortLabel: "Agent" },
 };
 
@@ -80,6 +79,21 @@ const viewMeta: Record<ViewKey, { label: string; shortLabel: string }> = {
 const AGENT_INTENT = /整理|收录|归档|存档|留档|建立关联|建个关联|理一遍|梳理/;
 
 const NEW_NOTE_TAB: Tab = { id: "view:new-note", kind: "view", viewKey: "new-note", label: "新建笔记" };
+const KNOWLEDGE_INDEX_TAB: Tab = { id: "view:knowledge-index", kind: "view", viewKey: "knowledge-index", label: "知识页" };
+
+type ContentSpace = "home" | "knowledge";
+
+function tabSpace(tab: Tab): ContentSpace | null {
+  if (tab.kind === "raw" || tab.kind === "draft") return "home";
+  if (tab.kind === "knowledge") return "knowledge";
+  if (tab.kind === "view" && tab.viewKey === "new-note") return "home";
+  if (tab.kind === "view" && tab.viewKey === "knowledge-index") return "knowledge";
+  return null;
+}
+
+function defaultTab(space: ContentSpace): Tab {
+  return space === "home" ? NEW_NOTE_TAB : KNOWLEDGE_INDEX_TAB;
+}
 
 function linesToArray(value: string) {
   return value.split("\n").map((line) => line.trim()).filter(Boolean);
@@ -157,7 +171,8 @@ export default function Home() {
   const [entered, setEntered] = useState<boolean | null>(null);
   const [activeSpace, setActiveSpace] = useState<Space>("home");
   const [settingsSection, setSettingsSection] = useState<SettingsSection>("models");
-  const [openTabs, setOpenTabs] = useState<Tab[]>([NEW_NOTE_TAB]);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [openTabs, setOpenTabs] = useState<Tab[]>([NEW_NOTE_TAB, KNOWLEDGE_INDEX_TAB]);
   const [activeTabId, setActiveTabId] = useState(NEW_NOTE_TAB.id);
   const [text, setText] = useState("");
   const [noteTitle, setNoteTitle] = useState("");
@@ -185,7 +200,6 @@ export default function Home() {
   const [mentionTarget, setMentionTarget] = useState<MentionItem | null>(null);
   const [notesExpanded, setNotesExpanded] = useState(true);
   const [rawsExpanded, setRawsExpanded] = useState(true);
-  const [archivedExpanded, setArchivedExpanded] = useState(true);
   const [, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isSavingRaw, setIsSavingRaw] = useState(false);
@@ -208,13 +222,11 @@ export default function Home() {
    * 一个布尔量表达不了。顶栏与底部导航那颗「上下文」按钮同时翻转两者，
    * 于是两个断点下都是"按一下开、再按一下关"。
    *
-   * 进来时**收起**（右栏是"我现在关心入链/出链/编辑助理"时才要的东西），
-   * 想看就点顶栏那颗「上下文」。
+   * 初始为收起：Home 的新建页不显示右栏，打开原始记录时再展开整理助手。
+   * 进入 Knowledge / Agent 时默认展开（见 openSpace / openTab），
+   * 之后由顶栏那颗「上下文」或右栏的 × 决定开合，切换标签不重置。
    */
   const [railHidden, setRailHidden] = useState(true);
-  /** 待确认提议数量，Home 的只读摘要用。 */
-  const [pendingProposals, setPendingProposals] = useState(0);
-  const [pendingProposalsMore, setPendingProposalsMore] = useState(false);
   const [graphParams, setGraphParams] = useState({
     nodeSize: 1.0,
     lineWidth: 1.0,
@@ -354,31 +366,6 @@ export default function Home() {
         if (active) setArchivedNotes(payload.knowledges ?? []);
       } catch {
         if (active) setArchivedNotes([]);
-      }
-    })();
-
-    return () => {
-      active = false;
-    };
-  }, [listRefresh]);
-
-  /** 待确认提议数量：只读，Home 用。 */
-  useEffect(() => {
-    let active = true;
-
-    void (async () => {
-      try {
-        const response = await fetch("/api/proposals?status=pending&limit=100");
-        const payload = (await response.json()) as { proposals?: unknown[]; nextCursor?: string | null };
-        if (active) {
-          setPendingProposals(response.ok ? (payload.proposals?.length ?? 0) : 0);
-          setPendingProposalsMore(response.ok && Boolean(payload.nextCursor));
-        }
-      } catch {
-        if (active) {
-          setPendingProposals(0);
-          setPendingProposalsMore(false);
-        }
       }
     })();
 
@@ -543,23 +530,45 @@ export default function Home() {
   /**
    * 切换一级空间。
    *
-   * Knowledge 保留原来的 Tab 列表；Agent 不再占一个 Tab。
-   * 从 Agent 回到 Knowledge 时，若当前 Tab 是旧的 agent 视图，落到最近的普通 Tab。
+   * Home 保留原始记录相关标签，Knowledge 保留知识页与图谱标签。
+   * 两边使用同一套标签组件，但不会把另一空间的内容带进来。
    */
   function openSpace(space: Space) {
-    if (space === "knowledge") {
-      const current = openTabs.find((tab) => tab.id === activeTabId);
-      if (!current || (current.kind === "view" && current.viewKey === "agent")) {
-        const fallback = [...openTabs]
-          .reverse()
-          .find((tab) => !(tab.kind === "view" && tab.viewKey === "agent")) ?? NEW_NOTE_TAB;
-        setActiveTabId(fallback.id);
-      }
+    if (space === "settings") {
+      setSettingsOpen(true);
+      setMobileNavOpen(false);
+      setRailOpen(false);
+      clearFeedback();
+      return;
     }
 
-    if (space === "home" || space === "settings") {
+    let nextTab: Tab | null = null;
+    if (space === "home" || space === "knowledge") {
+      const current = openTabs.find((tab) => tab.id === activeTabId);
+      nextTab = current && tabSpace(current) === space
+        ? current
+        : [...openTabs].reverse().find((tab) => tabSpace(tab) === space) ?? defaultTab(space);
+
+      setOpenTabs((tabs) => tabs.some((tab) => tab.id === nextTab?.id) ? tabs : [...tabs, nextTab as Tab]);
+      setActiveTabId(nextTab.id);
+    }
+
+    const nextHasInspector =
+      space === "agent" ||
+      space === "graph" ||
+      space === "knowledge" ||
+      (space === "home" && nextTab?.kind === "raw");
+
+    if (!nextHasInspector) {
       setRailOpen(false);
       setRailHidden(true);
+    } else if (space !== activeSpace) {
+      /*
+       * 进入 Knowledge / Graph / Agent：右栏默认展开。
+       * 只改宽屏常驻列（railHidden），不碰窄屏抽屉（railOpen）——
+       * ≤860px 上强行拉开抽屉会盖住正文，那里仍然由「上下文」按钮开合。
+       */
+      setRailHidden(false);
     }
 
     setActiveSpace(space);
@@ -569,8 +578,12 @@ export default function Home() {
   }
 
   function openTab(tab: Tab) {
-    // Tab 只属于 Knowledge：任何入口打开内容，都先落在这个空间里。
-    setActiveSpace("knowledge");
+    const owner = tabSpace(tab);
+    if (!owner) return;
+
+    const hasInspector = owner === "knowledge" || tab.kind === "raw";
+    setRailHidden(!hasInspector);
+    setActiveSpace(owner);
     setOpenTabs((current) => current.some((item) => item.id === tab.id) ? current : [...current, tab]);
     setActiveTabId(tab.id);
     setMobileNavOpen(false);
@@ -581,13 +594,16 @@ export default function Home() {
 
   function closeTab(id: string) {
     setOpenTabs((current) => {
+      const closing = current.find((tab) => tab.id === id);
       const next = current.filter((tab) => tab.id !== id);
       if (activeTabId === id) {
-        const closedIndex = current.findIndex((tab) => tab.id === id);
-        const fallback = next[closedIndex - 1] ?? next[0] ?? NEW_NOTE_TAB;
+        const owner = closing ? tabSpace(closing) : null;
+        const sameSpace = owner ? next.filter((tab) => tabSpace(tab) === owner) : next;
+        const fallback = sameSpace.at(-1) ?? (owner ? defaultTab(owner) : NEW_NOTE_TAB);
+        if (!next.some((tab) => tab.id === fallback.id)) next.push(fallback);
         setActiveTabId(fallback.id);
       }
-      return next.length > 0 ? next : [NEW_NOTE_TAB];
+      return next.length > 0 ? next : [NEW_NOTE_TAB, KNOWLEDGE_INDEX_TAB];
     });
   }
 
@@ -944,11 +960,11 @@ export default function Home() {
       if (archived) {
         setKnowledges((current) => current.filter((item) => item.id !== knowledge.id));
         setArchivedNotes((current) => [updated, ...current.filter((item) => item.id !== knowledge.id)]);
-        setNotice("已归档。它不再出现在左栏的笔记列表里，需要时从「已归档」恢复。");
+        setNotice("已归档。它不再出现在 Knowledge，需要时可从 Settings 的「归档」恢复。");
       } else {
         setArchivedNotes((current) => current.filter((item) => item.id !== knowledge.id));
         setKnowledges((current) => [updated, ...current.filter((item) => item.id !== knowledge.id)]);
-        setNotice("已恢复，回到左栏的笔记列表。");
+        setNotice("已恢复，重新回到 Knowledge 的知识页列表。");
       }
 
       setListRefresh((current) => current + 1);
@@ -1269,7 +1285,7 @@ export default function Home() {
     const archivedKnowledge = archivedNotes.find((item) => item.rawId === raw.id);
 
     return <>
-      <header className="workspace-heading compact-heading">
+      <header className="workspace-heading compact-heading reading-head">
         <div><p className="eyebrow">原始记录 · {formatDate(raw.createdAt)}</p><h1>忠实留下的原话</h1><p>你可以随时修订原话，编辑助理不会改写它。每次修订都会留下记录，所有整理都能回到这份出处。</p></div>
         {knowledge ? <StatusPill tone="accent">已收录</StatusPill> : archivedKnowledge ? <StatusPill>知识页已归档</StatusPill> : <StatusPill>等待整理</StatusPill>}
       </header>
@@ -1379,13 +1395,13 @@ export default function Home() {
     }
 
     return <>
-      <header className="workspace-heading compact-heading">
+      <header className="workspace-heading compact-heading reading-head">
         <div>
           <p className="eyebrow">知识页</p>
           {isEditingTitle
             ? <input className="title-edit-input" value={titleDraft} autoFocus onChange={(event) => setTitleDraft(event.target.value)} onBlur={() => void handleUpdateKnowledge(detail.id, { title: titleDraft })} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void handleUpdateKnowledge(detail.id, { title: titleDraft }); } if (event.key === "Escape") setEditingTitleId(null); }} />
             : <h1 onContextMenu={(event) => { event.preventDefault(); setContextMenu({ type: "knowledge-title", knowledge: detail, x: event.clientX, y: event.clientY }); }}>{detail.title}</h1>}
-          <p>修订于 {formatDate(detail.updatedAt)}</p>
+          <p className="reading-meta">修订于 {formatDate(detail.updatedAt)} · 点击正文即可编辑</p>
         </div>
           <div className="heading-actions">
             <StatusPill tone="accent">已收录</StatusPill>
@@ -1508,6 +1524,26 @@ export default function Home() {
         {renderAssistantBlock(detail.id)}
       </div>
     </div>;
+  }
+
+  function renderKnowledgeIndex() {
+    return <>
+      <header className="workspace-heading compact-heading">
+        <div>
+          <p className="eyebrow">Knowledge</p>
+          <h1>沉淀后的知识页。</h1>
+          <p>这里保存经过你确认的整理结果。请从左侧选择一篇知识页继续阅读或编辑。</p>
+        </div>
+        <StatusPill tone="accent">{knowledges.length} 篇</StatusPill>
+      </header>
+      <section className="content-section">
+        <EmptyState
+          title={knowledges.length > 0 ? "从左侧打开一篇知识页" : "还没有知识页"}
+          body={knowledges.length > 0 ? "知识页会在标签中打开，方便你在多篇内容之间切换。" : "先在 Home 留下一条原始记录，再确认整理稿，它就会出现在这里。"}
+          action={knowledges.length === 0 ? <button className="button-dark" type="button" data-sound="press" onClick={() => navigate("new-note")}>留下原话</button> : undefined}
+        />
+      </section>
+    </>;
   }
 
   function renderGraph() {
@@ -1633,7 +1669,7 @@ export default function Home() {
   }
 
   function renderRail() {
-    if (activeSpace === "knowledge" && activeTab.kind === "view" && activeTab.viewKey === "graph") {
+    if (activeSpace === "graph") {
       return <div className="rail-inner">
         <div className="rail-head"><h4>图谱设置</h4></div>
         <div className="rail-body">
@@ -1755,7 +1791,7 @@ export default function Home() {
      * 放在这里当**快捷词**：整理助手本来就负责这一步（提一版草稿、用户确认才入库），
      * 页面上的按钮只是它的一个快捷键。这样原始记录页也就只剩"读"和"改原文"两件事。
      */
-    if (activeSpace === "knowledge" && activeTab.kind === "raw") {
+    if (activeSpace === "home" && activeTab.kind === "raw") {
       const raw = raws.find((item) => item.id === activeTab.rawId);
       const collected = raw ? knowledges.find((item) => item.rawId === raw.id) : undefined;
       const archivedNote = raw ? archivedNotes.find((item) => item.rawId === raw.id) : undefined;
@@ -1770,7 +1806,7 @@ export default function Home() {
           : mood === "settled"
             ? "这条原话已经长成一张知识页。要继续打磨，打开那一页，用它的编辑助理。"
             : mood === "resting"
-              ? "它对应的知识页已归档。要接着整理，先在左栏「已归档」里恢复那一页。"
+              ? "它对应的知识页已归档。要接着整理，先到 Settings 的「归档」里恢复那一页。"
               : "交给它读一遍，再提一版草稿：它只提议，你确认之后才会成为知识页。";
 
       return <div className="rail-inner">
@@ -1809,7 +1845,7 @@ export default function Home() {
       case "view":
         switch (activeTab.viewKey) {
           case "new-note": return renderNewNote();
-          case "graph": return renderGraph();
+          case "knowledge-index": return renderKnowledgeIndex();
           case "agent": return renderAgentTab();
         }
     }
@@ -1818,24 +1854,26 @@ export default function Home() {
   function renderSecondaryNav() {
     return (
       <SecondaryNav space={activeSpace}>
-        {activeSpace === "knowledge" ? (
-          <KnowledgeTree
+        {activeSpace === "home" ? (
+          <RawTree
             raws={raws}
-            knowledges={knowledges}
-            archivedNotes={archivedNotes}
             activeTabId={activeTabId}
             rawsExpanded={rawsExpanded}
-            notesExpanded={notesExpanded}
-            archivedExpanded={archivedExpanded}
             onToggleRaws={() => setRawsExpanded((current) => !current)}
-            onToggleNotes={() => setNotesExpanded((current) => !current)}
-            onToggleArchived={() => setArchivedExpanded((current) => !current)}
             rawLabel={rawLabel}
             onOpenRaw={openRawTab}
-            onOpenKnowledge={openKnowledgeTab}
-            onRestoreNote={(note) => void handleArchiveNote(note, false)}
             onRawContextMenu={(raw, x, y) => setContextMenu({ type: "raw", raw, x, y })}
-            onNavigate={navigate}
+            onNewNote={() => navigate("new-note")}
+          />
+        ) : null}
+
+        {activeSpace === "knowledge" ? (
+          <KnowledgeTree
+            knowledges={knowledges}
+            activeTabId={activeTabId}
+            notesExpanded={notesExpanded}
+            onToggleNotes={() => setNotesExpanded((current) => !current)}
+            onOpenKnowledge={openKnowledgeTab}
           />
         ) : null}
 
@@ -1843,15 +1881,6 @@ export default function Home() {
           <AgentNav trace={agentTrace} onOpenAgent={() => openSpace("agent")} />
         ) : null}
 
-        {activeSpace === "settings" ? (
-          <SettingsNav
-            section={settingsSection}
-            onSelect={(next) => {
-              setSettingsSection(next);
-              clearFeedback();
-            }}
-          />
-        ) : null}
       </SecondaryNav>
     );
   }
@@ -1875,46 +1904,30 @@ export default function Home() {
     );
   }
 
-  function renderHome() {
-    return (
-      <HomeSpace
-        rawCount={raws.length}
-        knowledgeCount={knowledges.length}
-        archivedCount={archivedNotes.length}
-        linkCount={graph.edges.length}
-        pendingProposals={pendingProposals}
-        pendingProposalsMore={pendingProposalsMore}
-        recentNotes={knowledges.slice(0, 5)}
-        onOpenKnowledge={openKnowledgeTab}
-        onGoKnowledge={() => openSpace("knowledge")}
-        onGoAgent={() => openSpace("agent")}
-        onGoSettings={() => openSpace("settings")}
-        onNewNote={() => navigate("new-note")}
-      />
-    );
-  }
-
   function renderSpaceContent() {
-    if (activeSpace === "home") return renderHome();
-    if (activeSpace === "settings") return <SettingsSpace section={settingsSection} />;
+    if (activeSpace === "graph") return renderGraph();
     if (activeSpace === "agent") return renderAgentTab();
     return renderMainContent();
   }
 
   const activeTab = openTabs.find((tab) => tab.id === activeTabId) ?? openTabs[0] ?? NEW_NOTE_TAB;
+  const visibleTabs = activeSpace === "home" || activeSpace === "knowledge"
+    ? openTabs.filter((tab) => tabSpace(tab) === activeSpace)
+    : [];
 
   /**
    * 右栏此刻是否可见：宽屏看「有没有被收起来」，窄屏看抽屉状态。
    */
   const railShow = railOpen || !railHidden;
-  const showInspector = activeSpace === "knowledge" || activeSpace === "agent";
-  const settingsMeta = SETTINGS_SECTIONS.find((item) => item.id === settingsSection) ?? SETTINGS_SECTIONS[0];
+  const showInspector =
+    activeSpace === "knowledge" ||
+    activeSpace === "graph" ||
+    activeSpace === "agent" ||
+    (activeSpace === "home" && activeTab.kind === "raw");
   const breadcrumbLabel =
-    activeSpace === "knowledge"
+    activeSpace === "home" || activeSpace === "knowledge"
       ? activeTab.label
-      : activeSpace === "settings"
-        ? settingsMeta.label
-        : SPACE_META[activeSpace].label;
+      : SPACE_META[activeSpace].label;
 
   if (entered === null) return null;
 
@@ -1966,7 +1979,7 @@ export default function Home() {
             <div className="data-status"><span className="status-dot" aria-hidden="true" /><span><strong>记录已保存</strong><small>原始记录与知识页可追溯</small></span></div>
             <div className="sidebar-bottom-row">
               <span className="sidebar-version">Chordnote · 和弦</span>
-              <button className="sidebar-settings-btn" type="button" data-sound="select" aria-label="打开设置" onClick={() => openSpace("settings")}><IconSettings /></button>
+              <button className={`sidebar-settings-btn${settingsOpen ? " is-active" : ""}`} type="button" data-sound="select" aria-label="打开设置" aria-expanded={settingsOpen} aria-controls="settings-window" onClick={() => openSpace("settings")}><IconSettings /></button>
             </div>
           </div>
         </aside>
@@ -1983,9 +1996,9 @@ export default function Home() {
             </div>
           </div>
 
-          {activeSpace === "knowledge" ? (
+          {activeSpace === "home" || activeSpace === "knowledge" ? (
             <div className="tab-bar" role="tablist">
-              {openTabs.map((tab) => (
+              {visibleTabs.map((tab) => (
                 <div key={tab.id} className={`tab-chip${activeTabId === tab.id ? " is-active" : ""}`} role="tab" tabIndex={activeTabId === tab.id ? 0 : -1} data-sound="select" aria-selected={activeTabId === tab.id} onClick={() => setActiveTabId(tab.id)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setActiveTabId(tab.id); } }}>
                   <span>{tab.label}</span>
                   <button type="button" data-sound="select" aria-label="关闭标签" onClick={(event) => { event.stopPropagation(); closeTab(tab.id); }}>×</button>
@@ -2016,8 +2029,8 @@ export default function Home() {
       }
       mobileBottomNav={
         <nav className="mobile-bottom-nav" aria-label="移动端导航">
-          {(["home", "knowledge", "agent", "settings"] as Space[]).map((space) => (
-            <button key={space} className={activeSpace === space ? "is-active" : ""} type="button" data-sound="select" onClick={() => openSpace(space)}>
+          {(["home", "knowledge", "graph", "agent", "settings"] as Space[]).map((space) => (
+            <button key={space} className={space === "settings" ? (settingsOpen ? "is-active" : "") : (activeSpace === space ? "is-active" : "")} type="button" data-sound="select" onClick={() => openSpace(space)}>
               <span>{SPACE_META[space].shortLabel}</span>
             </button>
           ))}
@@ -2028,6 +2041,17 @@ export default function Home() {
       }
       overlays={
         <>
+          <SettingsDialog
+            open={settingsOpen}
+            section={settingsSection}
+            archivedNotes={archivedNotes}
+            onSelect={(next) => {
+              setSettingsSection(next);
+              clearFeedback();
+            }}
+            onRestoreNote={(note) => void handleArchiveNote(note, false)}
+            onClose={() => setSettingsOpen(false)}
+          />
           {contextMenu?.type === "raw" ? <div className="raw-context-menu" style={{ left: contextMenu.x, top: contextMenu.y }} onClick={(event) => event.stopPropagation()}><div className="context-menu-label">原始记录</div><div className="context-menu-title">{getPreview(contextMenu.raw.text, 62)}</div><button type="button" data-sound="press" onClick={() => { openRawTab(contextMenu.raw); setEditingRawId(contextMenu.raw.id); setRawTextDraft(contextMenu.raw.text); setContextMenu(null); }}>编辑原话</button><button type="button" data-sound="destructive" onClick={() => void handleDeleteRaw(contextMenu.raw)}>移除这条记录</button></div> : null}
           {contextMenu?.type === "knowledge-title" ? <div className="raw-context-menu" style={{ left: contextMenu.x, top: contextMenu.y }} onClick={(event) => event.stopPropagation()}><div className="context-menu-label">修订标题</div><div className="context-menu-title">{getPreview(contextMenu.knowledge.title, 62)}</div><button type="button" data-sound="press" onClick={() => { setEditingTitleId(contextMenu.knowledge.id); setTitleDraft(contextMenu.knowledge.title); setContextMenu(null); }}>修改标题</button></div> : null}
         </>

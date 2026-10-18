@@ -6,7 +6,7 @@
   "packageManager": "pnpm@11.25.0",
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "node scripts/next-build.mjs",
     "start": "next start",
     "lint": "eslint .",
     "test": "node scripts/regression.mjs",
@@ -15,8 +15,9 @@
     "seed:demo": "node scripts/seed-demo.mjs",
     "seed:reset": "node scripts/reset-demo-data.mjs",
     "desktop:dev:server": "next dev --hostname 127.0.0.1 --port 3210",
-    "desktop:dev": "tauri dev",
-    "desktop:prepare": "pnpm build && node scripts/prepare-desktop.mjs",
+    "desktop:dev": "pnpm desktop:prepare && tauri dev",
+    "desktop:prepare": "node scripts/create-tauri-icon.mjs && pnpm build && node scripts/prepare-desktop.mjs",
+    "desktop:verify:runtime": "node scripts/verify-desktop-runtime.mjs",
     "desktop:build": "tauri build --bundles nsis"
   },
   "dependencies": {

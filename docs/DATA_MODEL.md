@@ -34,31 +34,13 @@ Raw {
 > **2026-10-10 决策：Raw 允许用户修改。**
 > 原先「Raw 不可变」的表述作废。新的边界是：**用户可改，AI 不可改**。
 
-待实现的目标形态（**尚未实现**，不要按这个写代码）：
+**当前实现（2026-10-18 核对）**：`PATCH /api/raw/:id` 已实现；每次修改把 `{ before, after, version }` 写进 `audit_log`（`operation = 'raw.update'`），`raw_notes.version` 同步 +1。没有独立的 `RawRevision` 表——修订历史存在 `audit_log.detail` 里。
 
-```text
-Raw {
-  id: string
-  text: string
-  createdAt: string
-  updatedAt: string          // 新增
-}
+三条约束仍然成立：
 
-RawRevision {                // 新增：修改历史，保证「可追溯」
-  id: string
-  rawId: string
-  prevText: string
-  nextText: string
-  editedAt: string
-  editor: "user"             // 只可能是用户；AI 不在此列
-}
-```
-
-三条要同时成立的约束：
-
-1. 用户可以修改 Raw 正文（`PATCH /api/raw`）。
+1. 用户可以修改 Raw 正文（`PATCH /api/raw/:id`）。
 2. **AI 永远不能改写 Raw 的正文**；AI 只能在 Draft 里引用原文。整理链路只产出 `OrganizeDraft`，从不写 `raw_notes` 的正文列。
-3. 每次修改留下 `RawRevision`，否则「原始出处」的信任基础会消失。
+3. 每次修改留下修订记录（当前落在 `audit_log`），否则「原始出处」的信任基础会消失。
 
 ### Knowledge —— 用户确认后的知识页
 
@@ -72,6 +54,8 @@ Knowledge {
   keyPoints: string[]
   concepts: string[]
   keywords: string[]
+  version?: number    // 乐观并发；每次更新 +1
+  archivedAt?: string | null
   createdAt: string
   updatedAt: string
 }
@@ -140,7 +124,7 @@ OrganizeDraft {
 }
 ```
 
-**不持久化**。由 `POST /api/organize` 调 DeepSeek 生成并校验形状；`relatedKnowledge` 中服务端确认不存在的 ID 会被过滤掉。
+**不持久化**。由 `POST /api/organize` 经 Provider 层（默认 DeepSeek）生成并校验形状；`relatedKnowledge` 中服务端确认不存在的 ID 会被过滤掉。
 用户确认后，由 `POST /api/knowledge` 落库为 `Knowledge`。
 
 ### 关系图（运行时派生，不是存储）

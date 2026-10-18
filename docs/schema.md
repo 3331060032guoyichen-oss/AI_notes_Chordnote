@@ -41,7 +41,8 @@ All business tables carry `user_id text NOT NULL`. 所有时间列为 `timestamp
 | `id` | text PK | `raw_<uuid>` |
 | `user_id` | text NOT NULL | indexed |
 | `text` | text NOT NULL | 长度上限在 API 层校验（50000）|
-| `version` | integer NOT NULL DEFAULT 1 | 预留 |
+| `title` | text NULL | 用户起的名字（迁移 0004）；为空时界面显示「未命名 N」|
+| `version` | integer NOT NULL DEFAULT 1 | 每次 `PATCH /api/raw/:id` +1 |
 | `archived_at` | timestamptz NULL | 归档 = 普通"移除"；**没有** `deleted_at` |
 | `created_at` / `updated_at` | timestamptz NOT NULL DEFAULT now() | `updated_at` 由服务层显式写入 |
 
@@ -129,7 +130,7 @@ All business tables carry `user_id text NOT NULL`. 所有时间列为 `timestamp
 | `POST /api/relations` | `{ sourceId, targetId, type:"related", reason }` | `201 { relation, created: true }` | **无序对**去重；重复 → `200 created:false`；已软删则复活 |
 | `DELETE /api/relations/:id` | — | `204` | **软删除**；不存在 → 404 |
 | `GET /api/graph` | — | `200 { nodes, edges }` | 边仅保留两端都存在的笔记 |
-| `POST /api/organize` | `{ rawId }` | `200 { draft }` | 需 `DEEPSEEK_API_KEY`；缺 → `503` |
+| `POST /api/organize` | `{ rawId }` | `200 { draft }` | 需已配置 provider；缺凭据 → `503 DEEPSEEK_CONFIG_MISSING` |
 | `POST /api/assistant` | `{ question, contextType, contextId? }` | `200 { answer }` | 同上；`contextType`: `knowledge \| raw \| draft \| none` |
 | `POST /api/assistant/propose` | `{ knowledgeId, question? }` | `200 { proposal }` | 编辑助理对一张知识页提出**改写正文**的提议（`note_update`），只落 `pending`，不写正文 |
 | `POST /api/agent/organize` | `{ question, contextType, contextId?, draftContext? }` | `200 { trace }` | Agent 工具循环（检索 → 通读 → 提提议），返回可渲染轨迹；提议真的落进 `proposals`（`status=pending`），正式数据一条不动 |
@@ -138,6 +139,10 @@ All business tables carry `user_id text NOT NULL`. 所有时间列为 `timestamp
 | `POST /api/proposals/:id/approve` `reject` `apply` | — | `200` | 决议与执行；`apply` 需要已 `approved`，支持 `Idempotency-Key`；目标版本变了 → 提议推进到 `stale` |
 | `GET /api/export` | `?format=markdown` | `200` JSON 全量快照 / `application/zip` | 默认 JSON（原始记录 + 知识页 + 关联 + 修订历史）；`format=markdown` 返回 README + notes/*.md + sources/*.md 的 zip |
 | `POST /api/import` | 知识包 JSON | `200 { dryRun, result }` | `?dryRun=1` 只算数不写库；同名（原始记录没有标题时按正文）一律保留已有、跳过导入 |
+| `GET /api/health` | — | `200 { status:"ok", database:"ok" }` / `503` | 桌面宿主轮询；首次调用会触发 PGlite 初始化与迁移 |
+| `POST /api/desktop/shutdown` | header `x-chordnote-shutdown-token` | `200 { status:"shutting_down" }` | 仅 Tauri 宿主；令牌不匹配 → `404` |
+
+`/api/*` 在进入路由前经过 `middleware.ts`：Host 必须是回环地址；写请求（POST / PATCH / PUT / DELETE）还要求 Origin 来自本机页面（桌面模式下固定 `127.0.0.1:3210`）。
 
 `Knowledge` 响应字段：`id, rawId, title, summary, content, keyPoints[], concepts[], keywords[], version?, createdAt, updatedAt`。
 
@@ -165,10 +170,10 @@ All business tables carry `user_id text NOT NULL`. 所有时间列为 `timestamp
 ## 7. Migration and Local Database
 
 - 迁移文件：`drizzle/0000`–`0005`（6 个 SQL）。应用启动时由 `lib/db/client.ts` 的 `migrate()` 按 journal **增量**执行，已应用过的跳过 —— 所以首次 `pnpm dev` 就自动建好表，不存在"记得手动跑迁移"这一步。
-- 数据目录：`data/pglite`（可用 `PGLITE_DATA_DIR` 改）。本机数据不进版本库，仓库里只有 `data/.gitkeep`。
+- 数据目录：`data/pglite`（可用 `PGLITE_DATA_DIR` 改）；桌面安装包版是 `%LOCALAPPDATA%\Chordnote\db`。本机数据不进版本库，仓库里只有 `data/.gitkeep`。
 - **单写者**：同一份数据目录同一时刻只能有一个进程写。不要一边跑 `pnpm dev` 一边让别的进程去连同一目录 —— 它读到的是打开那一刻的快照，写回去的内容还会被应用随后的写入覆盖（"删了像没删"）。脚本要跟库打交道，要么走 HTTP 接口（`scripts/regression.mjs`），要么自己起一份内存库（`scripts/db-verify.mjs`）。
 - 备份与恢复：**拷走 `data/` 目录就是完整备份**；界面里的「导出知识包」（`GET /api/export`）给出可读、可再导入的快照。没有云端历史窗口，恢复能力等于你手上那份拷贝。
-- 环境变量只有两个，都可选：`DEEPSEEK_API_KEY`（AI 端点）与 `PGLITE_DATA_DIR`（数据目录）。**没有任何连接串**。
+- 环境变量都可选：`DEEPSEEK_API_KEY`（旧名，provider=deepseek 时仍生效）、`CHORDNOTE_PROVIDER` / `CHORDNOTE_MODEL` / `CHORDNOTE_BASE_URL` / `CHORDNOTE_API_KEY` / `CHORDNOTE_TIMEOUT_MS`、`CHORDNOTE_SETTINGS_FILE`、`PGLITE_DATA_DIR`。桌面宿主还会注入 `CHORDNOTE_DESKTOP` / `CHORDNOTE_SHUTDOWN_TOKEN` / `CHORDNOTE_MIGRATIONS_DIR` / `CHORDNOTE_LOG_DIR`。**没有任何连接串**。
 - `NOT IMPLEMENTED`：多设备 / 多人共享同一份知识库的同步机制。
 
 **中文注解 · 为什么 purge 要二次确认**：本地库没有历史窗口，误删之后只能靠之前的 `data/` 拷贝或知识包还原，中间没有"回滚 6 小时"这种东西。
@@ -180,10 +185,11 @@ All business tables carry `user_id text NOT NULL`. 所有时间列为 `timestamp
 | 脚本 | 命令 | 作用 |
 |---|---|---|
 | `scripts/db-verify.mjs` | `pnpm verify:db` | 在**内存库**上跑一遍迁移，断言 11 张表 / 11 个 CHECK / 8 个外键（含 RESTRICT 行为）/ 索引落地 / jsonb 真为数组 / 非法关系类型被拒 / 归属隔离在 SQL 层成立。不需要 dev server，也不碰本机数据 |
-| `scripts/regression.mjs` | `pnpm test` | 端到端：**纯 HTTP** 打全部路由（含知识包导出 / 导入、归档视图、404 面），当前 75 条断言。需先 `pnpm dev` |
+| `scripts/regression.mjs` | `pnpm test` | 端到端：**纯 HTTP** 打全部路由（含知识包导出 / 导入、归档视图、404 面），当前 75 条断言。3000 端口空闲时自起临时 dev server |
+| `scripts/verify-desktop-runtime.mjs` | `pnpm desktop:verify:runtime` | 用临时数据目录启动打包后的 standalone 服务，验证 `/api/health` 与 `/api/desktop/shutdown` |
 | `scripts/seed-demo.mjs` | `pnpm seed:demo` | 按 `seed/demo-notes.json` 幂等写入演示数据。需先 `pnpm dev` |
 | `scripts/reset-demo-data.mjs` | `pnpm seed:reset` | 清空业务表。默认 dry-run，`-- --yes` 才执行；**必须先停掉 `pnpm dev`**，删除前把九张表备份到 `.tmp/` |
 
 回归脚本**不连数据库**，因为 PGlite 是单写者（见 §7）。副作用：它造的数据只能归档清场，会在库里留下已归档行（日常视图看不到）。
 
-验证入口只有 `pnpm test` 与 `pnpm verify:db` 两条；`pnpm seed:*` 两条只负责准备与清理演示数据。2026-10-17 之前那种"另开一个进程直接写库造夹具"的一次性脚本已随存储层改动一并删除——本地库不允许第二个写者，那条路走不通了。
+验证入口是 `pnpm test` / `pnpm test:unit` / `pnpm verify:db` / `pnpm desktop:verify:runtime`；`pnpm seed:*` 两条只负责准备与清理演示数据。2026-10-17 之前那种"另开一个进程直接写库造夹具"的一次性脚本已随存储层改动一并删除——本地库不允许第二个写者，那条路走不通了。

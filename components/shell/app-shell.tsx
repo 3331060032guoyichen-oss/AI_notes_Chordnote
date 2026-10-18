@@ -5,7 +5,7 @@ import { AppStardust } from "../landing-stardust";
 type AppShellProps = {
   sidebarOpen: boolean;
   railHidden: boolean;
-  /** Settings 与 Home 不保留检查器：隐藏右栏并把网格收成两列。 */
+  /** 当前空间没有检查器时，隐藏右栏并把网格收成两列。 */
   showInspector: boolean;
   sidebar: ReactNode;
   main: ReactNode;

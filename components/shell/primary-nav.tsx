@@ -1,4 +1,4 @@
-import { IconBook, IconHarp, IconHome, IconPanelExpand, IconSettings } from "../ui/icons";
+import { IconBook, IconGraph, IconHarp, IconHome, IconPanelExpand } from "../ui/icons";
 import { SPACE_META, type Space } from "./spaces";
 
 type PrimaryNavProps = {
@@ -10,12 +10,12 @@ type PrimaryNavProps = {
 const SPACES: Array<{ id: Space; icon: React.ReactNode }> = [
   { id: "home", icon: <IconHome /> },
   { id: "knowledge", icon: <IconBook /> },
+  { id: "graph", icon: <IconGraph /> },
   { id: "agent", icon: <IconHarp /> },
-  { id: "settings", icon: <IconSettings /> },
 ];
 
 /**
- * 一级导航：四个空间。
+ * 一级工作区导航。Settings 使用侧栏底部的独立入口，不在这里重复出现。
  *
  * 展开时是侧栏里的一列文字入口（复用原有的 `.primary-nav / .nav-item`）；
  * 收起时变成 56px 图标条（`.rail-nav`）。两套都渲染，显隐交给 CSS 断点，

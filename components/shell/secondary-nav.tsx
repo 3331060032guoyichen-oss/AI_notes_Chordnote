@@ -2,9 +2,9 @@ import type { ReactNode } from "react";
 
 import type { Space } from "./spaces";
 
-/** 二级导航容器。Settings 与 Home 的内容不同，但外层目录样式一致。 */
+/** Home 与 Knowledge 共用二级导航骨架，Settings 使用独立窗口。 */
 export function SecondaryNav({ space, children }: { space: Space; children?: ReactNode }) {
-  if (space === "home") return null;
+  if (space === "graph" || space === "settings") return null;
 
   return (
     <nav className="file-tree" aria-label={`${space} 导航`}>

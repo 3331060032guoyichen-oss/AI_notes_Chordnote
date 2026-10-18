@@ -6,8 +6,8 @@ authors = ["Chordnote"]
 edition = "2021"
 
 [build-dependencies]
-tauri-build = { version = "2" }
+tauri-build = { version = "2", features = [] }
 
 [dependencies]
 getrandom = "0.3"
-tauri = { version = "2" }
+tauri = { version = "2", features = [] }

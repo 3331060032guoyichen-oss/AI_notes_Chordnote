@@ -6,7 +6,7 @@
 
 ## 1. 项目概览
 
-AI Notes 是面向大学生的 AI 知识系统（校赛 Demo）。应用运行在使用者本机，数据存于本机，不依赖外部数据库或云服务，没有部署链路。
+AI Notes 是面向大学生的 AI 知识系统（校赛 Demo）。应用运行在使用者本机，数据存于本机，不依赖外部数据库或云服务，没有 Web 部署链路；另提供 Windows 桌面安装包（Tauri 2 + NSIS，见第 3、4 节）。
 
 核心链路：
 
@@ -36,6 +36,7 @@ Raw（原始记录）→ Draft（AI 整理草稿）→ 用户确认 → Knowledg
 - 知识图谱：`d3-force` 只做力学计算，渲染为自绘 Canvas
 - 背景星尘：`@tsparticles/*`
 - 首屏粒子：`three`，仅用于 `components/landing-particle-field.tsx`，不要用于图谱或其他地方
+- Windows 桌面壳：Tauri 2（`src-tauri/`），只负责窗口生命周期与启动/停止本机 Next.js standalone 服务（127.0.0.1:3210）；Next.js 以 `output: "standalone"` 打包进安装包
 
 **未安装，不要引入：**
 
@@ -58,43 +59,47 @@ pnpm dev                     # http://localhost:3000
 | 命令 | 说明 |
 |---|---|
 | `pnpm dev` | 开发服务器 |
-| `pnpm build` / `pnpm start` | 生产构建与运行 |
+| `pnpm build` / `pnpm start` | 生产构建（standalone 输出）与运行 |
 | `pnpm lint` | 代码检查 |
-| `pnpm test` | HTTP 回归测试（75 条断言），需先启动 `pnpm dev` |
+| `pnpm test` | HTTP 回归测试（75 条断言）；3000 端口空闲时会自起临时 dev server |
 | `pnpm test:unit` | 离线单元测试（Provider / 配置），不联网、不需要密钥 |
 | `pnpm verify:db` | 在内存库上执行全部迁移并断言结构、约束、外键行为、归属隔离。不需要 dev server，不碰本机数据 |
 | `pnpm seed:demo` | 幂等写入演示数据（`seed/demo-notes.json`），需先启动 dev，只增不删 |
 | `pnpm seed:reset` | 清空业务表，必须先停止 `pnpm dev`。默认 dry-run，加 `--yes` 才执行，执行前备份到 `.tmp/` |
+| `pnpm desktop:dev` | Tauri 开发窗；服务固定 `127.0.0.1:3210` |
+| `pnpm desktop:build` | 生成 Windows NSIS 安装包，需要 Rust 工具链；产物在 `src-tauri/target/` |
+| `pnpm desktop:verify:runtime` | 用临时数据目录启动打包后的 standalone 服务，验证 `/api/health` 与关闭接口 |
 
 注意：
 
-- 没有 `DEEPSEEK_API_KEY` 时，笔记、知识库、图谱都正常，只有「AI 整理」和右侧 AI 问答会报错，这是预期行为。
+- 默认 DeepSeek 且没有 `DEEPSEEK_API_KEY` 时，笔记、知识库、图谱都正常，只有「AI 整理」和右侧 AI 问答会报错，这是预期行为；改用 Ollama / 自定义接口时以设置里的配置为准。
 - 首次启动数据库为空，迁移由 `lib/db/client.ts` 在首次打开数据目录时自动执行。
-- `pnpm test` 不连数据库，只走 HTTP，只针对自己造的数据断言，库里有演示数据也能通过。用完的数据只能归档清场，彻底清空用 `pnpm seed:reset -- --yes`。
+- `pnpm test` 不连数据库，只走 HTTP，只针对自己造的数据断言，库里有演示数据也能通过。3000 端口空闲时它会自己起一个临时 dev server，跑完连同数据一起删掉；已开着 `pnpm dev` 就直接复用。用完的数据只能归档清场，彻底清空用 `pnpm seed:reset -- --yes`。
+- 桌面版与网页版的数据目录不同：网页版是 `./data/pglite`，安装包版是 `%LOCALAPPDATA%\Chordnote\db`，模型配置与日志也在同目录。
 - 演示数据 `seed/demo-notes.json` 有意留一条未建立的关联，用来演示「提到不等于连上」。不要为凑演示点再加笔记。换数据前先 `seed:reset`，再 `seed:demo`。
 
 ## 5. 目录结构
 
 ```
 app/
-  page.tsx            唯一页面：应用外壳 + 四个空间，"use client"
+  page.tsx            唯一页面：应用外壳 + 五个入口，"use client"
   globals.css         全部设计令牌与组件样式
   layout.tsx          根布局
   api/**/route.ts     每个路由均声明 runtime = "nodejs"
+middleware.ts         /api/* 只接受回环 Host；写请求要求本机 Origin
 components/
   shell/              应用外壳：AppShell / PrimaryNav / SecondaryNav / InspectorHost
   knowledge/          Knowledge 空间的二级导航（文件树）
   agent/              Agent 空间的二级导航（本次任务）
-  settings/           Settings 空间、六个入口与二级导航
-  home/               Home 的只读活动摘要
+  settings/           独立设置窗口、八个分类入口与内容
+  home/               Home 的原始记录目录与写作入口
   ui/                 共享内联图标
-  landing-page.tsx            首屏门禁（只在首次进入时出现）
+  landing-page.tsx            完整落地页（首次进入时出现）
   landing-constellation.tsx   首屏星座
   landing-particle-field.tsx  首屏 Three.js 粒子场
   landing-stardust.tsx        星尘配方（首屏与工作台共用）
   interface-sound.tsx         Web Audio 实时合成音效，偏好存 localStorage
   graph-view.tsx              知识图谱（d3-force + Canvas）
-  settings-panel.tsx          设置抽屉（主题 / 模型 / API / 数据）
 lib/
   ai/                模型调用：provider.ts 传输与统一错误、config.ts 服务端配置、tasks.ts 提示词与形状校验
   api/               路由层小工具（本机写请求来源检查）
@@ -111,48 +116,53 @@ lib/
   auth/               用户上下文与归属校验
   db/                 Drizzle schema、枚举、连接工厂
 types/                raw / organize / knowledge / relation / graph / proposal / agent
-seed/                 演示数据与播种 / 重置脚本
+seed/                 演示数据（`demo-notes.json`）
+scripts/              构建、桌面暂存、回归、迁移校验与数据脚本
+src-tauri/            Windows 桌面宿主（Tauri 2 / Rust）
 drizzle/              迁移 0000–0005，只能增量追加
+deliverables/         校赛提交材料（PPT / 文档 / 界面预览）
 docs/                 产品、设计、数据文档（见第 11 节）
 ```
 
 ## 6. 前端约定
 
-**单页应用 + 四个空间。** 页面仍是单一客户端页，不引入路由；一级空间由 `activeSpace` 驱动：
+**单页应用 + 五个入口。** 页面仍是单一客户端页，不引入路由；一级空间由 `activeSpace` 驱动：
 
 ```ts
-type Space = "home" | "knowledge" | "agent" | "settings";
+type Space = "home" | "knowledge" | "graph" | "agent" | "settings";
 ```
 
-- Knowledge 内部沿用 Tab 联合类型；**Tab 只属于 Knowledge**，其余空间不渲染 Tab 栏。
-- Home / Settings 不显示右侧检查器；Knowledge / Agent 的检查器由 `InspectorHost` 按空间选择。
+- Home 与 Knowledge 各自渲染自己的 Tab：Home 只放新建、原始记录与整理稿；Knowledge 只放知识页。Graph 与 Agent 不渲染 Tab。
+- Home 的原始记录显示整理助手；Knowledge / Graph / Agent 的检查器由 `InspectorHost` 按空间选择；Home 新建页与 Settings 不显示检查器。
 - 跨空间打开知识内容（例如 Agent 检查器里点知识页）时，先切到 Knowledge 再打开对应 Tab。
 
 ```ts
 type Tab =
-  | { kind: "view"; viewKey: "new-note" | "graph"; ... }   // 工具类视图
+  | { kind: "view"; viewKey: "new-note" | "knowledge-index"; ... } // 空间起始视图
   | { kind: "raw"; rawId: string; ... }                    // 单条原始记录
   | { kind: "knowledge"; knowledgeId: string; ... }        // 单条知识页
   | { kind: "draft"; rawId: string; ... }                  // Draft 审阅
 ```
 
-- 左侧是一级导航（Home / Knowledge / Agent / Settings）与当前空间的二级导航。
+- 左侧一级导航是 Home / Knowledge / Graph / Agent；Settings 使用侧栏底部齿轮打开独立窗口。
 - 工具类视图用 `navigate(viewKey)` 打开或激活；Knowledge 的目录在 `components/knowledge/knowledge-tree.tsx`。
 - 新增某类**详情页**：加一个 Tab 变体和一个 `renderXxxTab()`，不要新增路由。
 - 新增一级**空间**：同时改 `components/shell/`（PrimaryNav / SecondaryNav / InspectorHost）与本文件这一节。
 
 **右栏是检查器，不是聊天框。** 内容随空间与当前标签变化：
 
-- Knowledge：知识页显示入链、出链、未链接提及、编辑助理；原始记录显示整理助手；图谱显示图谱参数。
+- Knowledge：知识页显示入链、出链、未链接提及与编辑助理。
+- Graph：显示知识网络，右栏显示图谱参数。
 - Agent：显示本次任务的整理摘要与守则。
-- Home / Settings：**不显示检查器**（`AppShell` 收掉右栏列宽）。
+- Home：原始记录显示整理助手；新建与整理稿不显示检查器。
+- Settings：**不显示检查器**，以独立设置窗口覆盖在当前工作区上。
 
 不要改回全局聊天框，也不要为 AI 另做一套视觉语言。
 
 **界面约定（已拍板，推翻前先确认是有意为之）：**
 
-- 左栏折叠为功能图标条，四个入口与一级导航一致（Home / Knowledge / Agent / Settings），展开按钮在图标条内。
-- 右栏收起为右边缘图标条（56px）：Knowledge 有入链 / 出链 / 未链接提及 / 编辑助理四个入口与计数角标；Agent 只有开合按钮。
+- 左栏折叠为功能图标条，保留 Home / Knowledge / Graph / Agent、展开按钮和底部 Settings 齿轮。
+- 右栏收起为右边缘图标条（56px）：Knowledge 有入链 / 出链 / 未链接提及 / 编辑助理四个入口与计数角标；Home 原始记录、Graph 与 Agent 只有开合按钮。
 - 右栏在 860px 及以下变为抽屉，861px 及以上为常驻列。抽屉收起方式：内部 ×、Esc、打开任意标签、再次点击入口。新增一级导航后需重新实测这一断点。
 - 写作区的位置、内边距、圆角、边框宽度不要动，只改颜色。去框线时把 `border-color` 和背景改为透明。
 - `.content-section` / `.capture-panel` 半透明（surface 42%），星尘从纸后透出，正文区保持可读。
@@ -165,7 +175,7 @@ type Tab =
 - 助手形象是一把会呼吸的竖琴（内联 SVG，细线，无渐变），左栏 Agent 入口、右栏编辑助理、Agent 页面共用。不要换成星芒、头像或发光圆球。
 - 助手状态四态：空闲 / 整理中 / 已收录 / 已归档，只动 `transform` 与 `opacity`，`prefers-reduced-motion` 下整体停掉。
 - 界面声音开关在「Settings → Voice」，顶栏与侧栏底部都不放。
-- 左栏分组：原始记录 / 知识页 / 标签，另有「已归档 N」分组用于恢复。不做「最近编辑 / 最近查看」。
+- Home 左栏放原始记录；Knowledge 左栏只放知识页与标签；已归档知识页统一放在 Settings → 归档。不做「最近编辑 / 最近查看」。
 - 图谱交互：单击选中出卡片，双击打开知识页，拖动即固定。
 
 **已删除的功能，不要重建：**
@@ -188,7 +198,7 @@ type Tab =
 |---|---|---|
 | `/api/raw` | GET / POST / DELETE | GET 支持 `?scope=archived`。DELETE 是归档语义，被未归档知识页引用时返回 409 |
 | `/api/raw/[id]` | PATCH | 用户编辑原话，仅 user 主体可调用 |
-| `/api/organize` | POST | 调 DeepSeek 生成 OrganizeDraft，不写库 |
+| `/api/organize` | POST | 经 Provider 层生成 OrganizeDraft，不写库 |
 | `/api/knowledge` | GET / POST | 列表 / 确认草稿入库。body 为 `{ rawId, draft }`，可选 `origin`（默认 `user`，AI 流程传 `ai`） |
 | `/api/knowledge/[id]` | GET / PATCH | 读取 / 部分更新，可选 `version` 做乐观并发（不匹配返回 409 `VERSION_CONFLICT`）；`{ archived }` 归档或恢复 |
 | `/api/knowledge/[id]/relations` | GET | 该知识页的关联 |
@@ -205,6 +215,10 @@ type Tab =
 | `/api/import` | POST | 导入知识包。`?dryRun=1` 只校验不写库；同名项保留已有、跳过导入 |
 | `/api/settings/model` | GET / PATCH | 模型配置（脱敏读取 / 保存）。密钥只进不出，空串=保持、`null`=清除 |
 | `/api/settings/model/test` | POST | 真实连接测试：可访问 / 模型存在 / 对话 / 工具调用四项分别报告 |
+| `/api/health` | GET | 桌面宿主轮询的存活检查，同时验证 PGlite 初始化与迁移 |
+| `/api/desktop/shutdown` | POST | 仅 Tauri 宿主调用；校验 `x-chordnote-shutdown-token` 后关闭进程 |
+
+所有 `/api/*` 请求先经过 `middleware.ts`：Host 必须是回环地址；写请求（POST / PATCH / PUT / DELETE）还要求 Origin 来自本机页面（桌面模式下固定 `127.0.0.1:3210`）。非浏览器的本机客户端没有 Origin。
 
 ### 服务层与归属
 
@@ -258,7 +272,7 @@ jsonb 列直接传数组或对象，**不要手动 `JSON.stringify`**。Drizzle 
 1. 沿用 `globals.css` 的类名与令牌。
 2. 新详情页用 Tab 变体，不新增路由；新增一级空间见第 6 节。
 3. 检查 860px 与 861px 两侧的右栏行为，以及 ≤760px 的移动端底部导航（4 或 5 个入口）。
-4. 只有浮层才用毛玻璃；Settings / Home 不放检查器。
+4. 只有浮层才用毛玻璃；Settings 与 Home 新建页不放检查器，Home 原始记录显示整理助手。
 5. 未实现的能力显示空态，不用假数据填充。
 
 **修改 AI 相关逻辑**
@@ -266,7 +280,7 @@ jsonb 列直接传数组或对象，**不要手动 `JSON.stringify`**。Drizzle 
 2. 服务端重新读取上下文，不信任前端传来的正文。
 3. 供应商差异只放进 `lib/ai/provider.ts`：提示词与形状校验留在 `lib/ai/tasks.ts`，不要复制第二份。
 4. 配置优先级固定为 `CHORDNOTE_*` > 旧 `DEEPSEEK_*`（仅 provider=deepseek）> `data/settings.json` > 默认值。
-5. 缺少凭据时给出清晰报错（503 `CONFIG_MISSING`），不静默失败。
+5. 缺少凭据时给出清晰报错（ProviderError `CONFIG_MISSING`；对外 HTTP 错误码仍是 `DEEPSEEK_CONFIG_MISSING`），不静默失败。
 
 ## 10. 已知陷阱
 
@@ -279,6 +293,8 @@ jsonb 列直接传数组或对象，**不要手动 `JSON.stringify`**。Drizzle 
 - **目录名有两种写法：** clone 出来是 `ai-notes_demo`，本机可能叫 `ai-notes_demo-local`。常被误写成全连字符，那个路径不存在。
 - **Windows 行尾假象。** `git status` 列出大量修改但 `git diff` 无内容，是 stat 缓存过期，执行 `git add -A` 即可，不要用 `git checkout -- .`。
 - **Windows + Git Bash 下路径含中文时 `cd` 偶尔失败。** 把 `cd` 和后续命令写在同一条命令里，或用相对路径。
+- **Windows 桌面打包需要 Rust 工具链。** `pnpm desktop:build` 先跑 `pnpm build`，再把 standalone 运行时装进 `.desktop/runtime/`；该目录是可再生产物，不要提交。
+- **桌面版的数据不在 `data/`。** 安装包版把库放在 `%LOCALAPPDATA%\Chordnote\db`，模型配置在同目录 `settings.json`，日志在 `logs/desktop.log`；只有网页版用 `./data/pglite`。
 - **动手前先确认当前目录是仓库：** `git rev-parse --is-inside-work-tree`。不是仓库就不要用 git 判断改动或回滚。
 
 ## 11. 文档索引
@@ -293,15 +309,14 @@ jsonb 列直接传数组或对象，**不要手动 `JSON.stringify`**。Drizzle 
 | `docs/DESIGN_SYSTEM.md` | 视觉规范 |
 | `docs/DEV_WORKFLOW.md` | 分支与提交规范。个人开发直接提交 main 并 push，多人协作再走 feature 分支 + PR |
 | `docs/THIRD_PARTY.md` | 第三方依赖登记 |
+| `GLOSSARY.md` | 领域术语与 _Avoid_ 命名 |
 | `docs/adr/` | 架构决策记录，含本地嵌入式存储的取舍（0003） |
-| `docs/PROJECT_CONTEXT.md` | 阶段性记录，可能滞后 |
-| `docs/CODEX_AI_LEARNING_UI_BRIEF.md` | 历史 brief，已过时，不要照做 |
 | `docs/reports/` | 历史报告，描述的是当时状态，不代表当前代码 |
 | `README.md` | 面向人的简介 |
 
 ## 12. 产品内 Agent 的知识工作流
 
-产品内的整理助手遵循 Karpathy 的 LLM Wiki 模式：Raw 不可变，知识库由 AI 持续整理，工作规则写在 schema 里。本项目的 schema 是 `lib/agent/manual.ts`，不在本文件。本节只规定改动相关代码时必须守住的约束。
+产品内的整理助手遵循 Karpathy 的 LLM Wiki 模式：Raw 用户可改、AI 不可改，知识库由 AI 持续整理，工作规则写在 schema 里。本项目的 schema 是 `lib/agent/manual.ts`，不在本文件。本节只规定改动相关代码时必须守住的约束。
 
 ### 对应关系
 

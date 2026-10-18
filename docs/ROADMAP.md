@@ -56,23 +56,29 @@ AI Notes 是面向大学生的生长式 AI 知识系统：把原始学习材料�
 
 ## 二、当前实现状态
 
-> **2026-10-17 按代码核对并更正**：本表下方与「差距清单」中曾有多处描述落后于实现（Raw PATCH、工具循环、图谱、主题、Proposal、反向链接面板）。已按当前代码更正；历史描述不再保留。
+> **2026-10-18 按代码核对并更正**：补齐桌面版、Provider 层、Proposal 状态机、Agent 工具循环与知识包；同步首屏与图谱的现状。历史描述不再保留。
 
 ### 已完成并有真实代码
 
 | 模块 | 实现位置 |
 |---|---|
 | Raw 原始笔记：创建、列表、归档、修改（输入校验、长度上限 50000） | `app/api/raw/route.ts`、`lib/services/sources.ts` |
-| AI 整理：调用 DeepSeek 生成结构化 Draft | `app/api/organize/route.ts`、`lib/deepseek.ts` |
+| AI 整理：生成结构化 Draft（Provider 层，默认 DeepSeek） | `app/api/organize/route.ts`、`lib/ai/provider.ts`、`lib/ai/tasks.ts` |
 | Knowledge：列表、确认入库（Draft 落库）、**字段修改（PATCH）** | `app/api/knowledge/route.ts`、`app/api/knowledge/[id]/route.ts` |
 | KnowledgeRelation：关联的创建、列表、删除 | `app/api/relations/route.ts`、`app/api/relations/[id]/route.ts` |
 | Backlink **接口**：动态反查相关 Knowledge | `app/api/knowledge/[id]/backlinks/route.ts` |
 | Graph **接口**：从 Knowledge + Relation 实时生成 nodes/edges | `app/api/graph/route.ts` |
 | ~~Wiki 只读结构~~ | **已于 2026-10-10 整层移除**（`types/wiki.ts`、`lib/wiki-storage.ts`、`app/api/wiki/route.ts`、`data/wiki.json`）。原因见 `AGENTS.md` 的「决策记录」 |
 | AI 问答：`@` 提及式单轮问答，服务端按引用重读真实内容 | `app/api/assistant/route.ts` |
+| 提议状态机：`pending → approved → applied`，另有 `rejected` / `stale` / `cancelled` | `lib/services/proposals.ts`、`app/api/proposals*` |
+| Agent 工具循环：检索 → 通读 → 提议；blocked 工具不交给模型 | `lib/agent/loop.ts`、`lib/agent/manual.ts`、`app/api/agent/organize/route.ts` |
+| 模型 Provider：DeepSeek / Ollama / 自定义共用 OpenAI 兼容协议，密钥只在服务端 | `lib/ai/`、`app/api/settings/model*` |
+| 知识包：JSON 全量快照、markdown zip 导出、dry-run 导入 | `lib/services/bundle.ts`、`app/api/export`、`app/api/import` |
+| Windows 桌面版：Tauri 2 宿主 + standalone Next.js + NSIS 安装包 | `src-tauri/`、`scripts/prepare-desktop.mjs`、`scripts/verify-desktop-runtime.mjs` |
+| 本机来源防护：`/api/*` 只接受回环 Host，写请求校验 Origin | `middleware.ts` |
 | 工作台 UI：Raw / Knowledge 文件树 + 标签页 | `app/page.tsx` |
 | Knowledge 内联编辑：标题右键改名、摘要/正文/概念可改 | `app/page.tsx` + `PATCH /api/knowledge/:id` |
-| 首屏门禁：滚轮 / 触摸 / 键盘三种揭示方式 + Three.js 粒子场 | `components/landing-page.tsx`、`components/landing-particle-field.tsx` |
+| 首屏落地页：Hero + 特点 + 工作方式 + 收尾；Three.js 粒子场 / Canvas 星丛 / tsParticles 星尘 | `components/landing-page.tsx`、`landing-particle-field.tsx`、`landing-constellation.tsx`、`landing-stardust.tsx` |
 | 界面音效：Web Audio 实时合成、首次询问、偏好持久化 | `components/interface-sound.tsx` |
 
 ### 工程与协作
@@ -80,7 +86,7 @@ AI Notes 是面向大学生的生长式 AI 知识系统：把原始学习材料�
 - 存储层是 Drizzle ORM + 本机 PGlite（PostgreSQL 方言，跑在应用进程内），数据在 `data/pglite`；迁移随启动自动增量补齐
 - 全部 API 路由 `export const runtime = "nodejs"`
 - 样式为 `app/globals.css` 手写 CSS + CSS 变量，**未引入** CSS 框架或 UI 组件库
-- 自动化验证有三条：`pnpm test`（75 条 HTTP 断言，需先跑 `pnpm dev`）、`pnpm verify:db`（内存库跑迁移并验证表 / 约束 / 外键 / 归属隔离，离线）、`pnpm build`（生产构建）。界面改动仍必须手动走查
+- 自动化验证：`pnpm test`（75 条 HTTP 断言，3000 端口空闲时自起临时 dev server）、`pnpm test:unit`（Provider / 配置离线单测）、`pnpm verify:db`（内存库跑迁移并验证表 / 约束 / 外键 / 归属隔离）、`pnpm build`、`pnpm desktop:verify:runtime`（打包运行时健康检查）。界面改动仍必须手动走查
 
 ---
 
@@ -111,8 +117,8 @@ AI Notes 是面向大学生的生长式 AI 知识系统：把原始学习材料�
 
 | # | 目标 | 现状 | 缺口 |
 |---|---|---|---|
-| C1 | 首次滑动出现的边框（控灵敏度） | ✅ **已实现** | `components/landing-page.tsx`：滚轮 96px / 触摸 48px / 回车空格 三种揭示方式，`onlyOnce: true` |
-| C2 | 边框内的欢迎标语与进入窗口 | ✅ **已实现** | 同文件：`landing-intro` 标语 + `landing-welcome` 面板；首屏还带 Three.js 水晶场景与界面音效 |
+| C1 | 首次滑动出现的边框（控灵敏度） | ✅ **已实现（形态已改）** | `components/landing-page.tsx`：完整滚动落地页；点击「进入编辑室」进入工作台，`localStorage(chordnote:entered)` 记住选择 |
+| C2 | 边框内的欢迎标语与进入窗口 | ✅ **已实现** | 同文件：Hero 标语与主按钮 + 特点区 + 工作方式 + 收尾；Hero 右侧 Three.js 粒子场，底层 Canvas 星丛与 tsParticles 星尘 |
 
 ### D. 数据模型层面的长期欠账
 
@@ -125,8 +131,8 @@ AI Notes 是面向大学生的生长式 AI 知识系统：把原始学习材料�
 
 ## 四、排期建议
 
-1. **先补 A2 / A3 / A4**（出链、反向链接面板、勾选内容建链接）——这是阶段一明确要求且当前缺口最大的一块，且都建立在已有的 Relation 接口上，改造成本相对低。
-2. **A1 决策已定**（用户可改、AI 不可改），可以直接排实现：`PATCH /api/raw` + `RawRevision` 修订记录 + 界面入口。
-3. **B1 图谱**是阶段二的重点。方案已定：`d3-force`（力学）+ 自绘 Canvas（渲染），先做局部图谱再扩到全库，见 `AGENTS.md` 的「决策记录」。改动量比 A 类大，建议单独排期。
-4. **B2 agent 插件**是独立工程量，建议单独排期。注意 `agent简易模板.docx` 中的安全底线：**写操作默认进入审查模式，用户确认后才真正写入**；笔记内容视为不可信数据，需在系统提示词中防御 Prompt Injection。
-5. **C1 / C2 / B3** 属 UI 线，可与知识库线并行。
+1. **A2 出链** 仍是唯一需要先做产品决策的项：`links` 现在按无序对去重，要出链必须先决定关系是否方向化。
+2. **A4 圈选片段建链接**：内联标记已能按标题点击建关系，圈选任意正文片段还不存在。
+3. **B4 OCR / B5 网页剪切**：都未引入，属于 Skills 线阶段二。
+4. **Markdown 权威迁移**（ADR-0006）：方向已定、未实施；完成前不要对外宣称"支持本地 Markdown 文件夹"。
+5. 校赛收口优先于新功能：所有对外材料必须与当前实现一致（桌面版、三套主题、图谱、提议链路已可用；错题回流仍是规划中）。

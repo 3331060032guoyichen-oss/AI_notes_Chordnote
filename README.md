@@ -57,7 +57,7 @@ Raw 原始记录 → 整理助手 Draft → 用户确认 → Knowledge 知识页
 - **知识网络**：`d3-force` 力学 + Canvas 自绘，可拖动、滚轮缩放、点节点出卡片、双击打开那一页；拖动即固定。
 - **知识包**：一键导出全部数据（JSON 全量快照，可再导入回来），或导出成 markdown + YAML frontmatter 的 zip —— 任何读 markdown 的工具都能打开，不依赖本应用。
 - **三套阅读主题**：暗室星图 / 暖纸批注 / 实验工坊；界面声音开关收在设置里。
-- **进入体验**：滚轮、触摸、键盘都能揭示欢迎界面。
+- **进入体验**：完整落地页；点击「进入编辑室」进入工作台，并记住这次选择。
 
 ## 快速开始
 
@@ -70,11 +70,13 @@ pnpm dev
 
 打开 <http://localhost:3000>，从左侧「新建笔记」开始。**零配置**：知识库就在本机 —— PGlite（编译成 WASM 的 PostgreSQL，跑在应用进程里），数据落在 `data/pglite`，首次启动自动建目录、补齐 `drizzle/` 里的迁移；不需要数据库服务，也不需要联网。
 
-想要「AI 整理」和右侧 AI 问答，再把 `.env.example` 复制成 `.env.local`，填上 `DEEPSEEK_API_KEY`；不填时这两个端点返回 503，其余功能照常。变量说明见 [`.env.example`](.env.example) 与 [`docs/DEV_WORKFLOW.md`](docs/DEV_WORKFLOW.md)。
+想要「AI 整理」和右侧 AI 问答，再把 `.env.example` 复制成 `.env.local`，填上 `DEEPSEEK_API_KEY`；默认 DeepSeek 且不填时这两个端点返回 503，其余功能照常。也可以在设置里改用 Ollama 或自定义兼容接口。变量说明见 [`.env.example`](.env.example) 与 [`docs/DEV_WORKFLOW.md`](docs/DEV_WORKFLOW.md)。
 
 本地知识库的两条边界：同一份数据目录**同一时刻只能有一个进程写**（PGlite 是单写者，别一边跑 `pnpm dev` 一边让另一个进程连同一目录）；数据只在这台机器上，没有多设备与多云同步。**备份 = 拷走 `data/` 目录，或用设置里的「导出知识包」**；换数据目录用环境变量 `PGLITE_DATA_DIR`。
 
 想直接看到有内容的界面：`pnpm seed:demo`（幂等写入一批演示笔记，见 [`AGENTS.md`](AGENTS.md)）。
+
+想用桌面窗口：`pnpm desktop:dev` 启动 Tauri 开发窗（本机服务固定 `127.0.0.1:3210`）；`pnpm desktop:build` 生成 Windows NSIS 安装包，需要 Rust 工具链。安装包版的数据在 `%LOCALAPPDATA%\Chordnote`，与网页版的 `data/` 互不影响。
 
 ## 当前边界与下一步
 
@@ -88,14 +90,16 @@ pnpm dev
 
 ## 技术栈与项目结构
 
-Next.js 15（App Router） · React 19 · TypeScript · pnpm · 手写 CSS · Drizzle ORM + PGlite（本地嵌入式 PostgreSQL） · Three.js 0.186.0（首屏） · d3-force（图谱力学） · tsParticles（背景星尘）
+Next.js 15（App Router） · React 19 · TypeScript · pnpm · 手写 CSS · Drizzle ORM + PGlite（本地嵌入式 PostgreSQL） · Three.js 0.186.0（首屏） · d3-force（图谱力学） · tsParticles（背景星尘） · Tauri 2（Windows 桌面宿主）
 
 ```text
 app/          Next.js 页面与 API 路由（含 export / import / proposals / agent）
-components/   应用外壳与空间导航、首屏门禁与星尘、知识图谱、Settings 空间、界面音效
-lib/          服务层（sources / notes / links / proposals / bundle）、Agent 工具循环、DeepSeek 边界、手写 zip
+components/   应用外壳与空间导航、首屏落地页与星尘、知识图谱、Settings 空间、界面音效
+lib/          服务层（sources / notes / links / proposals / bundle）、Agent 工具循环、Provider 边界、手写 zip
 types/        TypeScript 类型
 seed/         演示数据（pnpm seed:demo）
+scripts/      构建、桌面打包、回归与数据脚本
+src-tauri/    Windows 桌面宿主（Tauri 2）
 docs/         产品、数据、设计与开发文档
 ```
 

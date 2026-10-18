@@ -5,7 +5,7 @@
 | 项 | 现在是什么 |
 |---|---|
 | 工作分支 | `main`。一个人做就直接提交 `main` 并 `git push`；多人协作走下面的「分工与协作」|
-| 运行形态 | **本机运行，没有部署链路。** 应用与知识库都在使用者本机，交付物就是这份仓库：`pnpm install && pnpm dev` 即可 |
+| 运行形态 | **本机运行，没有 Web 部署链路。** 网页版 `pnpm install && pnpm dev`；Windows 桌面版走 `pnpm desktop:dev` / `pnpm desktop:build`（Tauri 2 + NSIS）。应用与知识库都在使用者本机 |
 | 知识库 | 本机 **PGlite**（PostgreSQL 的 WASM 版，跑在应用进程内）+ Drizzle ORM。数据在 `data/pglite`，首次启动自动补齐迁移，**没有连接串** |
 | 权威说明 | 仓库根目录的 [`AGENTS.md`](../AGENTS.md)：仓库结构、技术栈、已实现 / 已删除功能、决策记录、已知坑。**冲突时以它为准** |
 
@@ -25,16 +25,21 @@
 pnpm install
 cp .env.example .env.local   # 可选：只填 DEEPSEEK_API_KEY
 pnpm dev                     # http://localhost:3000
+pnpm desktop:dev             # Tauri 开发窗，服务固定 127.0.0.1:3210
+pnpm desktop:build           # Windows NSIS 安装包（需要 Rust 工具链）
 ```
 
 | 变量 | 必填 | 说明 |
 |---|---|---|
-| `DEEPSEEK_API_KEY` | 否 | 仅调试 AI 端点需要；不填时 `/api/organize`、`/api/assistant` 返回 503，其余功能正常 |
+| `DEEPSEEK_API_KEY` | 否 | 默认 provider=deepseek 时调试 AI 端点需要；不填时 `/api/organize`、`/api/assistant` 返回 503，其余功能正常 |
 | `CHORDNOTE_PROVIDER` / `CHORDNOTE_MODEL` / `CHORDNOTE_BASE_URL` / `CHORDNOTE_API_KEY` / `CHORDNOTE_TIMEOUT_MS` | 否 | 统一模型配置，优先级高于 `data/settings.json`；设置后界面对应字段锁定。provider 取值 `deepseek` / `ollama` / `custom` |
 | `CHORDNOTE_SETTINGS_FILE` | 否 | 换模型配置文件位置，默认 `./data/settings.json` |
 | `PGLITE_DATA_DIR` | 否 | 换知识库数据目录，默认 `./data/pglite`（相对项目根）。测试脚本用它指到别处的库，避免和应用抢同一份数据 |
+| `CHORDNOTE_DESKTOP` / `CHORDNOTE_SHUTDOWN_TOKEN` / `CHORDNOTE_MIGRATIONS_DIR` / `CHORDNOTE_LOG_DIR` | 否 | 仅由 Tauri 宿主注入；手工跑网页版不要设置 |
 
 没有任何连接串要填：知识库是跑在应用进程内的 PGlite，第一次 `pnpm dev` 就会建目录、补迁移。
+
+桌面安装包版不读 `./data`：库在 `%LOCALAPPDATA%\Chordnote\db`，模型配置与日志在同目录；网页版与桌面版的数据互不影响。
 
 ## 验证流程
 
@@ -44,9 +49,10 @@ pnpm dev                     # http://localhost:3000
 pnpm exec tsc --noEmit   # 类型检查
 pnpm build               # 生产构建；不要与 pnpm dev 同时跑（共用 .next/ 会互相覆盖）
 pnpm test:unit           # 离线单元测试：Provider 归一化 / 工具调用 / 超时 / 错误 / 配置优先级
-pnpm dev                 # 另开终端
-pnpm test                # 75 项回归断言，纯 HTTP，需服务在跑
+pnpm dev                 # 可选：另开终端；不跑时 test 会自起临时服务
+pnpm test                # 75 项回归断言，纯 HTTP；3000 空闲时自起临时服务
 pnpm verify:db           # 离线：在内存库上跑一遍迁移，校验表 / 约束 / 外键 / 归属隔离
+pnpm desktop:verify:runtime  # 离线：用临时数据目录启动打包后的 standalone 服务
 pnpm seed:demo           # 可选：幂等写入演示数据（需服务在跑）
 pnpm seed:reset          # 可选：清空业务表（默认 dry-run，加 -- --yes 才执行；必须先停掉 pnpm dev）
 ```

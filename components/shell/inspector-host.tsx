@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 type InspectorHostProps = {
-  /** Home / Settings 不显示检查器。 */
+  /** 当前内容需要上下文检查器时才挂载右栏。 */
   visible: boolean;
   /** 宽屏下是否被收起；收起的 56px 图标条由 icons 提供。 */
   hidden: boolean;

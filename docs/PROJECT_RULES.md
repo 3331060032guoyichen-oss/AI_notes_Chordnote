@@ -26,11 +26,11 @@ AI Notes 是面向大学生的生长式 AI 知识系统。它帮助用户将手�
 
 涉及知识结构变化的操作遵循「AI 提议 → 用户确认 → 写入知识网络」。原始数据不得被 AI 直接覆盖。
 
-当前实现用「AI 在 Draft 中给出建议 → 用户勾选 → 直接写入」做了**部分替代**；规划中的独立 `Proposal` 实体（`proposed` / `accepted` / `rejected` 三态）**尚未实现**。详见 `DATA_MODEL.md`。
+当前实现已落地独立的 `proposals` 实体与状态机（`pending → approved → applied`，另有 `rejected` / `stale` / `cancelled`），接口在 `/api/proposals*`。AI 只写 `pending` 提议，正式数据等 `apply` 才落库。详见 `DATA_MODEL.md`。
 
 ## Raw 与"整理后的内容"
 
-Raw 保存原始图片、文本和上传文件；整理后的内容落在 Knowledge 层。Raw 必须保留并可追溯——**可修改 ≠ 可覆盖**：用户改动 Raw 时保留修订历史，任何时候都能看到它原来是什么样子。
+Raw 保存原始文本（当前只支持文本，图片与附件未实现）；整理后的内容落在 Knowledge 层。Raw 必须保留并可追溯——**可修改 ≠ 可覆盖**：用户改动 Raw 时保留修订历史，任何时候都能看到它原来是什么样子。
 
 > **原「参考库 / Wiki」整层已于 2026-10-10 移除。** 它当初被写成了一份只读的演示结构（`data/wiki.json`，12 页面 / 14 条带类型的链接），但它本来的意图是**给 agent 的工作手册**（`schema.md`），不该是用户在界面里浏览的内容。将来若要做"承载四类节点的知识层"，以新形态重新设计，不要恢复旧结构。原因见 `AGENTS.md` 的「决策记录」。
 
@@ -38,9 +38,9 @@ Raw 保存原始图片、文本和上传文件；整理后的内容落在 Knowle
 
 Phase 1 建立了一条可验证的持久化闭环：用户输入文本 → Raw 保存 → AI 整理 Draft → 用户确认 → Knowledge → Relation → Backlink → Graph，并验证了服务重启后的持久化。
 
-Step 1–7 的逐条验收记录见 `DEV_WORKFLOW.md` 的「Step gate」一节。
+Step 1–7 的逐条验收记录见 `DEV_WORKFLOW.md` 的「历史记录」一节。
 
-**当前仍未实现**（不得假定已存在）：OCR、多模态输入、Agent 工具调用、RAG、Embedding 和向量数据库。
+**当前仍未实现**（不得假定已存在）：OCR、多模态输入、RAG、Embedding 和向量数据库。Agent 工具调用已实现（`lib/agent/loop.ts`）：只读工具直接执行，写意图一律生成提议。
 
 ## 当前规划：三条工作线
 

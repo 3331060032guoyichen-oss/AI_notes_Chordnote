@@ -291,7 +291,7 @@ fn request_graceful_shutdown(token: &str) -> DesktopResult<()> {
     stream.set_write_timeout(Some(Duration::from_secs(2)))?;
     stream.write_all(
         format!(
-            "POST /api/_desktop/shutdown HTTP/1.1\r\nHost: {SERVICE_HOST}:{SERVICE_PORT}\r\nX-Chordnote-Shutdown-Token: {token}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+            "POST /api/desktop/shutdown HTTP/1.1\r\nHost: {SERVICE_HOST}:{SERVICE_PORT}\r\nX-Chordnote-Shutdown-Token: {token}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
         )
         .as_bytes(),
     )?;
@@ -301,7 +301,12 @@ fn request_graceful_shutdown(token: &str) -> DesktopResult<()> {
 
 fn random_token() -> DesktopResult<String> {
     let mut bytes = [0_u8; 32];
-    getrandom::fill(&mut bytes)?;
+    getrandom::fill(&mut bytes).map_err(|error| {
+        Error::new(
+            ErrorKind::Other,
+            format!("无法生成本地服务关闭令牌：{error}"),
+        )
+    })?;
     Ok(bytes.iter().map(|byte| format!("{byte:02x}")).collect())
 }
 

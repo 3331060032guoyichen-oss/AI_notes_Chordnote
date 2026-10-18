@@ -1,16 +1,19 @@
-/** Settings 的六个入口。能力状态：real = 真实可用，readonly = 只读，planned = 未实现。 */
-export type SettingsSection = "models" | "tools" | "schedules" | "voice" | "themes" | "settings";
+/** Settings 的分类入口。能力状态：real = 真实可用，readonly = 只读，planned = 未实现。 */
+export type SettingsSection = "models" | "tools" | "schedules" | "voice" | "themes" | "data" | "system" | "archive";
 
 export const SETTINGS_SECTIONS: Array<{
   id: SettingsSection;
   label: string;
   hint: string;
+  group: "AI 与 Agent" | "界面偏好" | "数据与连接";
   state: "real" | "readonly" | "planned";
 }> = [
-  { id: "models", label: "Models", hint: "模型提供者与地址", state: "real" },
-  { id: "tools", label: "Tools", hint: "Agent 的授权清单", state: "readonly" },
-  { id: "schedules", label: "Schedules", hint: "定时任务", state: "planned" },
-  { id: "voice", label: "Voice", hint: "界面声音", state: "real" },
-  { id: "themes", label: "Themes", hint: "三套阅读主题", state: "real" },
-  { id: "settings", label: "Settings", hint: "API、数据与系统", state: "real" },
+  { id: "models", label: "模型与服务", hint: "提供者、模型与服务地址", group: "AI 与 Agent", state: "real" },
+  { id: "tools", label: "工具权限", hint: "Agent 可使用的能力", group: "AI 与 Agent", state: "readonly" },
+  { id: "schedules", label: "自动化", hint: "计划任务与后台运行", group: "AI 与 Agent", state: "planned" },
+  { id: "themes", label: "外观主题", hint: "阅读与工作区风格", group: "界面偏好", state: "real" },
+  { id: "voice", label: "界面声音", hint: "操作反馈音效", group: "界面偏好", state: "real" },
+  { id: "data", label: "Data", hint: "导入、导出与本地存储", group: "数据与连接", state: "real" },
+  { id: "system", label: "System", hint: "API 密钥与连接检查", group: "数据与连接", state: "real" },
+  { id: "archive", label: "归档", hint: "已收起的知识页", group: "数据与连接", state: "real" },
 ];
