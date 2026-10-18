@@ -65,12 +65,14 @@
 - 新增命令式文档搜索、白板工作区和版本冲突保护；`/api/bootstrap` 合并工作区首屏读取，避免 PGlite 冷启动时的并发路由竞争。
 - 浏览器验收：在 861px 时中央区 325px，在 760px 时中央区 274px；两侧均未覆盖正文。白板写入显示“已保存”。
 - 记录：`components/{shell,workspace-tree,document-search,canvas-workspace}.tsx`、`app/page.tsx`、`app/globals.css`、`/api/bootstrap`、`/api/canvas`、`lib/services/{canvases,graph}.ts`、迁移 0007。
+- 改动文件：`app/api/{bootstrap,canvas,graph}/`、`components/{shell/app-shell,workspace-tree,document-search,canvas-workspace,graph-view}.tsx`、`app/{page.tsx,globals.css}`、`lib/services/{canvases,graph}.ts`、`lib/db/{schema,client}.ts`、`drizzle/0007_canvas_workspace.sql`。
 
 ## 第五组验收记录
 
 - 模型设置拆分为本地模型、模型厂商和自定义模型；厂商/自定义可发现模型，模型选择移到右侧 Agent 输入区，已删除 `system` 设置。
 - dsh 新增 ACP 适配器。外部 Agent 通过 ACP 运行，子进程移除所有 `CHORDNOTE_*` 环境变量，仅可通过一次性令牌的 MCP 桥使用白名单工具。
 - 定向运行时测试通过：本地 dsh 子进程完成多轮模型/工具调用；本地 ACP fixture 完成相同 MCP 边界测试。没有使用用户密钥或外部订阅。
+- 改动文件：`lib/agent/{runtime,dsh-acp,acp-mcp,loop,manual,runtime.test}.ts|mjs`、`lib/ai/{config,config.test}.ts`、`app/api/{agent/organize,settings/model}/`、`components/{agent-model-select,settings/model-panel}.tsx`、`package.json`、`pnpm-lock.yaml`。
 - 剩余边界：真实 Codex/Claude Code ACP 程序需要使用者在设置中配置并完成自己的登录；本次未对第三方账号发起调用。
 
 ## 第六组验收记录
@@ -78,6 +80,7 @@
 - 所有普通删除仍是归档。Archive 支持 Raw / Knowledge 的恢复与永久清除；清除只接受已归档对象，要求理由和依赖确认，并写审计记录。
 - 永久清除保留 Raw 与 Knowledge 的外键/修订保护：有依赖时先返回冲突，只有用户确认后才清理允许清理的历史行。
 - HTTP 回归覆盖归档、未确认永久删除被拒绝、确认后清除成功。
+- 改动文件：`app/api/archive/route.ts`、`lib/services/archive.ts`、`components/settings/{archive-panel,settings-space}.tsx`、`lib/services/{sources,notes,bundle,document-path}.ts`、`scripts/regression.mjs`。
 
 ## 第七组验收记录
 
@@ -85,6 +88,7 @@
 - `/api/agent/schema` 和 Schema 视图只读取 `lib/agent/manual.ts`；Agent runtime 加载同一份字符串。应用内不能编辑。
 - 图谱移除孤立节点、方向箭头和重新布局选项；编辑器移除块状输入框，首行 H1 是标题。
 - 回归新增“待确认提议应用后保留 `[[...]]` 并立即重建引用”断言。编辑器和设置的浏览器验收截图见 `ui-editor-proof.png`、`ui-settings-proof.png`。
+- 改动文件：`components/{markdown-editor,document-session,schema-view}.tsx`、`app/api/agent/schema/route.ts`、`components/graph-view.tsx`、`components/settings/sections.tsx`、`lib/documents/{markdown,compat,markdown.test}.ts`、`scripts/regression.mjs`。
 
 ## 最终验证与冲突
 
