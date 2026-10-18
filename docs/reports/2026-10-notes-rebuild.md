@@ -46,7 +46,7 @@
 - JSON 导出升级 v2 并继续接受 v1；Markdown 导出保留原始 frontmatter 与路径。
 - 验证：7 个迁移/11 表检查通过，4 个 Markdown 单测通过，原 75 项 HTTP 回归通过；新增文档端到端断言正在运行。
 - 修改：lib/documents、lib/services/{notes,sources,documents,bundle}、Raw/Knowledge API 与 types、drizzle/0006、scripts/regression.mjs。
-- 待解决：同名内容导入仍沿用保留已有策略，需要补齐 v2 路径判重与来源映射；不能把跳过项当作已恢复。
+- v2 路径判重、来源 ID、wikilink 目标和正式关系端点映射已补齐；87 项 HTTP 回归中的同名异路径导入与重导断言通过。v1 仍按标题保留已有并跳过导入。
 
 
 ## 第三组验收记录
@@ -77,10 +77,10 @@
 
 ## 第六组验收记录
 
-- 所有普通删除仍是归档。Archive 支持 Raw / Knowledge 的恢复与永久清除；清除只接受已归档对象，要求理由和依赖确认，并写审计记录。
+- Raw、Knowledge 与正式关系的普通删除进入 Archive。Archive 支持恢复与永久清除；清除只接受已归档对象，要求理由和依赖确认，并写审计记录。
 - 永久清除保留 Raw 与 Knowledge 的外键/修订保护：有依赖时先返回冲突，只有用户确认后才清理允许清理的历史行。
-- HTTP 回归覆盖归档、未确认永久删除被拒绝、确认后清除成功。
-- 改动文件：`app/api/archive/route.ts`、`lib/services/archive.ts`、`components/settings/{archive-panel,settings-space}.tsx`、`lib/services/{sources,notes,bundle,document-path}.ts`、`scripts/regression.mjs`。
+- HTTP 回归覆盖归档、恢复、未确认永久删除被拒绝、确认后清除成功，包括正式关系。
+- 改动文件：`app/api/archive/route.ts`、`lib/services/{archive,links,sources,notes,bundle,document-path}.ts`、`components/settings/{archive-panel,settings-space}.tsx`、`scripts/regression.mjs`。
 
 ## 第七组验收记录
 
@@ -93,6 +93,23 @@
 ## 最终验证与冲突
 
 - `pnpm lint`、`pnpm exec tsc --noEmit`、`pnpm test:unit`（24 项）、Markdown/dsh 定向测试（7 项）、`pnpm verify:db`（8 条迁移/12 张表）均通过。
-- `pnpm test`：83 项 HTTP 断言通过；使用临时 PGlite 数据目录。
+- `pnpm test`：90 项 HTTP 断言通过；使用临时 PGlite 数据目录。新增 v2 同名异路径、来源、wikilink、正式关系、重导和关系归档验收。
 - `pnpm build` 通过；`pnpm desktop:verify:runtime` 在临时数据目录通过健康检查和受控关闭。
 - Windows standalone 曾因完整 dsh/ACP 包树 glob 追踪而长时间停滞，已收窄为本地运行时插件；生产构建和桌面 runtime 已随后通过。
+
+## 逐项对照任务书
+
+| 项目 | 状态 | 验收依据或剩余边界 |
+|---|---|---|
+| 1. dsh 多模型 Agent 与只读 LLM Wiki Schema | 部分实现 | dsh 多步循环与 ACP/MCP fixture 通过，Schema 同源；尚未用已登录的真实 Codex/Claude ACP 程序及真实 Ollama/厂商端点端到端调用。 |
+| 2. wikilink 与常用标注 | 已实现 | 浏览器验收 `[[` 补全、链接创建、Live Preview；共享语法树单测通过。 |
+| 3. 移除知识页常驻出入链面板 | 已实现 | 右侧只保留 Agent；命令搜索提供链接查询。 |
+| 4. Agent 链接、连续正文与极简标题 | 已实现 | 提议应用后 `[[...]]` 保留并立即派生引用的 HTTP 断言通过；首行 H1 为标题。 |
+| 5. Ribbon 与左树 | 已实现 | 入口和目录顺序已接线，浏览器验收。 |
+| 6. 精简说明文字与三类模型设置 | 已实现 | 设置为本地/厂商/自定义，模型选择在 Agent 输入区。 |
+| 7. 删除进入 Archive | 已实现 | Raw、Knowledge 与正式关系均可从 Archive 恢复或永久清除；白板卡片的归档/恢复入口在白板内。 |
+| 8. 图谱选项精简 | 已实现 | 孤立节点、方向箭头、重新布局选项已移除。 |
+| 9. 右栏开关与中央压缩 | 已实现 | 861px 与 760px 两侧展开时中央区实测未被覆盖。 |
+| 10. Wiki frontmatter 属性折叠 | 已实现 | 五项属性默认折叠，编辑回写同一 Markdown frontmatter。 |
+
+上表的“已实现”表示代码及相应本地验收完成。ACP 实际账号、真实 Ollama 和厂商端点联调仍需在配置好对应服务的环境中完成，不能把整张任务书的实机验收标为全部完成。

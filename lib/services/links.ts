@@ -5,7 +5,7 @@ import { and, desc, eq, isNull, or } from "drizzle-orm";
 import type { KnowledgeRelation } from "../../types/relation";
 import { getUserContext } from "../auth/context";
 import { getDb, type DbTransaction } from "../db/client";
-import { links } from "../db/schema";
+import { auditLog, links } from "../db/schema";
 
 // 正式关系（links）服务层。
 // 读路径默认排除已软删除的关系（deleted_at is null）。
@@ -156,12 +156,14 @@ export async function createOrReviveLinkInTx(
 /** 普通"移除"= 软删除。影响 0 行（不存在或已软删）返回 false，调用方据此返回 404。 */
 export async function softDeleteLink(id: string): Promise<boolean> {
   const { db } = await getDb();
-  const { userId } = getUserContext();
-  const rows = await db
+  const { userId, actor } = getUserContext();
+  return db.transaction(async tx => {
+  const rows = await tx
     .update(links)
     .set({ deletedAt: new Date() })
     .where(and(eq(links.id, id), eq(links.userId, userId), isNull(links.deletedAt)))
     .returning();
-
+  if (rows[0]) await tx.insert(auditLog).values({id:`audit_${randomUUID()}`,userId,actorType:actor.type,actorId:actor.id,operation:"link.archive",targetType:"link",targetId:id,result:"ok",detail:{sourceId:rows[0].sourceNoteId,targetId:rows[0].targetNoteId}});
   return rows.length > 0;
+  });
 }

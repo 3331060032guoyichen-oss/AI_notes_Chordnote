@@ -335,6 +335,15 @@ try {
 
   const delAgain = await DELETE(`/api/relations/${linkId}`);
   check("DELETE /api/relations/:id 再次 → 204", delAgain.status === 204);
+  const archiveWithLink = await GET("/api/archive");
+  check("删除的正式关系进入 Archive", archiveWithLink.status === 200 && archiveWithLink.body?.items?.some(item => item.kind === "relation" && item.id === linkId));
+  const restoredLink = await PATCH("/api/archive", {kind:"relation",id:linkId});
+  const afterLinkRestore = await GET("/api/relations");
+  check("Archive 可恢复正式关系", restoredLink.status === 200 && afterLinkRestore.body?.relations?.some(item => item.id === linkId));
+  await DELETE(`/api/relations/${linkId}`);
+  const unconfirmedLinkPurge = await DELETE("/api/archive", {kind:"relation",id:linkId,reason:"回归关系",confirmDependencies:false});
+  const confirmedLinkPurge = await DELETE("/api/archive", {kind:"relation",id:linkId,reason:"回归关系",confirmDependencies:true});
+  check("正式关系只能在 Archive 确认后永久删除", unconfirmedLinkPurge.status === 409 && confirmedLinkPurge.status === 200);
 
   // ---- 引用守卫 / AI 端点读路径 -----------------------------------------
   const blocked = await DELETE("/api/raw", { rawId: rawBId });
@@ -464,6 +473,41 @@ try {
 
   // 这两行交给 finally 按标题回收（它们不在 created 里，因为 id 是导入时生成的）。
   created.imported = { rawTitle: IMPORT_RAW_TITLE, noteTitle: IMPORT_NOTE_TITLE };
+
+  // v2 uses paths and exported ids. Two documents may share a visible title;
+  // source ownership, explicit wikilinks and formal relations must still map.
+  const sameTitle = `同名导入 ${RUN}`;
+  const oldRawA = `raw_old_a_${RUN}`, oldRawB = `raw_old_b_${RUN}`;
+  const oldNoteA = `knowledge_old_a_${RUN}`, oldNoteB = `knowledge_old_b_${RUN}`;
+  const sourcePathA = `raw/papers/${RUN}-a.md`, sourcePathB = `raw/books/${RUN}-b.md`;
+  const notePathA = `wilki/concept/${RUN}-a.md`, notePathB = `wilki/sources/${RUN}-b.md`;
+  const sourceMarkdown = (body) => `---\ntitle: ${sameTitle}\n---\n# ${sameTitle}\n\n${body}\n`;
+  const noteMarkdown = (sourceId, body) => `---\ntitle: ${sameTitle}\nsource: ${sourceId}\ntags: [回归]\n---\n# ${sameTitle}\n\n${body}\n`;
+  const v2Bundle = {
+    format: "chordnote.bundle", version: 2,
+    sources: [
+      { id: oldRawA, title: sameTitle, text: "不同路径原话 A", markdown: sourceMarkdown("不同路径原话 A"), path: sourcePathA, archived: false },
+      { id: oldRawB, title: sameTitle, text: "不同路径原话 B", markdown: sourceMarkdown("不同路径原话 B"), path: sourcePathB, archived: false },
+    ],
+    notes: [
+      { id: oldNoteA, sourceId: oldRawA, sourceTitle: sameTitle, title: sameTitle, summary: "摘要 A", content: `引用 [[${oldNoteB}|另一页]]`, markdown: noteMarkdown(oldRawA, `引用 [[${oldNoteB}|另一页]]`), path: notePathA, keyPoints: [], concepts: [], keywords: [] },
+      { id: oldNoteB, sourceId: oldRawB, sourceTitle: sameTitle, title: sameTitle, summary: "摘要 B", content: "知识页 B", markdown: noteMarkdown(oldRawB, "知识页 B"), path: notePathB, keyPoints: [], concepts: [], keywords: [] },
+    ],
+    links: [{ fromId: oldNoteA, toId: oldNoteB, from: sameTitle, to: sameTitle, reason: "回归关系", type: "related" }],
+  };
+  const importedV2 = await POST("/api/import", v2Bundle);
+  const v2Raws = (await GET("/api/raw")).body?.raws ?? [];
+  const v2Notes = (await GET("/api/knowledge")).body?.knowledges ?? [];
+  const rawPathA = v2Raws.find(r => r.path === sourcePathA), rawPathB = v2Raws.find(r => r.path === sourcePathB);
+  const notePathRowA = v2Notes.find(n => n.path === notePathA), notePathRowB = v2Notes.find(n => n.path === notePathB);
+  created.raws.push(rawPathA?.id, rawPathB?.id);
+  created.notes.push(notePathRowA?.id, notePathRowB?.id);
+  const v2Refs = await GET("/api/documents");
+  const v2Links = await GET("/api/relations");
+  check("v2 同名异路径导入保留两份文档与原始来源", importedV2.status === 200 && importedV2.body?.result?.sources?.created === 2 && importedV2.body?.result?.notes?.created === 2 && rawPathA && rawPathB && notePathRowA?.rawId === rawPathA.id && notePathRowB?.rawId === rawPathB.id);
+  check("v2 导入重映射 wikilink 与正式关系端点", v2Refs.body?.references?.some(r => r.sourceId === notePathRowA?.id && r.targetId === notePathRowB?.id) && v2Links.body?.relations?.some(r => [r.sourceId, r.targetId].includes(notePathRowA?.id) && [r.sourceId, r.targetId].includes(notePathRowB?.id)));
+  const reimportV2 = await POST("/api/import", v2Bundle);
+  check("v2 按路径重导保留已有内容", reimportV2.body?.result?.sources?.skipped === 2 && reimportV2.body?.result?.notes?.skipped === 2 && reimportV2.body?.result?.links?.skipped === 1);
 
   // ---- 「新建」只准写原始记录 --------------------------------------------
   // 知识页必须由「整理助手提议 → 用户确认」产生（AGENTS.md 核心链路）。

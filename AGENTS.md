@@ -204,7 +204,7 @@ type Tab =
 | `/api/bootstrap` | GET | 一次读取工作区启动所需的 Raw、Knowledge、图谱和提议，避免 PGlite 并发冷启动 |
 | `/api/documents` | GET / POST | Markdown 文档引用索引 / 用户显式创建未解析 Raw 链接目标 |
 | `/api/canvas` | GET / PUT | 白板工作区，`version` 乐观并发 |
-| `/api/archive` | GET / POST / DELETE | 归档列表、恢复、归档内永久清除；永久清除需要理由与依赖确认 |
+| `/api/archive` | GET / PATCH / DELETE | 归档列表、恢复、归档内永久清除；永久清除需要理由与依赖确认 |
 | `/api/proposals` | GET / POST | 提议列表（可按 status、targetNoteId 过滤）/ 提交 |
 | `/api/proposals/[id]/approve` `reject` `apply` | POST | 决议与执行。apply 需先 approved，支持 `Idempotency-Key` |
 | `/api/export` | GET | 默认 JSON 全量快照；`?format=markdown` 返回 markdown + YAML frontmatter 的 zip |
@@ -239,7 +239,7 @@ jsonb 列直接传数组或对象，**不要手动 `JSON.stringify`**。Drizzle 
 
 - `notes` 与 `raw_notes` 归档优先。`notes.deleted_at` 是墓碑标记，与 `archived_at` 是两个独立状态。
 - `note_revisions`、`proposals`、`links` 两端对 `notes` 的外键为 RESTRICT：删除不会静默带走历史或关系。因此每条笔记都有 v1 修订，无法被物理删除，这是预期行为。
-- `links` 普通删除是可恢复软删除（`deleted_at`）。`links_pair_idx` 是完整唯一索引，重建同一关系时必须复活已有行，不能插入新行。
+- `links` 普通删除是可恢复软删除（`deleted_at`），在 Archive 中可恢复或永久清除。`links_pair_idx` 是完整唯一索引，重建同一关系时必须复活已有行，不能插入新行。
 - `raw_notes` 没有 `deleted_at`，目前只有归档。
 - Agent 没有 purge 路径，最多建议归档。用户只能在 Archive 中发起永久清除，必须填写理由并确认依赖；理由写入 `audit_log.detail.reason`，Raw 不级联清除。
 
