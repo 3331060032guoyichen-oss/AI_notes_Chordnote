@@ -1,3 +1,5 @@
+import { rawMarkdown } from "../documents/compat";
+import { readMarkdown, safeDocumentPath } from "../documents/markdown";
 import { randomUUID } from "node:crypto";
 
 import { and, desc, eq, isNotNull, isNull } from "drizzle-orm";
@@ -32,6 +34,10 @@ function toSource(row: SourceRow): Raw {
     id: row.id,
     title: row.title,
     text: row.text,
+    markdown: rawMarkdown(row),
+    path: row.path ?? `raw/articles/${row.id}.md`,
+    version: row.version,
+    archivedAt: row.archivedAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),
   };
 }
@@ -152,7 +158,7 @@ export type UpdateSourceResult =
  * 正好承载"改前 / 改后"快照，且不需要新增迁移。若将来要做"逐版本对比 / 回滚到某一版"
  * 的界面，再单开 `raw_revisions` 表并追加迁移（见 docs/schema.md）。
  */
-export async function updateSource(id: string, text: string): Promise<UpdateSourceResult> {
+export async function updateSource(id: string, text: string, document?: { markdown: string; path?: string; version?: number }): Promise<UpdateSourceResult> {
   requireUserActor(getUserContext());
 
   const { db } = await getDb();
@@ -170,14 +176,15 @@ export async function updateSource(id: string, text: string): Promise<UpdateSour
 
     if (!current) return { status: "not_found" as const };
 
-    if (current.text === text) {
+    if (document?.version !== undefined && current.version !== document.version) throw new Error("VERSION_CONFLICT");
+    if (current.text === text && !document) {
       return { status: "unchanged" as const, raw: toSource(current) };
     }
 
     const updated = (
       await tx
         .update(rawNotes)
-        .set({ text, version: current.version + 1, updatedAt: new Date() })
+        .set({ text, ...(document ? { markdown: document.markdown, title: readMarkdown(document.markdown).properties.title || null, ...(document.path ? { path: safeDocumentPath(document.path) } : {}) } : { markdown: null }), version: current.version + 1, updatedAt: new Date() })
         .where(and(eq(rawNotes.id, id), eq(rawNotes.userId, userId)))
         .returning()
     )[0];
@@ -197,6 +204,8 @@ export async function updateSource(id: string, text: string): Promise<UpdateSour
         before: current.text,
         after: text,
         version: updated.version,
+        beforeMarkdown: current.markdown, afterMarkdown: updated.markdown,
+        beforePath: current.path, afterPath: updated.path,
       },
     });
 

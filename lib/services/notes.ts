@@ -1,3 +1,5 @@
+import { knowledgeMarkdown, applyLegacyPatch, bodyWithoutTitle } from "../documents/compat";
+import { readMarkdown, safeDocumentPath } from "../documents/markdown";
 import { randomUUID } from "node:crypto";
 
 import { and, desc, eq, isNotNull, isNull } from "drizzle-orm";
@@ -27,6 +29,8 @@ function toKnowledge(row: NoteRow): Knowledge {
   return {
     id: row.id,
     rawId: row.rawId,
+    markdown: knowledgeMarkdown(row),
+    path: row.path ?? `wilki/concept/${row.id}.md`,
     title: row.title,
     summary: row.summary,
     content: row.content,
@@ -192,12 +196,15 @@ export async function promoteFromSource(
     }
 
     const id = `knowledge_${randomUUID()}`;
+    const markdown = knowledgeMarkdown({ ...input, createdAt: new Date() });
     const inserted = await tx
       .insert(notes)
       .values({
         id,
         userId,
         rawId: input.rawId,
+        markdown,
+        path: `wilki/concept/${id}.md`,
         title: input.title,
         summary: input.summary,
         content: input.content,
@@ -216,6 +223,8 @@ export async function promoteFromSource(
       id: `revision_${randomUUID()}`,
       userId,
       noteId: row.id,
+      markdown: row.markdown,
+      path: row.path,
       version: row.version,
       title: row.title,
       summary: row.summary,
@@ -237,7 +246,7 @@ export type UpdateNoteResult =
   | { status: "conflict"; knowledge: Knowledge };
 
 export type UpdateNotePatch = Partial<
-  Pick<Knowledge, "title" | "summary" | "content" | "keyPoints" | "concepts" | "keywords">
+  Pick<Knowledge, "title" | "summary" | "content" | "keyPoints" | "concepts" | "keywords" | "markdown" | "path">
 >;
 
 /**
@@ -285,10 +294,15 @@ export async function updateNoteInTx(
     return { status: "conflict" as const, knowledge: toKnowledge(current) };
   }
 
+  const markdown = patch.markdown ?? applyLegacyPatch(knowledgeMarkdown(current), patch);
+  const properties = readMarkdown(markdown).properties;
+  const normalizedPatch = { ...patch, markdown, title: properties.title || patch.title || current.title,
+    summary: properties.description, keywords: properties.tags, content: bodyWithoutTitle(markdown),
+    ...(patch.path ? { path: safeDocumentPath(patch.path) } : {}) };
   const updated = (
     await tx
       .update(notes)
-      .set({ ...patch, version: current.version + 1, updatedAt: new Date() })
+      .set({ ...normalizedPatch, version: current.version + 1, updatedAt: new Date() })
       .where(and(eq(notes.id, id), eq(notes.userId, userId)))
       .returning()
   )[0];
@@ -297,6 +311,8 @@ export async function updateNoteInTx(
     id: `revision_${randomUUID()}`,
     userId,
     noteId: updated.id,
+    markdown: updated.markdown,
+    path: updated.path,
     version: updated.version,
     title: updated.title,
     summary: updated.summary,

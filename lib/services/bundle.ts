@@ -4,8 +4,10 @@ import { getUserContext } from "../auth/context";
 import { getDb } from "../db/client";
 import { links, noteRevisions, notes, rawNotes } from "../db/schema";
 import { createOrReviveLink, listLinks } from "./links";
-import { listArchivedNotes, listNotes, promoteFromSource } from "./notes";
-import { createSource, listArchivedSources, listSources } from "./sources";
+import { listArchivedNotes, listNotes, promoteFromSource, updateNote, setNoteArchived } from "./notes";
+import { createSource, listArchivedSources, listSources, updateSource, archiveSource } from "./sources";
+import { rawMarkdown, knowledgeMarkdown } from "../documents/compat";
+import { safeDocumentPath } from "../documents/markdown";
 import { createZip, type ZipEntry } from "../zip";
 
 // 知识包（Bundle）—— "数据是你的"这条承诺的兑现方式。
@@ -18,9 +20,10 @@ import { createZip, type ZipEntry } from "../zip";
 // 导出仍然带上它，是为了让人拿到完整快照去归档或迁库。
 
 export const BUNDLE_FORMAT = "chordnote.bundle";
-export const BUNDLE_VERSION = 1;
+export const BUNDLE_VERSION = 2;
 
 export type BundleSource = {
+  markdown?: string; path?: string; id?: string;
   title: string | null;
   text: string;
   createdAt: string;
@@ -28,6 +31,7 @@ export type BundleSource = {
 };
 
 export type BundleNote = {
+  markdown?: string; path?: string; id?: string; sourceId?: string; archived?: boolean;
   title: string;
   summary: string;
   content: string;
@@ -48,6 +52,7 @@ export type BundleLink = {
 };
 
 export type BundleRevision = {
+  markdown?: string | null; path?: string | null;
   noteTitle: string;
   version: number;
   title: string;
@@ -110,12 +115,14 @@ export async function exportBundle(): Promise<KnowledgeBundle> {
       revisions: revisionRows.length,
     },
     sources: rawRows.map((row) => ({
+      id: row.id, markdown: rawMarkdown(row), path: row.path ?? `raw/articles/${row.id}.md`,
       title: row.title,
       text: row.text,
       createdAt: row.createdAt.toISOString(),
       archived: row.archivedAt !== null,
     })),
     notes: noteRows.map((row) => ({
+      id: row.id, sourceId: row.rawId, markdown: knowledgeMarkdown(row), path: row.path ?? `wilki/concept/${row.id}.md`, archived: row.archivedAt !== null,
       title: row.title,
       summary: row.summary,
       content: row.content,
@@ -133,6 +140,7 @@ export async function exportBundle(): Promise<KnowledgeBundle> {
       type: row.type,
     })),
     revisions: revisionRows.map((row) => ({
+      markdown: row.markdown, path: row.path,
       noteTitle: titleById.get(row.noteId) ?? row.noteId,
       version: row.version,
       title: row.title,
@@ -193,7 +201,8 @@ export async function exportMarkdownBundle(): Promise<{ file: Buffer; fileName: 
 
   const notePaths = new Map<string, string>();
   for (const note of bundle.notes) {
-    const path = `notes/${safeFileName(note.title, "未命名知识页", usedNoteNames)}.md`;
+    const path = note.path ? safeDocumentPath(note.path) : `notes/${safeFileName(note.title, "未命名知识页", usedNoteNames)}.md`;
+    if (note.markdown !== undefined) { entries.push({ name: path, content: note.markdown }); notePaths.set(note.title, path); continue; }
     notePaths.set(note.title, path);
 
     const out = outlinks.get(note.title) ?? [];
@@ -223,7 +232,8 @@ export async function exportMarkdownBundle(): Promise<{ file: Buffer; fileName: 
 
   for (const source of bundle.sources) {
     const label = source.title?.trim() || source.text.trim().slice(0, 24) || "未命名原始记录";
-    const path = `sources/${safeFileName(label, "未命名原始记录", usedSourceNames)}.md`;
+    const path = source.path ? safeDocumentPath(source.path) : `sources/${safeFileName(label, "未命名原始记录", usedSourceNames)}.md`;
+    if (source.markdown !== undefined) { entries.push({ name: path, content: source.markdown }); continue; }
     const frontmatter = [
       "---",
       `title: ${yamlString(label)}`,
@@ -368,6 +378,8 @@ export async function importBundle(
     }
 
     const created = await createSource(text, title || null);
+    if (typeof source.markdown === "string") await updateSource(created.id, text, { markdown: source.markdown, path: typeof source.path === "string" ? safeDocumentPath(source.path) : undefined });
+    if (source.archived === true) await archiveSource(created.id);
     result.sources.created += 1;
     if (title) {
       sourceTitleSet.add(title);
@@ -425,6 +437,8 @@ export async function importBundle(
       origin: "user",
     });
 
+    if (promoted.created && typeof note.markdown === "string") await updateNote(promoted.knowledge.id, { markdown: note.markdown, ...(typeof note.path === "string" ? { path: safeDocumentPath(note.path) } : {}) });
+    if (promoted.created && note.archived === true) await setNoteArchived(promoted.knowledge.id, true);
     if (promoted.created) {
       result.notes.created += 1;
       noteTitleSet.add(title);

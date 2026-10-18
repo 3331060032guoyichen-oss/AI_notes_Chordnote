@@ -6,7 +6,7 @@ import { MAX_RAW_TEXT_LENGTH, updateSource } from "../../../../lib/services/sour
 
 export const runtime = "nodejs";
 
-type RawPatchBody = { text?: unknown };
+type RawPatchBody = { text?: unknown; markdown?: unknown; path?: unknown; version?: unknown };
 
 function errorResponse(message: string, status: number, code: string) {
   return NextResponse.json({ error: { code, message } }, { status });
@@ -65,7 +65,11 @@ export async function PATCH(
   try {
     requireUserActor(getUserContext());
 
-    const result = await updateSource(id, body.text);
+    if (body.markdown !== undefined && (typeof body.markdown !== "string" || body.markdown.length > MAX_RAW_TEXT_LENGTH)) return errorResponse("文档无效", 400, "INVALID_MARKDOWN");
+    const result = await updateSource(id, body.text, typeof body.markdown === "string" ? {
+      markdown: body.markdown, path: typeof body.path === "string" ? body.path : undefined,
+      version: typeof body.version === "number" ? body.version : undefined,
+    } : undefined);
 
     if (result.status === "not_found") {
       return errorResponse("这条原始记录已不存在，请刷新目录。", 404, "RAW_NOT_FOUND");
@@ -81,6 +85,7 @@ export async function PATCH(
       revisionId: result.revisionId,
     });
   } catch (error) {
+    if (error instanceof Error && error.message === "VERSION_CONFLICT") return errorResponse("记录已有新版本，当前编辑已保留，请重新载入后合并。", 409, "VERSION_CONFLICT");
     if (error instanceof AuthorizationError) {
       return errorResponse("该操作需要通过提议流程，请改用提议接口。", 403, error.code);
     }

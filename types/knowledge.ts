@@ -1,4 +1,6 @@
 export type Knowledge = {
+  markdown?: string;
+  path?: string;
   id: string;
   rawId: string;
   title: string;

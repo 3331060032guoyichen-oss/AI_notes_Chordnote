@@ -101,7 +101,9 @@ async function ensureServer() {
   const nextBin = require.resolve("next/dist/bin/next");
   const child = spawn(process.execPath, [nextBin, "dev", "--port", "3000"], {
     cwd: process.cwd(),
-    env: { ...process.env, PGLITE_DATA_DIR: dataDir },
+    env: { ...process.env, PGLITE_DATA_DIR: dataDir,
+      CHORDNOTE_PROVIDER: "ollama", CHORDNOTE_MODEL: "regression-offline",
+      CHORDNOTE_BASE_URL: "http://127.0.0.1:9/v1", CHORDNOTE_TIMEOUT_MS: "1000" },
     stdio: "ignore",
   });
   const ownedPids = [child.pid];
@@ -167,7 +169,7 @@ try {
   check("POST /api/raw 创建 201", rawA.status === 201 && Boolean(rawAId));
   check(
     "POST /api/raw 响应形状",
-    JSON.stringify(Object.keys(rawA.body?.raw ?? {}).sort()) === '["createdAt","id","text","title"]',
+    ["createdAt", "id", "text", "title", "markdown", "path", "version"].every(key => key in (rawA.body?.raw ?? {})),
   );
 
   const empty = await POST("/api/raw", { text: "   " });
@@ -235,7 +237,7 @@ try {
   check("PATCH /api/raw/:id 修改 200", rawEdit.status === 200 && rawEdit.body?.changed === true);
   check(
     "PATCH /api/raw/:id 响应形状不变",
-    JSON.stringify(Object.keys(rawEdit.body?.raw ?? {}).sort()) === '["createdAt","id","text","title"]',
+    ["createdAt", "id", "text", "title", "markdown", "path", "version"].every(key => key in (rawEdit.body?.raw ?? {})),
   );
 
   const rawAfterEdit = await GET("/api/raw");
@@ -377,7 +379,7 @@ try {
   const bundle = await bundleRes.json().catch(() => null);
   check(
     "GET /api/export 返回知识包",
-    bundleRes.status === 200 && bundle?.format === "chordnote.bundle" && bundle?.version === 1,
+    bundleRes.status === 200 && bundle?.format === "chordnote.bundle" && bundle?.version === 2,
   );
   check(
     "GET /api/export 以标题为可移植键（含本次造的数据）",
@@ -507,6 +509,21 @@ try {
   );
 } catch (error) {
   check("测试执行未抛异常", false, error.message);
+  // Canonical Markdown survives proposal application; references are derived immediately.
+  const mdRaw = await POST("/api/raw", { text: "文档管线夹具", title: `md-${RUN}` });
+  created.raws.push(mdRaw.body?.raw?.id);
+  const mdNote = await POST("/api/knowledge", { rawId: mdRaw.body.raw.id, draft: draft(`md-${RUN}`) });
+  const mdId = mdNote.body.knowledge.id; created.notes.push(mdId);
+  const canonical = `---\ntitle: md-${RUN}\ncustom: {preserved: true}\ntags: [测试]\n---\n# md-${RUN}\n\n[[回归改过的标题|可读链接]] 和 \\[[转义]]\n`;
+  const mdSaved = await PATCH(`/api/knowledge/${mdId}`, { markdown: canonical, version: 1 });
+  check("Markdown 保存保留未知 YAML 与 wikilink", mdSaved.status === 200 && mdSaved.body.knowledge.markdown.includes("custom: {preserved: true}") && mdSaved.body.knowledge.markdown.includes("[[回归改过的标题|可读链接]]"));
+  const refs = await GET("/api/documents");
+  check("双向链接按语法解析并忽略转义", refs.body.references.filter(r => r.sourceId === mdId).length === 1 && refs.body.references.some(r => r.sourceId === mdId && r.targetId === noteA));
+  const target = await POST("/api/documents", { target: `raw/articles/new-${RUN}` });
+  created.raws.push(target.body?.document?.id);
+  check("未解析链接显式创建 Raw 并保存路径", target.status === 201 && target.body?.document?.kind === "raw" && target.body.document.path === `raw/articles/new-${RUN}.md`);
+  const forbiddenPath = await POST("/api/documents", { target: "../escape" });
+  check("路径不能越出知识库", forbiddenPath.status === 409);
 } finally {
   // 清理走公开接口的"归档"（应用没有物理删除入口，这是设计）。
   // 于是这里顺便验证「归档 = 日常视图看不到、归档视图仍读得到」，对演示数据也安全。

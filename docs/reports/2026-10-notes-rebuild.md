@@ -38,3 +38,13 @@
 - 修改：lib/agent/{runtime.ts,dsh-policy.mjs,loop.ts,manual.ts,runtime.test.ts}、Agent API/types、依赖、Next 打包配置。
 - 待后续组解决：ACP 外部 Agent 设置与隔离、对话统一入口、打包后子进程追踪验证。未把这些记为已完成。
 
+# 第二组验收记录
+
+- 追加 0006 迁移，为 Raw、Knowledge 和修订增加 Markdown/path；历史列与历史迁移保持兼容。
+- 旧正文只在读取时转换；文档保存与 AI 提议应用共用服务层，修订保留完整文档。
+- wikilink 以同一 Lezer 语法树动态派生出链/入链，不依赖标题子串匹配；未解析链接只能经用户操作创建 Raw。
+- JSON 导出升级 v2 并继续接受 v1；Markdown 导出保留原始 frontmatter 与路径。
+- 验证：7 个迁移/11 表检查通过，4 个 Markdown 单测通过，原 75 项 HTTP 回归通过；新增文档端到端断言正在运行。
+- 修改：lib/documents、lib/services/{notes,sources,documents,bundle}、Raw/Knowledge API 与 types、drizzle/0006、scripts/regression.mjs。
+- 待解决：同名内容导入仍沿用保留已有策略，需要补齐 v2 路径判重与来源映射；不能把跳过项当作已恢复。
+

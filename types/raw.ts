@@ -1,4 +1,8 @@
 export type Raw = {
+  markdown?: string;
+  path?: string;
+  version?: number;
+  archivedAt?: string | null;
   id: string;
   /** 笔记名。可选：未命名时列表回退为正文预览。 */
   title: string | null;

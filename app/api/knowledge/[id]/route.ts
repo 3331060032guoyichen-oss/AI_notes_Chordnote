@@ -8,6 +8,8 @@ export const runtime = "nodejs";
 
 type KnowledgePatchBody = {
   title?: unknown;
+  markdown?: unknown;
+  path?: unknown;
   summary?: unknown;
   content?: unknown;
   keyPoints?: unknown;
@@ -102,6 +104,14 @@ export async function PATCH(
   }
 
   const patch: UpdateNotePatch = {};
+  if (body.markdown !== undefined) {
+    if (typeof body.markdown !== "string" || body.markdown.length > 200_000) return errorResponse("文档无效", 400, "INVALID_MARKDOWN");
+    patch.markdown = body.markdown;
+  }
+  if (body.path !== undefined) {
+    if (typeof body.path !== "string") return errorResponse("路径无效", 400, "INVALID_PATH");
+    patch.path = body.path;
+  }
 
   if (body.title !== undefined) {
     if (typeof body.title !== "string" || !body.title.trim()) {
