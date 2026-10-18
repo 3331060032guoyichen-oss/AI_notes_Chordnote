@@ -56,11 +56,13 @@ AI Notes 是面向大学生的生长式 AI 知识系统：把原始学习材料�
 
 ## 二、当前实现状态
 
+> **2026-10-17 按代码核对并更正**：本表下方与「差距清单」中曾有多处描述落后于实现（Raw PATCH、工具循环、图谱、主题、Proposal、反向链接面板）。已按当前代码更正；历史描述不再保留。
+
 ### 已完成并有真实代码
 
 | 模块 | 实现位置 |
 |---|---|
-| Raw 原始笔记：创建、列表、删除（输入校验、长度上限 50000） | `app/api/raw/route.ts`、`lib/raw-storage.ts` |
+| Raw 原始笔记：创建、列表、归档、修改（输入校验、长度上限 50000） | `app/api/raw/route.ts`、`lib/services/sources.ts` |
 | AI 整理：调用 DeepSeek 生成结构化 Draft | `app/api/organize/route.ts`、`lib/deepseek.ts` |
 | Knowledge：列表、确认入库（Draft 落库）、**字段修改（PATCH）** | `app/api/knowledge/route.ts`、`app/api/knowledge/[id]/route.ts` |
 | KnowledgeRelation：关联的创建、列表、删除 | `app/api/relations/route.ts`、`app/api/relations/[id]/route.ts` |
@@ -70,7 +72,7 @@ AI Notes 是面向大学生的生长式 AI 知识系统：把原始学习材料�
 | AI 问答：`@` 提及式单轮问答，服务端按引用重读真实内容 | `app/api/assistant/route.ts` |
 | 工作台 UI：Raw / Knowledge 文件树 + 标签页 | `app/page.tsx` |
 | Knowledge 内联编辑：标题右键改名、摘要/正文/概念可改 | `app/page.tsx` + `PATCH /api/knowledge/:id` |
-| 首屏门禁：滚轮 / 触摸 / 键盘三种揭示方式 + Three.js 水晶场景 | `components/landing-page.tsx`、`components/landing-crystal-scene.tsx` |
+| 首屏门禁：滚轮 / 触摸 / 键盘三种揭示方式 + Three.js 粒子场 | `components/landing-page.tsx`、`components/landing-particle-field.tsx` |
 | 界面音效：Web Audio 实时合成、首次询问、偏好持久化 | `components/interface-sound.tsx` |
 
 ### 工程与协作
@@ -90,18 +92,18 @@ AI Notes 是面向大学生的生长式 AI 知识系统：把原始学习材料�
 
 | # | 目标 | 现状 | 缺口 |
 |---|---|---|---|
-| A1 | 笔记能**修改** | Raw 只有 `GET`/`POST`/`DELETE`，**无 PATCH**；Knowledge 有 PATCH | **决策已定（2026-10-10）：允许用户修改 Raw。** 缺口因此变成一个具体的实现项：新增 `PATCH /api/raw` + `RawRevision` 修订记录 + 界面入口。注意 AI 仍**不能**改写 Raw 正文，见 `AGENTS.md` 的「决策记录」 |
-| A2 | **出链** | 无此概念 | 代码里只有无向的 `KnowledgeRelation`（服务端按无序 ID 对去重）。要做出链，需要明确"出链 = Relation 的方向化"，或新增有向链接类型 |
-| A3 | **反向链接**在界面上一等公民 | 有 `/api/knowledge/:id/backlinks` 接口 | UI 里只有"相关关系"列表，**没有独立的反向链接面板**；接口能力没有被界面用起来 |
-| A4 | 反向链接支持**勾选内容进行链接** | 无 | **完全未实现**。当前唯一的建链接路径是：AI 在 Draft 里提建议 → 用户勾选 → 写入。用户主动圈选正文片段建链接的能力不存在 |
+| A1 | 笔记能**修改** | ✅ 已实现：`PATCH /api/raw/:id`，每次修改写一条 `audit_log`（改前 / 改后 / 版本） | 无缺口。AI 仍**不能**改写 Raw 正文（Agent 调用返回 403 / 只能走提议）。没有独立的 `RawRevision` 表——历史存在 `audit_log.detail` |
+| A2 | **出链** | `links` 表保留 `source/target`，但服务层按**无序对**去重，A→B 与 B→A 视为同一条 | 仍无有向语义。要做出链，需要先决定"关系是否方向化" |
+| A3 | **反向链接**在界面上一等公民 | ✅ 已实现：右栏「入链 / 出链 / 未链接提及」三块，接口 `/api/knowledge/:id/backlinks` 与 `/api/graph` 均被界面使用 | 无缺口 |
+| A4 | 反向链接支持**勾选内容进行链接** | 正文中的标题内联标记可点击建立关联（未链接提及 → 一键建立） | 圈选任意正文片段建链接仍不存在 |
 
 ### B. 阶段二目标的缺口
 
 | # | 目标 | 现状 | 缺口 |
 |---|---|---|---|
-| B1 | 知识图谱可视化笔记间链接 | `GET /api/graph` + `app/page.tsx` 用 `node-position-${index % 6}` 的**规则网格卡片**渲染 | 是静态网格，不是图谱：**不能拖动、缩放、聚焦，也不画连线**。`DESIGN_SYSTEM.md` 要求的"自然布局、知识簇、密度差异"完全没有。**实现方式已定（2026-10-10）：对标 Obsidian 力导向图，`d3-force` + 自绘 Canvas，先局部图谱后全库图谱**，见 `AGENTS.md` 的「决策记录」 |
-| B2 | DeepSeek **agent 插件**（工具调用） | `POST /api/assistant` 单轮问答 | **没有工具调用循环**。`agent简易模板.docx` 要求的 `search_notes`/`read_note`/`create_note`/`update_note`/`delete_note`/`get_note_links` 一个都没有；也没有"模型提建议 → 宿主执行 → 结果回传 → 继续推理"的 agent loop |
-| B3 | 两套主题 | 只有 `prefers-color-scheme` 跟随系统自动切换 | 没有手动切换的多主题机制 |
+| B1 | 知识图谱可视化笔记间链接 | ✅ 已实现：`components/graph-view.tsx`，`d3-force` 力学 + 自绘 Canvas；可拖动、滚轮缩放、点节点出卡片、双击打开、拖动即固定 | 无缺口 |
+| B2 | **agent 插件**（工具调用） | ✅ 已实现：`lib/agent/loop.ts` 工具循环 + `lib/agent/manual.ts` 权限手册；只读工具直接执行，写意图一律生成 `pending` 提议 | 模型层已抽成可替换 Provider（`lib/ai/`）；Ollama 的真实工具调用待本机验证 |
+| B3 | 两套主题 | ✅ 已实现三套主题：暗室星图 / 暖纸批注 / 实验工坊，`<html data-studio>` 切换并持久化 | 无缺口 |
 | B4 | OCR 图片转 Markdown | 无 | 未实现（MinerU 尚未引入） |
 | B5 | 网页剪切 | 无 | 未实现（Clipper 尚未引入） |
 
@@ -117,7 +119,7 @@ AI Notes 是面向大学生的生长式 AI 知识系统：把原始学习材料�
 | # | 目标 | 现状 | 缺口 |
 |---|---|---|---|
 | D1 | `Note` / `Question` / `Concept` / `Card` 四类节点 | 实现的是 `Raw` / `Knowledge`（原先还有 `WikiPage`，已于 2026-10-10 移除）| 四类节点**完全未实现**，只有概念设计。见 `DATA_MODEL.md` 的映射表 |
-| D2 | `Proposal` 机制（`proposed`/`accepted`/`rejected` 三态） | 无 Proposal 实体 | 当前用"AI 在 Draft 里给建议 → 用户勾选 → 直接写入"做了**部分替代**，但没有 Proposal 这个可追溯的中间对象 |
+| D2 | `Proposal` 机制（`proposed`/`accepted`/`rejected` 三态） | ✅ 已实现：`proposals` 表 + `/api/proposals*`，状态为 `pending → approved → applied`，另有 `rejected` / `failed` / `stale` / `cancelled` | 无缺口。`apply` 前必须 `approved`，支持 `Idempotency-Key` |
 
 ---
 

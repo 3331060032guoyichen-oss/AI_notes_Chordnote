@@ -1,4 +1,5 @@
-import { createChatCompletionWithTools, type ChatMessage, type ChatToolCall } from "../deepseek";
+import { readModelSettings, resolveModelSettings, toProviderConfig } from "../ai/config";
+import { createChatProvider, type ChatMessage, type ChatToolCall } from "../ai/provider";
 import { createProposal } from "../services/proposals";
 import { getNote, listNotes } from "../services/notes";
 import { getSource } from "../services/sources";
@@ -484,13 +485,13 @@ export async function runOrganizeAgent(input: AgentRunInput): Promise<AgentRunTr
   ];
 
   const toolDefinitions = toChatToolDefinitions();
+  const provider = createChatProvider(
+    toProviderConfig(resolveModelSettings(await readModelSettings()).settings),
+  );
   let reply = "";
 
   for (let round = 0; round < MAX_ROUNDS; round += 1) {
-    const completion = await createChatCompletionWithTools({
-      messages,
-      tools: toolDefinitions,
-    });
+    const completion = await provider.chat({ messages, tools: toolDefinitions });
 
     if (completion.content) reply = completion.content;
 

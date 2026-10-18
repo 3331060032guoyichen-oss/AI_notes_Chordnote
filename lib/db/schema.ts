@@ -155,7 +155,7 @@ export const noteTags = pgTable(
   }),
 );
 
-// ---- 正式关系（有向；候选关系只存在于 proposals）-------------------------
+// ---- 正式关系（无序对；候选关系只存在于 proposals）-----------------------
 export const links = pgTable(
   "links",
   {

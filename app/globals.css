@@ -3643,7 +3643,8 @@ input::placeholder {
     bottom: 0;
     left: 0;
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
     min-height: 67px;
     padding: 7px 8px max(7px, env(safe-area-inset-bottom));
     border-top: 1px solid var(--line);
@@ -5810,4 +5811,115 @@ input::placeholder {
 
 @media (prefers-reduced-motion: reduce) {
   .agent-figure.is-hero svg { animation: none !important; }
+}
+
+/* ------------------------------------------------------------
+   空间外壳（2026-10-18）
+
+   Home / Settings 不保留检查器：右栏列宽归零，图标条也不出现。
+   旧的 `.primary-nav / .nav-item / .nav-label` 曾是无引用样式，现在
+   由一级导航重新使用。
+   ------------------------------------------------------------ */
+.app-shell.no-inspector {
+  --rail-col: 0px;
+}
+
+.app-shell.no-inspector .ai-rail,
+.app-shell.no-inspector .rail-icons {
+  display: none;
+}
+
+@media (min-width: 761px) {
+  .workspace-sidebar.is-collapsed > .primary-nav {
+    display: none;
+  }
+}
+
+/* Settings 空间 */
+.settings-space {
+  width: min(820px, 100%);
+  margin: 0 auto;
+}
+
+.settings-panel-body {
+  display: grid;
+  gap: 18px;
+  padding: 22px 24px;
+}
+
+.settings-empty {
+  display: grid;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.settings-empty b { color: var(--ink); font-size: 14px; }
+.settings-empty p { margin: 0; color: var(--quiet); font-size: 12px; line-height: 1.7; }
+
+/* Settings 二级导航 */
+.space-nav-item {
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.space-nav-label { display: grid; gap: 2px; }
+.space-nav-label small { color: var(--quiet); font-size: 10px; font-weight: 400; }
+
+.space-nav-tag {
+  padding: 1px 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--quiet);
+  font-size: 10px;
+  font-style: normal;
+}
+
+.tree-section-static {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 10px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* Home */
+.home-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  padding: 18px 20px;
+}
+
+.home-stat { display: grid; gap: 4px; }
+.home-stat b { font-size: 24px; letter-spacing: -0.02em; }
+.home-stat span { color: var(--quiet); font-size: 11px; }
+
+.home-recent { display: grid; gap: 6px; margin-top: 12px; }
+
+.home-recent-row {
+  display: grid;
+  gap: 3px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  color: var(--ink);
+  background: transparent;
+  text-align: left;
+}
+
+.home-recent-row small { color: var(--quiet); font-size: 11px; }
+.home-recent-row:hover { border-color: var(--line-strong); background: var(--accent-soft); }
+
+.home-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+@media (max-width: 760px) {
+  .home-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
-import { createOrganizeDraft, DeepSeekError } from "../../../lib/deepseek";
+import { ProviderError } from "../../../lib/ai/provider";
+import { createOrganizeDraft } from "../../../lib/ai/tasks";
 import { listNotes } from "../../../lib/services/notes";
 import { getSource } from "../../../lib/services/sources";
 
@@ -66,7 +67,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ draft });
   } catch (error) {
-    if (error instanceof DeepSeekError) {
+    if (error instanceof ProviderError) {
       if (error.code === "CONFIG_MISSING") {
         return errorResponse(
           "编辑助理尚未完成服务配置。原始记录仍然安全，请联系维护者。",

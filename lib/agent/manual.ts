@@ -18,7 +18,7 @@
  * 本文件不读任何环境变量（红线 7：不要在模块顶层读环境变量）。
  */
 
-import type { ChatToolDefinition } from "../deepseek";
+import type { ChatToolDefinition } from "../ai/provider";
 
 /** 手册版本。界面上显示「工具授权（来自工作手册 v1）」，改口径时要一起改这个号。 */
 export const MANUAL_VERSION = "v1";

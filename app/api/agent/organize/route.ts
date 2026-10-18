@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { DeepSeekError } from "../../../../lib/deepseek";
+import { ProviderError } from "../../../../lib/ai/provider";
 import {
   AgentContextError,
   runOrganizeAgent,
@@ -75,7 +75,7 @@ export async function POST(request: Request) {
       return errorResponse(error.message, status, error.code);
     }
 
-    if (error instanceof DeepSeekError) {
+    if (error instanceof ProviderError) {
       if (error.code === "CONFIG_MISSING") {
         return errorResponse(
           "agent 尚未完成服务配置。你的内容仍然安全，请联系维护者。",

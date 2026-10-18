@@ -22,7 +22,8 @@ Raw（原始记录）→ Draft（AI 整理草稿）→ 用户确认 → Knowledg
 - **Raw 正文 AI 永远不能改写。** 用户可通过 `PATCH /api/raw/:id` 修改自己的原话，每次修改写入一条审计记录（改前、改后、版本）。Agent 主体调用该接口返回 403（`USE_PROPOSAL_FLOW`）。
 - **新建只写 Raw。** 不新增 `POST /api/notes`。知识页只能经 `POST /api/knowledge` 产生。回归测试里有一条断言守着这一点。
 - **同一数据目录同一时刻只允许一个进程写。** 存储是 PGlite（WASM 版 PostgreSQL），单写者。
-- **API Key 只在服务端。** `DEEPSEEK_API_KEY` 从环境变量读取，不得传到浏览器或写进代码。`.env*` 已被忽略（保留 `.env.example`）。
+- **API Key 只在服务端。** 来自环境变量或 `data/settings.json`（已被 `data/*` 忽略）；任何接口、日志、导出知识包都不得出现密钥原文，设置接口只返回"是否已配置"。
+- **模型调用只走 Provider 层。** 提示词、草稿校验与 Agent 权限留在上层，不为供应商复制一套。
 - **删除只做归档。** 界面和普通 API 没有物理删除入口。唯一的物理删除是 `pnpm seed:reset -- --yes`，执行前会自动备份。
 
 ## 3. 技术栈
@@ -60,6 +61,7 @@ pnpm dev                     # http://localhost:3000
 | `pnpm build` / `pnpm start` | 生产构建与运行 |
 | `pnpm lint` | 代码检查 |
 | `pnpm test` | HTTP 回归测试（75 条断言），需先启动 `pnpm dev` |
+| `pnpm test:unit` | 离线单元测试（Provider / 配置），不联网、不需要密钥 |
 | `pnpm verify:db` | 在内存库上执行全部迁移并断言结构、约束、外键行为、归属隔离。不需要 dev server，不碰本机数据 |
 | `pnpm seed:demo` | 幂等写入演示数据（`seed/demo-notes.json`），需先启动 dev，只增不删 |
 | `pnpm seed:reset` | 清空业务表，必须先停止 `pnpm dev`。默认 dry-run，加 `--yes` 才执行，执行前备份到 `.tmp/` |
@@ -75,12 +77,18 @@ pnpm dev                     # http://localhost:3000
 
 ```
 app/
-  page.tsx            唯一页面，单页工作台，"use client"
+  page.tsx            唯一页面：应用外壳 + 四个空间，"use client"
   globals.css         全部设计令牌与组件样式
   layout.tsx          根布局
   api/**/route.ts     每个路由均声明 runtime = "nodejs"
 components/
-  landing-page.tsx            首屏门禁（滚轮/触摸/键盘揭示）
+  shell/              应用外壳：AppShell / PrimaryNav / SecondaryNav / InspectorHost
+  knowledge/          Knowledge 空间的二级导航（文件树）
+  agent/              Agent 空间的二级导航（本次任务）
+  settings/           Settings 空间、六个入口与二级导航
+  home/               Home 的只读活动摘要
+  ui/                 共享内联图标
+  landing-page.tsx            首屏门禁（只在首次进入时出现）
   landing-constellation.tsx   首屏星座
   landing-particle-field.tsx  首屏 Three.js 粒子场
   landing-stardust.tsx        星尘配方（首屏与工作台共用）
@@ -88,7 +96,8 @@ components/
   graph-view.tsx              知识图谱（d3-force + Canvas）
   settings-panel.tsx          设置抽屉（主题 / 模型 / API / 数据）
 lib/
-  deepseek.ts         DeepSeek 调用：整理草稿、问答、改写提议
+  ai/                模型调用：provider.ts 传输与统一错误、config.ts 服务端配置、tasks.ts 提示词与形状校验
+  api/               路由层小工具（本机写请求来源检查）
   inline-refs.ts      正文内联知识点标记（按标题匹配）
   text-diff.ts        逐行 LCS，供编辑助理的 Diff 卡使用
   zip.ts              手写 zip 写入器（store 模式），仅用于 markdown 知识包
@@ -109,7 +118,15 @@ docs/                 产品、设计、数据文档（见第 11 节）
 
 ## 6. 前端约定
 
-**单页工作台。** 页面不是多路由，由 Tab 联合类型驱动：
+**单页应用 + 四个空间。** 页面仍是单一客户端页，不引入路由；一级空间由 `activeSpace` 驱动：
+
+```ts
+type Space = "home" | "knowledge" | "agent" | "settings";
+```
+
+- Knowledge 内部沿用 Tab 联合类型；**Tab 只属于 Knowledge**，其余空间不渲染 Tab 栏。
+- Home / Settings 不显示右侧检查器；Knowledge / Agent 的检查器由 `InspectorHost` 按空间选择。
+- 跨空间打开知识内容（例如 Agent 检查器里点知识页）时，先切到 Knowledge 再打开对应 Tab。
 
 ```ts
 type Tab =
@@ -119,17 +136,24 @@ type Tab =
   | { kind: "draft"; rawId: string; ... }                  // Draft 审阅
 ```
 
-- 左侧是 Raw / Knowledge 文件树，点击后用 `openXxxTab()` 打开标签。
-- 工具类视图用 `navigate(viewKey)` 打开或激活。
-- 新增某类详情页：加一个 Tab 变体和一个 `renderXxxTab()`。不要新增路由或顶层视图。
+- 左侧是一级导航（Home / Knowledge / Agent / Settings）与当前空间的二级导航。
+- 工具类视图用 `navigate(viewKey)` 打开或激活；Knowledge 的目录在 `components/knowledge/knowledge-tree.tsx`。
+- 新增某类**详情页**：加一个 Tab 变体和一个 `renderXxxTab()`，不要新增路由。
+- 新增一级**空间**：同时改 `components/shell/`（PrimaryNav / SecondaryNav / InspectorHost）与本文件这一节。
 
-**右栏是上下文面板，不是聊天框。** 跟随当前标签，自上而下：入链、出链、未链接提及、编辑助理。不要改回全局聊天框，也不要为 AI 另做一套视觉语言。
+**右栏是检查器，不是聊天框。** 内容随空间与当前标签变化：
+
+- Knowledge：知识页显示入链、出链、未链接提及、编辑助理；原始记录显示整理助手；图谱显示图谱参数。
+- Agent：显示本次任务的整理摘要与守则。
+- Home / Settings：**不显示检查器**（`AppShell` 收掉右栏列宽）。
+
+不要改回全局聊天框，也不要为 AI 另做一套视觉语言。
 
 **界面约定（已拍板，推翻前先确认是有意为之）：**
 
-- 左栏折叠为功能图标条（新建笔记 / 知识网络 / Agent），展开按钮在图标条内。
-- 右栏收起为右边缘图标条（56px），含开合按钮和四个入口的计数角标。点图标即展开面板并滚到对应块。
-- 右栏在 860px 及以下变为抽屉，861px 及以上为常驻列。抽屉收起方式：内部 ×、Esc、打开任意标签、再次点击入口。
+- 左栏折叠为功能图标条，四个入口与一级导航一致（Home / Knowledge / Agent / Settings），展开按钮在图标条内。
+- 右栏收起为右边缘图标条（56px）：Knowledge 有入链 / 出链 / 未链接提及 / 编辑助理四个入口与计数角标；Agent 只有开合按钮。
+- 右栏在 860px 及以下变为抽屉，861px 及以上为常驻列。抽屉收起方式：内部 ×、Esc、打开任意标签、再次点击入口。新增一级导航后需重新实测这一断点。
 - 写作区的位置、内边距、圆角、边框宽度不要动，只改颜色。去框线时把 `border-color` 和背景改为透明。
 - `.content-section` / `.capture-panel` 半透明（surface 42%），星尘从纸后透出，正文区保持可读。
 - 毛玻璃仅用于浮层（命令面板、弹层、抽屉）。正文、侧栏、面板一律不透明。
@@ -140,7 +164,7 @@ type Tab =
 - 没有 title 的原始记录按创建顺序显示为「未命名 1 / 2 / 3」。
 - 助手形象是一把会呼吸的竖琴（内联 SVG，细线，无渐变），左栏 Agent 入口、右栏编辑助理、Agent 页面共用。不要换成星芒、头像或发光圆球。
 - 助手状态四态：空闲 / 整理中 / 已收录 / 已归档，只动 `transform` 与 `opacity`，`prefers-reduced-motion` 下整体停掉。
-- 界面声音开关在「设置 → 主题」，顶栏与侧栏底部都不放。
+- 界面声音开关在「Settings → Voice」，顶栏与侧栏底部都不放。
 - 左栏分组：原始记录 / 知识页 / 标签，另有「已归档 N」分组用于恢复。不做「最近编辑 / 最近查看」。
 - 图谱交互：单击选中出卡片，双击打开知识页，拖动即固定。
 
@@ -154,7 +178,7 @@ type Tab =
 
 若将来需要类似功能，按新形态重新设计，不要恢复旧结构。
 
-**死样式（可顺手清理）：** `globals.css` 里以下类已无引用，删前用 `rg` 确认：`.primary-nav`、`.nav-item`、`.nav-label`、`.recent-link`、`.plugin-*`、`.sidebar-section`、`.sidebar-label`、`.sidebar-empty`、`.wiki-preview`、`.wiki-reading`、`.wiki-section`、`.wiki-layout`、`.wiki-tree`、`.wiki-tree-item`。
+**死样式（可顺手清理）：** `globals.css` 里以下类已无引用，删前用 `rg` 确认：`.recent-link`、`.plugin-*`、`.sidebar-section`、`.sidebar-label`、`.sidebar-empty`、`.wiki-preview`、`.wiki-reading`、`.wiki-section`、`.wiki-layout`、`.wiki-tree`、`.wiki-tree-item`。（`.primary-nav` / `.nav-item` / `.nav-label` 已由一级导航重新使用，不要删。）
 
 ## 7. 后端约定
 
@@ -179,6 +203,8 @@ type Tab =
 | `/api/proposals/[id]/approve` `reject` `apply` | POST | 决议与执行。apply 需先 approved，支持 `Idempotency-Key` |
 | `/api/export` | GET | 默认 JSON 全量快照；`?format=markdown` 返回 markdown + YAML frontmatter 的 zip |
 | `/api/import` | POST | 导入知识包。`?dryRun=1` 只校验不写库；同名项保留已有、跳过导入 |
+| `/api/settings/model` | GET / PATCH | 模型配置（脱敏读取 / 保存）。密钥只进不出，空串=保持、`null`=清除 |
+| `/api/settings/model/test` | POST | 真实连接测试：可访问 / 模型存在 / 对话 / 工具调用四项分别报告 |
 
 ### 服务层与归属
 
@@ -230,14 +256,17 @@ jsonb 列直接传数组或对象，**不要手动 `JSON.stringify`**。Drizzle 
 
 **修改界面**
 1. 沿用 `globals.css` 的类名与令牌。
-2. 新详情页用 Tab 变体，不新增路由。
-3. 检查 860px 与 861px 两侧的右栏行为。
-4. 只有浮层才用毛玻璃。
+2. 新详情页用 Tab 变体，不新增路由；新增一级空间见第 6 节。
+3. 检查 860px 与 861px 两侧的右栏行为，以及 ≤760px 的移动端底部导航（4 或 5 个入口）。
+4. 只有浮层才用毛玻璃；Settings / Home 不放检查器。
+5. 未实现的能力显示空态，不用假数据填充。
 
 **修改 AI 相关逻辑**
 1. 模型输出只生成草稿或提议。
 2. 服务端重新读取上下文，不信任前端传来的正文。
-3. 缺少 `DEEPSEEK_API_KEY` 时给出清晰报错，不静默失败。
+3. 供应商差异只放进 `lib/ai/provider.ts`：提示词与形状校验留在 `lib/ai/tasks.ts`，不要复制第二份。
+4. 配置优先级固定为 `CHORDNOTE_*` > 旧 `DEEPSEEK_*`（仅 provider=deepseek）> `data/settings.json` > 默认值。
+5. 缺少凭据时给出清晰报错（503 `CONFIG_MISSING`），不静默失败。
 
 ## 10. 已知陷阱
 

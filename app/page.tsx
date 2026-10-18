@@ -3,14 +3,34 @@
 import type { FormEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { AgentNav } from "../components/agent/agent-nav";
 import { GraphView } from "../components/graph-view";
+import { HomeSpace } from "../components/home/home-space";
 import { useInterfaceSound } from "../components/interface-sound";
+import { KnowledgeTree } from "../components/knowledge/knowledge-tree";
 import { LandingPage } from "../components/landing-page";
-import { AppStardust } from "../components/landing-stardust";
-import { SettingsPanel } from "../components/settings-panel";
+import { SETTINGS_SECTIONS, type SettingsSection } from "../components/settings/sections";
+import { SettingsNav } from "../components/settings/settings-nav";
+import { SettingsSpace } from "../components/settings/settings-space";
+import { AppShell } from "../components/shell/app-shell";
+import { InspectorHost } from "../components/shell/inspector-host";
+import { PrimaryNav } from "../components/shell/primary-nav";
+import { SecondaryNav } from "../components/shell/secondary-nav";
+import { SPACE_META, type Space } from "../components/shell/spaces";
+import {
+  AppLogo,
+  IconHarp,
+  IconInlink,
+  IconMention,
+  IconOutlink,
+  IconPanelCollapse,
+  IconPanelExpand,
+  IconSettings,
+} from "../components/ui/icons";
 
-import { diffLines } from "../lib/text-diff";
 import { splitByTitles } from "../lib/inline-refs";
+import { getPreview } from "../lib/text-preview";
+import { diffLines } from "../lib/text-diff";
 import type { AgentRunTrace, AgentStep } from "../types/agent";
 import type { GraphEdge, GraphNode } from "../types/graph";
 import type { Knowledge } from "../types/knowledge";
@@ -49,7 +69,6 @@ const viewMeta: Record<ViewKey, { label: string; shortLabel: string }> = {
   agent: { label: "Agent 调用", shortLabel: "Agent" },
 };
 
-const directNavViews: ViewKey[] = ["new-note", "graph", "agent"];
 
 /**
  * 「让 agent 整理」的意图词。
@@ -73,109 +92,6 @@ function formatDate(value: string) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(value));
-}
-
-function getPreview(text: string, length = 140) {
-  const normalized = text.replace(/\s+/g, " ").trim();
-  return normalized.length > length ? `${normalized.slice(0, length)}...` : normalized;
-}
-
-function AppLogo() {
-  return <div className="app-logo" aria-label="Chordnote"><span className="logo-mark" aria-hidden="true">C</span><span>Chordnote</span></div>;
-}
-
-/*
- * 侧栏图标：手写内联 SVG（项目不用图标库）。
- * 原始记录与知识页这两个沿用界面预览稿里的同一组路径，保证两边看起来是一套东西。
- * 侧栏折叠后文字会藏起来，这些图标就是唯一的识别信号，所以尺寸统一 15px、描边统一 2。
- */
-const TREE_ICON_PROPS = {
-  width: 15,
-  height: 15,
-  viewBox: "0 0 24 24",
-  fill: "none",
-  stroke: "currentColor",
-  strokeWidth: 2,
-  strokeLinecap: "round" as const,
-  strokeLinejoin: "round" as const,
-  "aria-hidden": true,
-};
-
-function IconSource() {
-  return <svg {...TREE_ICON_PROPS}><path d="M4 6h16M4 12h16M4 18h10" /></svg>;
-}
-
-function IconNote() {
-  return <svg {...TREE_ICON_PROPS}><rect x="4" y="4" width="16" height="16" rx="3" /><path d="M8 9h8M8 13h5" /></svg>;
-}
-
-function IconPlus() {
-  return <svg {...TREE_ICON_PROPS}><path d="M12 5v14M5 12h14" /></svg>;
-}
-
-function IconGraph() {
-  return <svg {...TREE_ICON_PROPS}><circle cx="6" cy="17.5" r="2.5" /><circle cx="12" cy="6" r="2.5" /><circle cx="18" cy="15" r="2.5" /><path d="M8 15.6 10.6 8.5M14.3 7.6 16.4 12.9M8.4 16.9l7.2-1.5" /></svg>;
-}
-
-function IconAgent() {
-  return <svg {...TREE_ICON_PROPS}><path d="M12 3v3" /><rect x="5" y="6" width="14" height="12" rx="3" /><path d="M9.5 12.5h.01M14.5 12.5h.01M9.5 15.5h5" /></svg>;
-}
-
-/**
- * 图标条自己的图标：比树里那些大一档（18px），线更细（1.7），对齐的是"功能栏"而不是"列表项"。
- * 只用在折叠后的左栏 `.rail-nav` 与右栏的收起按钮上。
- */
-const RAIL_ICON_PROPS = {
-  width: 18,
-  height: 18,
-  viewBox: "0 0 24 24",
-  fill: "none",
-  stroke: "currentColor",
-  strokeWidth: 1.7,
-  strokeLinecap: "round" as const,
-  strokeLinejoin: "round" as const,
-  "aria-hidden": true,
-};
-
-function IconPen() {
-  return <svg {...RAIL_ICON_PROPS}><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4z" /><path d="M14.5 5.5 18.5 9.5" /></svg>;
-}
-
-function IconGraphRail() {
-  return <svg {...RAIL_ICON_PROPS}><circle cx="12" cy="5.5" r="2.2" /><circle cx="5.5" cy="18" r="2.2" /><circle cx="18.5" cy="18" r="2.2" /><path d="M10.6 7.3 7 15.9M13.4 7.3 17 15.9M7.7 18h8.6" /></svg>;
-}
-
-/*
- * 助手入口的图标 = 那把琴的"指纹"：三根长短不一的弦，外加中弦上那粒音芯。
- *
- * 试过把整把竖琴缩到 18px —— 琴颈、支柱、共鸣箱全糊成一团。留三根弦就够了：
- * 它是那个形象最独特的部分，而且 18px 下依然分得清。用星芒之类的通用 AI 符号，
- * 用户认不出"点进去是同一个助手"。
- */
-function IconHarp() {
-  return <svg {...RAIL_ICON_PROPS}><path d="M8 6.5v11" /><path d="M12 4v16" /><path d="M16 8.5v9" /><circle cx="12" cy="11" r="1.15" /></svg>;
-}
-
-function IconPanelCollapse() {
-  return <svg {...RAIL_ICON_PROPS}><rect x="3" y="4.5" width="18" height="15" rx="3" /><path d="M9.5 4.5v15" /><path d="M16 9.5 13.5 12l2.5 2.5" /></svg>;
-}
-
-function IconPanelExpand() {
-  return <svg {...RAIL_ICON_PROPS}><rect x="3" y="4.5" width="18" height="15" rx="3" /><path d="M9.5 4.5v15" /><path d="M13.5 9.5 16 12l-2.5 2.5" /></svg>;
-}
-
-/* 右边缘图标条那三个：箭头进（入链）、箭头出（出链）、链环（未链接提及）——
-   与右栏三块一一对应，看形状就知道点开的是什么。 */
-function IconInlink() {
-  return <svg {...RAIL_ICON_PROPS}><path d="M18.5 5.5 6.5 17.5" /><path d="M6.5 10.5v7h7" /></svg>;
-}
-
-function IconOutlink() {
-  return <svg {...RAIL_ICON_PROPS}><path d="M5.5 18.5 17.5 6.5" /><path d="M17.5 13.5v-7h-7" /></svg>;
-}
-
-function IconMention() {
-  return <svg {...RAIL_ICON_PROPS}><path d="M10.6 13.4a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1.2 1.2" /><path d="M13.4 10.6a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1.2-1.2" /></svg>;
 }
 
 /** 图标右上角的计数角标。只有 >0 才显示 —— 一排"0"比没有角标更吵。 */
@@ -233,9 +149,14 @@ function EmptyState({ title, body, action }: { title: string; body: string; acti
   return <div className="empty-state-block"><span className="empty-index" aria-hidden="true">01</span><div><h3>{title}</h3><p>{body}</p>{action ? <div className="empty-action">{action}</div> : null}</div></div>;
 }
 
+const LANDING_KEY = "chordnote:entered";
+
 export default function Home() {
   const { play } = useInterfaceSound();
-  const [showLanding, setShowLanding] = useState(true);
+  /** null = 还没读到 localStorage；避免老用户每次刷新先闪一下落地页。 */
+  const [entered, setEntered] = useState<boolean | null>(null);
+  const [activeSpace, setActiveSpace] = useState<Space>("home");
+  const [settingsSection, setSettingsSection] = useState<SettingsSection>("models");
   const [openTabs, setOpenTabs] = useState<Tab[]>([NEW_NOTE_TAB]);
   const [activeTabId, setActiveTabId] = useState(NEW_NOTE_TAB.id);
   const [text, setText] = useState("");
@@ -291,7 +212,9 @@ export default function Home() {
    * 想看就点顶栏那颗「上下文」。
    */
   const [railHidden, setRailHidden] = useState(true);
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  /** 待确认提议数量，Home 的只读摘要用。 */
+  const [pendingProposals, setPendingProposals] = useState(0);
+  const [pendingProposalsMore, setPendingProposalsMore] = useState(false);
   const [graphParams, setGraphParams] = useState({
     nodeSize: 1.0,
     lineWidth: 1.0,
@@ -329,6 +252,28 @@ export default function Home() {
   /** 正在改写的原始记录 id 与草稿。Raw 允许用户改，所以这里没有走提议流程。 */
   const [editingRawId, setEditingRawId] = useState<string | null>(null);
   const [rawTextDraft, setRawTextDraft] = useState("");
+
+  useEffect(() => {
+    let hasEntered = false;
+    try {
+      hasEntered = window.localStorage.getItem(LANDING_KEY) === "1";
+    } catch {
+      /* 隐私模式下读不到：按首次进入处理 */
+    }
+    setEntered(hasEntered);
+  }, []);
+
+  /** 主题在 Settings 之外也要生效：空间卸载后 `<html data-studio>` 已经写在 DOM 上，但启动时需要恢复一次。 */
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem("chordnote:studio");
+      if (saved && ["darkroom", "editorial", "tactile"].includes(saved)) {
+        document.documentElement.setAttribute("data-studio", saved);
+      }
+    } catch {
+      /* 读不到就保持默认主题 */
+    }
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -417,9 +362,33 @@ export default function Home() {
     };
   }, [listRefresh]);
 
+  /** 待确认提议数量：只读，Home 用。 */
+  useEffect(() => {
+    let active = true;
+
+    void (async () => {
+      try {
+        const response = await fetch("/api/proposals?status=pending&limit=100");
+        const payload = (await response.json()) as { proposals?: unknown[]; nextCursor?: string | null };
+        if (active) {
+          setPendingProposals(response.ok ? (payload.proposals?.length ?? 0) : 0);
+          setPendingProposalsMore(response.ok && Boolean(payload.nextCursor));
+        }
+      } catch {
+        if (active) {
+          setPendingProposals(0);
+          setPendingProposalsMore(false);
+        }
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [listRefresh]);
+
   /**
-   * 打开一张知识页时，把它的待确认改写提议取回来。
-   *
+   * 打开一张知识页时，把它的待确认改写提议取回来。   *
    * 待办状态本来就存在库里（`proposals.status = 'pending'`），所以刷新页面后
    * Diff 预览卡还在 —— 它不是前端的临时状态，而是"这件事还等你决定"。
    */
@@ -571,7 +540,37 @@ export default function Home() {
     }, 90);
   }
 
+  /**
+   * 切换一级空间。
+   *
+   * Knowledge 保留原来的 Tab 列表；Agent 不再占一个 Tab。
+   * 从 Agent 回到 Knowledge 时，若当前 Tab 是旧的 agent 视图，落到最近的普通 Tab。
+   */
+  function openSpace(space: Space) {
+    if (space === "knowledge") {
+      const current = openTabs.find((tab) => tab.id === activeTabId);
+      if (!current || (current.kind === "view" && current.viewKey === "agent")) {
+        const fallback = [...openTabs]
+          .reverse()
+          .find((tab) => !(tab.kind === "view" && tab.viewKey === "agent")) ?? NEW_NOTE_TAB;
+        setActiveTabId(fallback.id);
+      }
+    }
+
+    if (space === "home" || space === "settings") {
+      setRailOpen(false);
+      setRailHidden(true);
+    }
+
+    setActiveSpace(space);
+    setMobileNavOpen(false);
+    setRailOpen(false);
+    clearFeedback();
+  }
+
   function openTab(tab: Tab) {
+    // Tab 只属于 Knowledge：任何入口打开内容，都先落在这个空间里。
+    setActiveSpace("knowledge");
     setOpenTabs((current) => current.some((item) => item.id === tab.id) ? current : [...current, tab]);
     setActiveTabId(tab.id);
     setMobileNavOpen(false);
@@ -593,6 +592,11 @@ export default function Home() {
   }
 
   function navigate(view: ViewKey) {
+    if (view === "agent") {
+      openSpace("agent");
+      return;
+    }
+
     openTab({ id: `view:${view}`, kind: "view", viewKey: view, label: viewMeta[view].label });
   }
 
@@ -1629,7 +1633,7 @@ export default function Home() {
   }
 
   function renderRail() {
-    if (activeTab.kind === "view" && activeTab.viewKey === "graph") {
+    if (activeSpace === "knowledge" && activeTab.kind === "view" && activeTab.viewKey === "graph") {
       return <div className="rail-inner">
         <div className="rail-head"><h4>图谱设置</h4></div>
         <div className="rail-body">
@@ -1663,7 +1667,7 @@ export default function Home() {
       </div>;
     }
 
-    if (activeTab.kind === "view" && activeTab.viewKey === "agent") {
+    if (activeSpace === "agent") {
       const trace = agentTrace;
       const approved = Object.values(gateStates).filter((state) => state === "accepted").length;
 
@@ -1740,7 +1744,7 @@ export default function Home() {
       </div>;
     }
 
-    if (activeTab.kind === "knowledge") {
+    if (activeSpace === "knowledge" && activeTab.kind === "knowledge") {
       return renderKnowledgeRail();
     }
 
@@ -1751,7 +1755,7 @@ export default function Home() {
      * 放在这里当**快捷词**：整理助手本来就负责这一步（提一版草稿、用户确认才入库），
      * 页面上的按钮只是它的一个快捷键。这样原始记录页也就只剩"读"和"改原文"两件事。
      */
-    if (activeTab.kind === "raw") {
+    if (activeSpace === "knowledge" && activeTab.kind === "raw") {
       const raw = raws.find((item) => item.id === activeTab.rawId);
       const collected = raw ? knowledges.find((item) => item.rawId === raw.id) : undefined;
       const archivedNote = raw ? archivedNotes.find((item) => item.rawId === raw.id) : undefined;
@@ -1811,89 +1815,223 @@ export default function Home() {
     }
   }
 
+  function renderSecondaryNav() {
+    return (
+      <SecondaryNav space={activeSpace}>
+        {activeSpace === "knowledge" ? (
+          <KnowledgeTree
+            raws={raws}
+            knowledges={knowledges}
+            archivedNotes={archivedNotes}
+            activeTabId={activeTabId}
+            rawsExpanded={rawsExpanded}
+            notesExpanded={notesExpanded}
+            archivedExpanded={archivedExpanded}
+            onToggleRaws={() => setRawsExpanded((current) => !current)}
+            onToggleNotes={() => setNotesExpanded((current) => !current)}
+            onToggleArchived={() => setArchivedExpanded((current) => !current)}
+            rawLabel={rawLabel}
+            onOpenRaw={openRawTab}
+            onOpenKnowledge={openKnowledgeTab}
+            onRestoreNote={(note) => void handleArchiveNote(note, false)}
+            onRawContextMenu={(raw, x, y) => setContextMenu({ type: "raw", raw, x, y })}
+            onNavigate={navigate}
+          />
+        ) : null}
+
+        {activeSpace === "agent" ? (
+          <AgentNav trace={agentTrace} onOpenAgent={() => openSpace("agent")} />
+        ) : null}
+
+        {activeSpace === "settings" ? (
+          <SettingsNav
+            section={settingsSection}
+            onSelect={(next) => {
+              setSettingsSection(next);
+              clearFeedback();
+            }}
+          />
+        ) : null}
+      </SecondaryNav>
+    );
+  }
+
+  function renderInspectorIcons() {
+    return (
+      <>
+        <button className="rail-icon-btn" type="button" data-sound="select" title="展开上下文面板" aria-label="展开上下文面板" aria-controls="context-rail" onClick={toggleRail}>
+          <IconPanelExpand />
+        </button>
+        <span className="rail-divider" aria-hidden="true" />
+        {activeSpace === "knowledge" && railContext ? (
+          <>
+            <button className="rail-icon-btn" type="button" data-sound="select" title={`入链 ${railContext.inlinks.length}`} aria-label={`入链 ${railContext.inlinks.length}`} onClick={() => openRailAt("rail-inlinks")}><IconInlink /><CountBadge count={railContext.inlinks.length} /></button>
+            <button className="rail-icon-btn" type="button" data-sound="select" title={`出链 ${railContext.outlinks.length}`} aria-label={`出链 ${railContext.outlinks.length}`} onClick={() => openRailAt("rail-outlinks")}><IconOutlink /><CountBadge count={railContext.outlinks.length} /></button>
+            <button className="rail-icon-btn" type="button" data-sound="select" title={`未链接提及 ${railContext.mentions.length}`} aria-label={`未链接提及 ${railContext.mentions.length}`} onClick={() => openRailAt("rail-mentions")}><IconMention /><CountBadge count={railContext.mentions.length} /></button>
+            <button className="rail-icon-btn" type="button" data-sound="select" title="编辑助理" aria-label="编辑助理" onClick={() => openRailAt("rail-assistant")}><IconHarp /></button>
+          </>
+        ) : null}
+      </>
+    );
+  }
+
+  function renderHome() {
+    return (
+      <HomeSpace
+        rawCount={raws.length}
+        knowledgeCount={knowledges.length}
+        archivedCount={archivedNotes.length}
+        linkCount={graph.edges.length}
+        pendingProposals={pendingProposals}
+        pendingProposalsMore={pendingProposalsMore}
+        recentNotes={knowledges.slice(0, 5)}
+        onOpenKnowledge={openKnowledgeTab}
+        onGoKnowledge={() => openSpace("knowledge")}
+        onGoAgent={() => openSpace("agent")}
+        onGoSettings={() => openSpace("settings")}
+        onNewNote={() => navigate("new-note")}
+      />
+    );
+  }
+
+  function renderSpaceContent() {
+    if (activeSpace === "home") return renderHome();
+    if (activeSpace === "settings") return <SettingsSpace section={settingsSection} />;
+    if (activeSpace === "agent") return renderAgentTab();
+    return renderMainContent();
+  }
+
   const activeTab = openTabs.find((tab) => tab.id === activeTabId) ?? openTabs[0] ?? NEW_NOTE_TAB;
 
   /**
    * 右栏此刻是否可见：宽屏看「有没有被收起来」，窄屏看抽屉状态。
-   * 顶栏那颗按钮的按下态与右栏自己的收起按钮，都以这一句为准。
    */
   const railShow = railOpen || !railHidden;
+  const showInspector = activeSpace === "knowledge" || activeSpace === "agent";
+  const settingsMeta = SETTINGS_SECTIONS.find((item) => item.id === settingsSection) ?? SETTINGS_SECTIONS[0];
+  const breadcrumbLabel =
+    activeSpace === "knowledge"
+      ? activeTab.label
+      : activeSpace === "settings"
+        ? settingsMeta.label
+        : SPACE_META[activeSpace].label;
 
-  if (showLanding) return <LandingPage onEnter={() => setShowLanding(false)} />;
+  if (entered === null) return null;
 
-  return <main className={`app-shell${sidebarOpen ? "" : " sidebar-collapsed"}${railHidden ? " rail-collapsed" : ""}`}>
-    <AppStardust />
-    <div className="mobile-topbar"><button className="mobile-menu-button" type="button" data-sound="select" onClick={() => { setRailOpen(false); setMobileNavOpen((current) => !current); }} aria-expanded={mobileNavOpen} aria-controls="workspace-nav">目录</button><AppLogo /><button className="mobile-new-button" type="button" data-sound="press" onClick={() => navigate("new-note")}>新建</button></div>
-    <aside id="workspace-nav" className={`workspace-sidebar${mobileNavOpen ? " is-open" : ""}${sidebarOpen ? "" : " is-collapsed"}`}>
-      <div className="sidebar-top"><div className="sidebar-top-row"><AppLogo /><button className="sidebar-collapse-btn" type="button" data-sound="select" aria-label="收起笔记侧栏" aria-controls="workspace-nav" onClick={() => setSidebarOpen(false)}><IconPanelCollapse /></button></div><button className="workspace-switcher" type="button"><span className="workspace-avatar">G</span><span><strong>私人知识编辑室</strong><small>个人知识库</small></span><span aria-hidden="true">⌄</span></button><button className="new-source-button" type="button" data-sound="press" onClick={() => navigate("new-note")}><span aria-hidden="true">+</span> 新建笔记</button></div>
-      {/* 折叠后的图标条：一个功能一个图标。原来是整列重复的笔记图标，认不出哪个是哪个。 */}
-      <nav className="rail-nav" aria-label="功能栏">
-        <span className="rail-logo" aria-hidden="true">C</span>
-        <button className="rail-icon-btn" type="button" data-sound="select" title="展开笔记侧栏" aria-label="展开笔记侧栏" aria-controls="workspace-nav" onClick={() => setSidebarOpen(true)}><IconPanelExpand /></button>
-        <span className="rail-divider" aria-hidden="true" />
-        <button className={`rail-icon-btn${activeTab.kind === "view" && activeTab.viewKey === "new-note" ? " is-active" : ""}`} type="button" data-sound="select" title={viewMeta["new-note"].label} aria-label={viewMeta["new-note"].label} onClick={() => navigate("new-note")}><IconPen /></button>
-        <button className={`rail-icon-btn${activeTab.kind === "view" && activeTab.viewKey === "graph" ? " is-active" : ""}`} type="button" data-sound="select" title={viewMeta.graph.label} aria-label={viewMeta.graph.label} onClick={() => navigate("graph")}><IconGraphRail /></button>
-        <button className={`rail-icon-btn${activeTab.kind === "view" && activeTab.viewKey === "agent" ? " is-active" : ""}`} type="button" data-sound="select" title={viewMeta.agent.label} aria-label={viewMeta.agent.label} onClick={() => navigate("agent")}><IconHarp /></button>
-      </nav>
-      <nav className="file-tree" aria-label="编辑室目录">
-        <div className="tree-section">
-          <button className="tree-section-header" type="button" data-sound="select" onClick={() => setRawsExpanded((current) => !current)} aria-expanded={rawsExpanded}>
-            <span className={`tree-caret${rawsExpanded ? " is-open" : ""}`} aria-hidden="true">▾</span>
-            <span>原始记录</span>
-            <span className="tree-count">{raws.length}</span>
-          </button>
-          {rawsExpanded ? <div className="tree-items">{raws.length === 0 ? <p className="tree-empty">还没有原始记录</p> : raws.map((raw) => <button className={`tree-item${activeTabId === `raw:${raw.id}` ? " is-selected" : ""}`} type="button" data-sound="select" key={raw.id} title={raw.title?.trim() || getPreview(raw.text, 40)} onClick={() => openRawTab(raw)} onContextMenu={(event) => { event.preventDefault(); setContextMenu({ type: "raw", raw, x: event.clientX, y: event.clientY }); }}><span className="tree-item-icon"><IconSource /></span><span className="tree-item-label">{getPreview(rawLabel(raw), 32)}</span></button>)}</div> : null}
+  if (!entered) {
+    return (
+      <LandingPage
+        onEnter={() => {
+          try {
+            window.localStorage.setItem(LANDING_KEY, "1");
+          } catch {
+            /* 存不下也让他进；下次仍会看到落地页 */
+          }
+          setEntered(true);
+        }}
+      />
+    );
+  }
+
+  return (
+    <AppShell
+      sidebarOpen={sidebarOpen}
+      railHidden={railHidden}
+      showInspector={showInspector}
+      mobileTopbar={
+        <div className="mobile-topbar">
+          <button className="mobile-menu-button" type="button" data-sound="select" onClick={() => { setRailOpen(false); setMobileNavOpen((current) => !current); }} aria-expanded={mobileNavOpen} aria-controls="workspace-nav">目录</button>
+          <AppLogo />
+          <button className="mobile-new-button" type="button" data-sound="press" onClick={() => navigate("new-note")}>新建</button>
         </div>
-        <div className="tree-section">
-          <button className="tree-section-header" type="button" data-sound="select" onClick={() => setNotesExpanded((current) => !current)} aria-expanded={notesExpanded}>
-            <span className={`tree-caret${notesExpanded ? " is-open" : ""}`} aria-hidden="true">▾</span>
-            <span>笔记</span>
-            <span className="tree-count">{knowledges.length}</span>
-          </button>
-          {notesExpanded ? <div className="tree-items">{knowledges.length === 0 ? <p className="tree-empty">还没有笔记，先创建一条</p> : knowledges.map((knowledge) => <button className={`tree-item${activeTabId === `knowledge:${knowledge.id}` ? " is-selected" : ""}`} type="button" data-sound="select" key={knowledge.id} title={knowledge.title} onClick={() => openKnowledgeTab(knowledge)}><span className="tree-item-icon"><IconNote /></span><span className="tree-item-label">{getPreview(knowledge.title, 32)}</span></button>)}</div> : null}
-        </div>
-        {archivedNotes.length > 0 ? <div className="tree-section">
-          <button className="tree-section-header" type="button" data-sound="select" onClick={() => setArchivedExpanded((current) => !current)} aria-expanded={archivedExpanded}>
-            <span className={`tree-caret${archivedExpanded ? " is-open" : ""}`} aria-hidden="true">▾</span>
-            <span>已归档</span>
-            <span className="tree-count">{archivedNotes.length}</span>
-          </button>
-          {archivedExpanded ? <div className="tree-items">{archivedNotes.map((note) => <div className="tree-item tree-item-archived" key={note.id}>
-            <span className="tree-item-icon"><IconNote /></span>
-            <span className="tree-item-label">{getPreview(note.title, 30)}</span>
-            <button className="tree-item-action" type="button" data-sound="press" title="恢复这一页" onClick={() => void handleArchiveNote(note, false)}>恢复</button>
-          </div>)}</div> : null}
-        </div> : null}
-        <div className="tree-section tree-tools-section">
-          <button className={`tree-tool-item${activeTabId === "view:new-note" ? " is-active" : ""}`} type="button" data-sound="select" title="新建笔记" onClick={() => navigate("new-note")}><span className="tree-item-icon"><IconPlus /></span><span className="tree-tool-item-label">新建笔记</span></button>
-          <button className={`tree-tool-item${activeTabId === "view:graph" ? " is-active" : ""}`} type="button" data-sound="select" title={viewMeta.graph.label} onClick={() => navigate("graph")}><span className="tree-item-icon"><IconGraph /></span><span className="tree-tool-item-label">{viewMeta.graph.label}</span></button>
-          <button className={`tree-tool-item${activeTabId === "view:agent" ? " is-active" : ""}`} type="button" data-sound="select" title={viewMeta.agent.label} onClick={() => navigate("agent")}><span className="tree-item-icon"><IconAgent /></span><span className="tree-tool-item-label">{viewMeta.agent.label}</span></button>
-        </div>
-      </nav>
-      <div className="sidebar-bottom"><div className="data-status"><span className="status-dot" aria-hidden="true" /><span><strong>记录已保存</strong><small>原始记录与知识页可追溯</small></span></div><div className="sidebar-bottom-row"><span className="sidebar-version">Chordnote · 和弦</span><button className="sidebar-settings-btn" type="button" data-sound="select" aria-label="打开设置" onClick={() => setSettingsOpen(true)}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" /></svg></button></div></div>
-    </aside>
-    <section className="workspace-main">
-      <div className="workspace-topbar"><div className="breadcrumb"><span>Chordnote</span><span aria-hidden="true">/</span><strong>{activeTab.label}</strong></div><div className="topbar-actions"><button className={`rail-toggle${railShow ? " is-active" : ""}`} type="button" data-sound="select" aria-expanded={railShow} aria-controls="context-rail" onClick={toggleRail}>上下文</button><button className="avatar-button" type="button" aria-label="打开个人菜单">G</button></div></div>
-      <div className="tab-bar" role="tablist">{openTabs.map((tab) => <div key={tab.id} className={`tab-chip${activeTabId === tab.id ? " is-active" : ""}`} role="tab" tabIndex={activeTabId === tab.id ? 0 : -1} data-sound="select" aria-selected={activeTabId === tab.id} onClick={() => setActiveTabId(tab.id)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setActiveTabId(tab.id); } }}><span>{tab.label}</span><button type="button" data-sound="select" aria-label="关闭标签" onClick={(event) => { event.stopPropagation(); closeTab(tab.id); }}>×</button></div>)}</div>
-      <div className="workspace-content"><div className="main-column">{error ? <div className="feedback-banner error-message" role="alert">{error}</div> : null}{notice ? <div className="feedback-banner notice-message" aria-live="polite">{notice}</div> : null}{renderMainContent()}</div></div>
-    </section>
-    <aside id="context-rail" className={`ai-rail${railOpen ? " is-open" : ""}`} aria-label="上下文面板">{railShow ? <button className="rail-drawer-close" type="button" data-sound="select" aria-label="收起上下文面板" onClick={hideRail}>×</button> : null}{renderRail()}</aside>
-    {/* 右栏收起时，右边缘留一条图标条 —— 与左栏那条对称：同一个 56px 列、同一套 38px 图标按钮。
-        四个图标与右栏四块一一对应，角标就是那一块的计数；点一下先展开面板、再滚到那一块。
-        当前标签不是知识页时（railContext 为 null）只留开合按钮，不摆一排 0。 */}
-    <nav className="rail-icons" aria-label="上下文图标条">
-      <button className="rail-icon-btn" type="button" data-sound="select" title="展开上下文面板" aria-label="展开上下文面板" aria-controls="context-rail" onClick={toggleRail}><IconPanelExpand /></button>
-      <span className="rail-divider" aria-hidden="true" />
-      {railContext ? <>
-        <button className="rail-icon-btn" type="button" data-sound="select" title={`入链 ${railContext.inlinks.length}`} aria-label={`入链 ${railContext.inlinks.length}`} onClick={() => openRailAt("rail-inlinks")}><IconInlink /><CountBadge count={railContext.inlinks.length} /></button>
-        <button className="rail-icon-btn" type="button" data-sound="select" title={`出链 ${railContext.outlinks.length}`} aria-label={`出链 ${railContext.outlinks.length}`} onClick={() => openRailAt("rail-outlinks")}><IconOutlink /><CountBadge count={railContext.outlinks.length} /></button>
-        <button className="rail-icon-btn" type="button" data-sound="select" title={`未链接提及 ${railContext.mentions.length}`} aria-label={`未链接提及 ${railContext.mentions.length}`} onClick={() => openRailAt("rail-mentions")}><IconMention /><CountBadge count={railContext.mentions.length} /></button>
-        <button className="rail-icon-btn" type="button" data-sound="select" title="编辑助理" aria-label="编辑助理" onClick={() => openRailAt("rail-assistant")}><IconHarp /></button>
-      </> : null}
-    </nav>
-    <nav className="mobile-bottom-nav" aria-label="移动端导航">{directNavViews.map((view) => <button className={activeTab.kind === "view" && activeTab.viewKey === view ? "is-active" : ""} type="button" data-sound="select" key={view} onClick={() => navigate(view)}><span>{viewMeta[view].shortLabel}</span></button>)}<button className={railOpen ? "is-active" : ""} type="button" data-sound="select" aria-expanded={railOpen} aria-controls="context-rail" onClick={toggleRail}><span>上下文</span></button><button type="button" data-sound="select" onClick={() => setMobileNavOpen(true)}><span>更多</span></button></nav>
-    {contextMenu?.type === "raw" ? <div className="raw-context-menu" style={{ left: contextMenu.x, top: contextMenu.y }} onClick={(event) => event.stopPropagation()}><div className="context-menu-label">原始记录</div><div className="context-menu-title">{getPreview(contextMenu.raw.text, 62)}</div><button type="button" data-sound="press" onClick={() => { openRawTab(contextMenu.raw); setEditingRawId(contextMenu.raw.id); setRawTextDraft(contextMenu.raw.text); setContextMenu(null); }}>编辑原话</button><button type="button" data-sound="destructive" onClick={() => void handleDeleteRaw(contextMenu.raw)}>移除这条记录</button></div> : null}
-    {contextMenu?.type === "knowledge-title" ? <div className="raw-context-menu" style={{ left: contextMenu.x, top: contextMenu.y }} onClick={(event) => event.stopPropagation()}><div className="context-menu-label">修订标题</div><div className="context-menu-title">{getPreview(contextMenu.knowledge.title, 62)}</div><button type="button" data-sound="press" onClick={() => { setEditingTitleId(contextMenu.knowledge.id); setTitleDraft(contextMenu.knowledge.title); setContextMenu(null); }}>修改标题</button></div> : null}
-    <SettingsPanel open={settingsOpen} onClose={() => setSettingsOpen(false)} />
-  </main>;
+      }
+      sidebar={
+        <aside id="workspace-nav" className={`workspace-sidebar${mobileNavOpen ? " is-open" : ""}${sidebarOpen ? "" : " is-collapsed"}`}>
+          <div className="sidebar-top">
+            <div className="sidebar-top-row">
+              <AppLogo />
+              <button className="sidebar-collapse-btn" type="button" data-sound="select" aria-label="收起侧栏" aria-controls="workspace-nav" onClick={() => setSidebarOpen(false)}><IconPanelCollapse /></button>
+            </div>
+            <button className="workspace-switcher" type="button" data-sound="select" onClick={() => openSpace("home")}>
+              <span className="workspace-avatar">G</span>
+              <span><strong>私人知识编辑室</strong><small>Home</small></span>
+            </button>
+            <button className="new-source-button" type="button" data-sound="press" onClick={() => navigate("new-note")}><span aria-hidden="true">+</span> 新建笔记</button>
+          </div>
+
+          <PrimaryNav activeSpace={activeSpace} onSelect={openSpace} onExpandSidebar={() => setSidebarOpen(true)} />
+          {renderSecondaryNav()}
+
+          <div className="sidebar-bottom">
+            <div className="data-status"><span className="status-dot" aria-hidden="true" /><span><strong>记录已保存</strong><small>原始记录与知识页可追溯</small></span></div>
+            <div className="sidebar-bottom-row">
+              <span className="sidebar-version">Chordnote · 和弦</span>
+              <button className="sidebar-settings-btn" type="button" data-sound="select" aria-label="打开设置" onClick={() => openSpace("settings")}><IconSettings /></button>
+            </div>
+          </div>
+        </aside>
+      }
+      main={
+        <section className="workspace-main">
+          <div className="workspace-topbar">
+            <div className="breadcrumb"><span>Chordnote</span><span aria-hidden="true">/</span><strong>{breadcrumbLabel}</strong></div>
+            <div className="topbar-actions">
+              {showInspector ? (
+                <button className={`rail-toggle${railShow ? " is-active" : ""}`} type="button" data-sound="select" aria-expanded={railShow} aria-controls="context-rail" onClick={toggleRail}>上下文</button>
+              ) : null}
+              <button className="avatar-button" type="button" aria-label="打开个人菜单">G</button>
+            </div>
+          </div>
+
+          {activeSpace === "knowledge" ? (
+            <div className="tab-bar" role="tablist">
+              {openTabs.map((tab) => (
+                <div key={tab.id} className={`tab-chip${activeTabId === tab.id ? " is-active" : ""}`} role="tab" tabIndex={activeTabId === tab.id ? 0 : -1} data-sound="select" aria-selected={activeTabId === tab.id} onClick={() => setActiveTabId(tab.id)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setActiveTabId(tab.id); } }}>
+                  <span>{tab.label}</span>
+                  <button type="button" data-sound="select" aria-label="关闭标签" onClick={(event) => { event.stopPropagation(); closeTab(tab.id); }}>×</button>
+                </div>
+              ))}
+            </div>
+          ) : null}
+
+          <div className="workspace-content">
+            <div className="main-column">
+              {error ? <div className="feedback-banner error-message" role="alert">{error}</div> : null}
+              {notice ? <div className="feedback-banner notice-message" aria-live="polite">{notice}</div> : null}
+              {renderSpaceContent()}
+            </div>
+          </div>
+        </section>
+      }
+      inspector={
+        <InspectorHost
+          visible={showInspector}
+          hidden={railHidden}
+          open={railOpen}
+          onClose={hideRail}
+          icons={renderInspectorIcons()}
+        >
+          {renderRail()}
+        </InspectorHost>
+      }
+      mobileBottomNav={
+        <nav className="mobile-bottom-nav" aria-label="移动端导航">
+          {(["home", "knowledge", "agent", "settings"] as Space[]).map((space) => (
+            <button key={space} className={activeSpace === space ? "is-active" : ""} type="button" data-sound="select" onClick={() => openSpace(space)}>
+              <span>{SPACE_META[space].shortLabel}</span>
+            </button>
+          ))}
+          {showInspector ? (
+            <button className={railOpen ? "is-active" : ""} type="button" data-sound="select" aria-expanded={railOpen} aria-controls="context-rail" onClick={toggleRail}><span>上下文</span></button>
+          ) : null}
+        </nav>
+      }
+      overlays={
+        <>
+          {contextMenu?.type === "raw" ? <div className="raw-context-menu" style={{ left: contextMenu.x, top: contextMenu.y }} onClick={(event) => event.stopPropagation()}><div className="context-menu-label">原始记录</div><div className="context-menu-title">{getPreview(contextMenu.raw.text, 62)}</div><button type="button" data-sound="press" onClick={() => { openRawTab(contextMenu.raw); setEditingRawId(contextMenu.raw.id); setRawTextDraft(contextMenu.raw.text); setContextMenu(null); }}>编辑原话</button><button type="button" data-sound="destructive" onClick={() => void handleDeleteRaw(contextMenu.raw)}>移除这条记录</button></div> : null}
+          {contextMenu?.type === "knowledge-title" ? <div className="raw-context-menu" style={{ left: contextMenu.x, top: contextMenu.y }} onClick={(event) => event.stopPropagation()}><div className="context-menu-label">修订标题</div><div className="context-menu-title">{getPreview(contextMenu.knowledge.title, 62)}</div><button type="button" data-sound="press" onClick={() => { setEditingTitleId(contextMenu.knowledge.id); setTitleDraft(contextMenu.knowledge.title); setContextMenu(null); }}>修改标题</button></div> : null}
+        </>
+      }
+    />
+  );
 }

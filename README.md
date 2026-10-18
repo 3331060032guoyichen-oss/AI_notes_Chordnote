@@ -63,7 +63,7 @@ Raw 原始记录 → 整理助手 Draft → 用户确认 → Knowledge 知识页
 
 ```bash
 git clone https://github.com/3331060032guoyichen-oss/ai-notes_demo.git
-cd AI_notes_Chordnote
+cd ai-notes_demo
 pnpm install
 pnpm dev
 ```
@@ -92,7 +92,7 @@ Next.js 15（App Router） · React 19 · TypeScript · pnpm · 手写 CSS · Dr
 
 ```text
 app/          Next.js 页面与 API 路由（含 export / import / proposals / agent）
-components/   首屏门禁与星尘、知识图谱、设置抽屉、界面音效
+components/   应用外壳与空间导航、首屏门禁与星尘、知识图谱、Settings 空间、界面音效
 lib/          服务层（sources / notes / links / proposals / bundle）、Agent 工具循环、DeepSeek 边界、手写 zip
 types/        TypeScript 类型
 seed/         演示数据（pnpm seed:demo）

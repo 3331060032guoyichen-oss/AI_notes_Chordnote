@@ -30,6 +30,8 @@ pnpm dev                     # http://localhost:3000
 | 变量 | 必填 | 说明 |
 |---|---|---|
 | `DEEPSEEK_API_KEY` | 否 | 仅调试 AI 端点需要；不填时 `/api/organize`、`/api/assistant` 返回 503，其余功能正常 |
+| `CHORDNOTE_PROVIDER` / `CHORDNOTE_MODEL` / `CHORDNOTE_BASE_URL` / `CHORDNOTE_API_KEY` / `CHORDNOTE_TIMEOUT_MS` | 否 | 统一模型配置，优先级高于 `data/settings.json`；设置后界面对应字段锁定。provider 取值 `deepseek` / `ollama` / `custom` |
+| `CHORDNOTE_SETTINGS_FILE` | 否 | 换模型配置文件位置，默认 `./data/settings.json` |
 | `PGLITE_DATA_DIR` | 否 | 换知识库数据目录，默认 `./data/pglite`（相对项目根）。测试脚本用它指到别处的库，避免和应用抢同一份数据 |
 
 没有任何连接串要填：知识库是跑在应用进程内的 PGlite，第一次 `pnpm dev` 就会建目录、补迁移。
@@ -41,6 +43,7 @@ pnpm dev                     # http://localhost:3000
 ```bash
 pnpm exec tsc --noEmit   # 类型检查
 pnpm build               # 生产构建；不要与 pnpm dev 同时跑（共用 .next/ 会互相覆盖）
+pnpm test:unit           # 离线单元测试：Provider 归一化 / 工具调用 / 超时 / 错误 / 配置优先级
 pnpm dev                 # 另开终端
 pnpm test                # 75 项回归断言，纯 HTTP，需服务在跑
 pnpm verify:db           # 离线：在内存库上跑一遍迁移，校验表 / 约束 / 外键 / 归属隔离

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
-import { askAssistant, DeepSeekError } from "../../../lib/deepseek";
+import { ProviderError } from "../../../lib/ai/provider";
+import { askAssistant } from "../../../lib/ai/tasks";
 import { getNote } from "../../../lib/services/notes";
 import { getSource } from "../../../lib/services/sources";
 
@@ -84,7 +85,7 @@ export async function POST(request: Request) {
     const answer = await askAssistant({ question: body.question, context });
     return NextResponse.json({ answer });
   } catch (error) {
-    if (error instanceof DeepSeekError) {
+    if (error instanceof ProviderError) {
       const status = error.code === "CONFIG_MISSING" ? 503 : 502;
       const message = error.code === "CONFIG_MISSING"
         ? "编辑助理尚未完成服务配置。你的内容仍然安全，请联系维护者。"

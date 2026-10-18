@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { isOrganizeDraft } from "../../../lib/deepseek";
+import { isOrganizeDraft } from "../../../lib/ai/tasks";
 import { listArchivedNotes, listNotes, promoteFromSource } from "../../../lib/services/notes";
 import { getSource } from "../../../lib/services/sources";
 
