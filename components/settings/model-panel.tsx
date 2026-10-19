@@ -1,33 +1,136 @@
 "use client";
+
 import { useEffect, useState } from "react";
+
 const VENDORS = {
-  deepseek:{name:"DeepSeek",endpoint:"https://api.deepseek.com",model:"deepseek-chat"},
-  qwen:{name:"通义千问",endpoint:"https://dashscope.aliyuncs.com/compatible-mode/v1",model:"qwen-plus"},
-  glm:{name:"智谱 GLM",endpoint:"https://open.bigmodel.cn/api/paas/v4",model:"glm-4.5"},
-  moonshot:{name:"Moonshot",endpoint:"https://api.moonshot.cn/v1",model:"moonshot-v1-8k"},
-  siliconflow:{name:"硅基流动",endpoint:"https://api.siliconflow.cn/v1",model:"deepseek-ai/DeepSeek-V3"},
+  deepseek: { name: "DeepSeek", endpoint: "https://api.deepseek.com", model: "deepseek-chat" },
+  qwen: { name: "通义千问", endpoint: "https://dashscope.aliyuncs.com/compatible-mode/v1", model: "qwen-plus" },
+  glm: { name: "智谱 GLM", endpoint: "https://open.bigmodel.cn/api/paas/v4", model: "glm-4.5" },
+  moonshot: { name: "Moonshot", endpoint: "https://api.moonshot.cn/v1", model: "moonshot-v1-8k" },
+  siliconflow: { name: "硅基流动", endpoint: "https://api.siliconflow.cn/v1", model: "deepseek-ai/DeepSeek-V3" },
 };
-type Category="local"|"vendor"|"custom";
+
+type Category = "local" | "vendor" | "custom";
+type SettingsPayload = {
+  settings?: {
+    agentBackend?: "api" | "acp";
+    acp?: { label: string; command: string; args: string[] };
+    category?: Category;
+    provider: string;
+    vendor?: keyof typeof VENDORS;
+    baseUrl: string;
+    model: string;
+    timeoutMs: number;
+    apiKeyConfigured: boolean;
+    locked: string[];
+  };
+};
+
 export function ModelPanel() {
-  const [backend,setBackend]=useState<"api"|"acp">("api");
-  const [acpLabel,setAcpLabel]=useState("外部 Agent"),[command,setCommand]=useState(""),[args,setArgs]=useState("[]");
-  const [category,setCategory]=useState<Category>("vendor"),[vendor,setVendor]=useState<keyof typeof VENDORS>("deepseek");
-  const [endpoint,setEndpoint]=useState(""),[model,setModel]=useState(""),[key,setKey]=useState(""),[configured,setConfigured]=useState(false),[timeout,setTimeoutValue]=useState(120000),[locked,setLocked]=useState<string[]>([]),[status,setStatus]=useState(""),[models,setModels]=useState<string[]>([]),[busy,setBusy]=useState(false);
-  useEffect(()=>{void fetch("/api/settings/model").then(r=>r.json()).then(p=>{if(!p.settings)return;const s=p.settings;setBackend(s.agentBackend??"api");if(s.acp){setAcpLabel(s.acp.label);setCommand(s.acp.command);setArgs(JSON.stringify(s.acp.args));}setCategory(s.category??(s.provider==="ollama"?"local":s.provider==="deepseek"?"vendor":"custom"));if(s.vendor in VENDORS)setVendor(s.vendor);setEndpoint(s.baseUrl);setModel(s.model);setTimeoutValue(s.timeoutMs);setConfigured(s.apiKeyConfigured);setLocked(s.locked);}).catch(()=>setStatus("模型设置读取失败"));},[]);
-  function choose(next:Category){setBackend("api");setCategory(next);setModels([]);setKey("");if(next==="local"){setEndpoint("http://127.0.0.1:11434/v1");setModel("qwen3:4b");}else if(next==="vendor"){setEndpoint(VENDORS[vendor].endpoint);setModel(VENDORS[vendor].model);}}
-  async function save(){const patch:Record<string,unknown>={category,vendor,agentBackend:backend};if(backend==="acp"){const parsed=JSON.parse(args);if(!Array.isArray(parsed)||parsed.some(a=>typeof a!=="string"))throw new Error("参数必须是 JSON 字符串数组");patch.acp={label:acpLabel,command,args:parsed};}const provider=category==="local"?"ollama":category==="vendor"&&vendor==="deepseek"?"deepseek":"custom";
-    for(const [name,value] of Object.entries({provider,baseUrl:endpoint,model:backend==="acp"?(model||"agent-default"):(model||"pending-selection"),timeoutMs:timeout,...(key?{apiKey:key}:{})}))if(!locked.includes(name))patch[name]=value;
-    const r=await fetch("/api/settings/model",{method:"PATCH",headers:{"content-type":"application/json"},body:JSON.stringify(patch)});const p=await r.json();if(!r.ok)throw new Error(p.error?.message??"保存失败");setConfigured(p.settings.apiKeyConfigured);setKey("");window.dispatchEvent(new Event("chordnote-model-changed"));}
-  async function run(action:"save"|"models"|"test"){setBusy(true);try{await save();if(action==="models"){const r=await fetch("/api/settings/model/models");const p=await r.json();if(!r.ok)throw new Error(p.error?.message);setModels(p.models);setStatus(`已获取 ${p.models.length} 个模型，在 Agent 输入框中选择。`);}else if(action==="test"){const r=await fetch("/api/settings/model/test",{method:"POST",headers:{"content-type":"application/json"},body:"{}"});const p=await r.json();if(!r.ok)throw new Error(p.error?.message);setStatus(p.checks.map((c:{label:string;status:string;detail:string})=>`${c.label}：${c.status} ${c.detail}`).join("\n"));}else setStatus("已保存");}catch(e){setStatus(e instanceof Error?e.message:"操作失败");}finally{setBusy(false);}}
-  return <section className="model-settings"><h1>模型提供与服务</h1><div className="model-categories" role="tablist">{([["local","本地模型"],["vendor","模型厂商"],["custom","自定义模型"]] as const).map(([id,label])=><button key={id} role="tab" aria-selected={category===id} disabled={locked.includes("provider")} onClick={()=>choose(id)}>{label}</button>)}</div>
-    {category==="vendor"?<label>厂商类型<select value={vendor} disabled={locked.includes("provider")} onChange={e=>{const next=e.target.value as keyof typeof VENDORS;setVendor(next);setEndpoint(VENDORS[next].endpoint);setModel(VENDORS[next].model);setModels([]);setKey("");}}>{Object.entries(VENDORS).map(([id,v])=><option key={id} value={id}>{v.name}</option>)}</select></label>:null}
-    {category==="custom"?<label>Agent 接入<select aria-label="Agent 接入" value={backend} disabled={locked.includes("provider")} onChange={e=>{setBackend(e.target.value as "api"|"acp");setModel(e.target.value==="acp"?"agent-default":"");}}><option value="api">兼容模型 API</option><option value="acp">ACP 外部 Agent</option></select></label>:null}
-    {backend==="acp"?<><label>Agent 名称<input value={acpLabel} onChange={e=>setAcpLabel(e.target.value)}/></label><label>ACP 程序绝对路径<input value={command} onChange={e=>setCommand(e.target.value)} spellCheck={false}/></label><label>参数（JSON 数组）<textarea value={args} onChange={e=>setArgs(e.target.value)}/></label><p>使用兼容 ACP 的 Codex / Claude Code 桥接程序。程序由用户安装并登录；笔记工具只允许读取和提出待确认建议，额外权限请求拒绝。外部程序自身的本机权限由其配置决定。</p></>:null}
-    {backend==="api"?<><label>{category==="local"?"本地推理端点":"Endpoint"}<input value={endpoint} disabled={locked.includes("baseUrl")} onChange={e=>setEndpoint(e.target.value)} spellCheck={false}/></label>
-    <label>API Key<input type="password" autoComplete="off" value={key} disabled={locked.includes("apiKey")} placeholder={configured?"已配置，留空保持":"输入 API Key"} onChange={e=>setKey(e.target.value)}/></label></>:null}
-    {category==="custom"?<label>Model ID<input value={model} disabled={locked.includes("model")} onChange={e=>setModel(e.target.value)}/></label>:null}
-    <label>请求超时（毫秒）<input type="number" value={timeout} min={1000} max={600000} disabled={locked.includes("timeoutMs")} onChange={e=>setTimeoutValue(Number(e.target.value))}/></label>
-    <div className="review-actions"><button disabled={busy} onClick={()=>void run("save")}>保存</button><button disabled={busy||backend==="acp"} onClick={()=>void run("models")}>获取模型</button><button disabled={busy} onClick={()=>void run("test")}>测试连接</button><button disabled={busy||locked.includes("apiKey")} onClick={async()=>{const r=await fetch("/api/settings/model",{method:"PATCH",headers:{"content-type":"application/json"},body:JSON.stringify({apiKey:null})});if(r.ok){setConfigured(false);setStatus("密钥已清除");}}}>清除密钥</button></div>
-    {models.length?<ul>{models.map(id=><li key={id}>{id}</li>)}</ul>:null}<p role="status" style={{whiteSpace:"pre-wrap"}}>{status}</p>
+  const [backend, setBackend] = useState<"api" | "acp">("api");
+  const [acpLabel, setAcpLabel] = useState("外部 Agent"), [command, setCommand] = useState(""), [args, setArgs] = useState("[]");
+  const [category, setCategory] = useState<Category>("vendor"), [vendor, setVendor] = useState<keyof typeof VENDORS>("deepseek");
+  const [endpoint, setEndpoint] = useState("https://api.deepseek.com"), [model, setModel] = useState("deepseek-chat"), [key, setKey] = useState("");
+  const [configured, setConfigured] = useState(false), [timeout, setTimeoutValue] = useState(30_000), [locked, setLocked] = useState<string[]>([]);
+  const [status, setStatus] = useState(""), [models, setModels] = useState<string[]>([]), [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    void fetch("/api/settings/model").then(response => response.json()).then((payload: SettingsPayload) => {
+      if (!payload.settings) return;
+      const settings = payload.settings;
+      setBackend(settings.agentBackend ?? "api");
+      if (settings.acp) { setAcpLabel(settings.acp.label); setCommand(settings.acp.command); setArgs(JSON.stringify(settings.acp.args)); }
+      setCategory(settings.category ?? (settings.provider === "ollama" ? "local" : settings.provider === "deepseek" ? "vendor" : "custom"));
+      if (settings.vendor && settings.vendor in VENDORS) setVendor(settings.vendor);
+      setEndpoint(settings.baseUrl); setModel(settings.model); setTimeoutValue(settings.timeoutMs);
+      setConfigured(settings.apiKeyConfigured); setLocked(settings.locked);
+    }).catch(() => setStatus("模型设置读取失败"));
+  }, []);
+
+  function choose(next: Category) {
+    setBackend("api"); setCategory(next); setModels([]); setKey("");
+    if (next === "local") { setEndpoint("http://127.0.0.1:11434/v1"); setModel("qwen3:4b"); setTimeoutValue(120_000); }
+    else if (next === "vendor") { setEndpoint(VENDORS[vendor].endpoint); setModel(VENDORS[vendor].model); setTimeoutValue(30_000); }
+    else { setEndpoint(""); setModel(""); setTimeoutValue(30_000); }
+  }
+
+  async function save() {
+    const patch: Record<string, unknown> = { category, vendor, agentBackend: backend };
+    if (backend === "acp") {
+      const parsed: unknown = JSON.parse(args);
+      if (!Array.isArray(parsed) || parsed.some(value => typeof value !== "string")) throw new Error("参数必须是 JSON 字符串数组");
+      patch.acp = { label: acpLabel, command, args: parsed };
+    }
+    const provider = category === "local" ? "ollama" : category === "vendor" && vendor === "deepseek" ? "deepseek" : "custom";
+    const values = { provider, baseUrl: endpoint, model: backend === "acp" ? (model || "agent-default") : (model || "pending-selection"), timeoutMs: timeout, ...(key ? { apiKey: key } : {}) };
+    for (const [name, value] of Object.entries(values)) if (!locked.includes(name)) patch[name] = value;
+    const response = await fetch("/api/settings/model", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(patch) });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error?.message ?? "保存失败");
+    setConfigured(payload.settings.apiKeyConfigured); setKey("");
+    window.dispatchEvent(new Event("chordnote-model-changed"));
+  }
+
+  async function run(action: "save" | "models" | "test") {
+    setBusy(true); setStatus("");
+    try {
+      await save();
+      if (action === "models") {
+        const response = await fetch("/api/settings/model/models"), payload = await response.json();
+        if (!response.ok) throw new Error(payload.error?.message ?? "获取模型失败");
+        setModels(payload.models); setStatus(`已获取 ${payload.models.length} 个模型，可在 Agent 输入框中选择。`);
+      } else if (action === "test") {
+        const response = await fetch("/api/settings/model/test", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" }), payload = await response.json();
+        if (!response.ok) throw new Error(payload.error?.message ?? "测试连接失败");
+        setStatus(payload.checks.map((check: { label: string; status: string; detail: string }) => `${check.label}：${check.status} ${check.detail}`).join("\n"));
+      } else setStatus("已保存");
+    } catch (error) { setStatus(error instanceof Error ? error.message : "操作失败"); }
+    finally { setBusy(false); }
+  }
+
+  async function clearKey() {
+    setBusy(true); setStatus("");
+    try {
+      const response = await fetch("/api/settings/model", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ apiKey: null }) });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error?.message ?? "密钥清除失败");
+      setConfigured(false); setKey(""); setStatus("密钥已清除");
+    } catch (error) { setStatus(error instanceof Error ? error.message : "密钥清除失败"); }
+    finally { setBusy(false); }
+  }
+
+  return <section className="model-settings">
+    <h1>模型提供与服务</h1>
+    <div className="model-categories" role="tablist" aria-label="模型来源">
+      {([[
+        "local", "本地模型",
+      ], ["vendor", "模型厂商"], ["custom", "自定义模型"]] as const).map(([id, label]) => <button key={id} type="button" role="tab" aria-selected={category === id} disabled={locked.includes("provider")} onClick={() => choose(id)}>{label}</button>)}
+    </div>
+
+    <div className="model-fields">
+      {category === "vendor" ? <label><span>厂商类型</span><select value={vendor} disabled={locked.includes("provider")} onChange={event => { const next = event.target.value as keyof typeof VENDORS; setVendor(next); setEndpoint(VENDORS[next].endpoint); setModel(VENDORS[next].model); setTimeoutValue(30_000); setModels([]); setKey(""); }}>{Object.entries(VENDORS).map(([id, item]) => <option key={id} value={id}>{item.name}</option>)}</select></label> : null}
+      {category === "custom" ? <label><span>Agent 接入</span><select aria-label="Agent 接入" value={backend} disabled={locked.includes("provider")} onChange={event => { const next = event.target.value as "api" | "acp"; setBackend(next); setModel(next === "acp" ? "agent-default" : ""); }}><option value="api">兼容模型 API</option><option value="acp">ACP 外部 Agent</option></select></label> : null}
+
+      {backend === "acp" ? <>
+        <label><span>Agent 名称</span><input value={acpLabel} onChange={event => setAcpLabel(event.target.value)} /></label>
+        <label><span>ACP 程序绝对路径</span><input value={command} onChange={event => setCommand(event.target.value)} spellCheck={false} /></label>
+        <label><span>参数（JSON 数组）</span><textarea value={args} onChange={event => setArgs(event.target.value)} /></label>
+        <p className="model-help">外部 Agent 由用户安装并登录。Chordnote 只开放读取与待确认提议工具，额外权限请求会被拒绝。</p>
+      </> : <>
+        <label><span>{category === "local" ? "本地推理端点" : "API 接口地址 (Endpoint)"}</span><input value={endpoint} disabled={locked.includes("baseUrl")} onChange={event => setEndpoint(event.target.value)} spellCheck={false} placeholder="https://api.deepseek.com" /></label>
+        {category !== "local" ? <label><span>API 密钥 (API Key)</span><input type="password" autoComplete="off" value={key} disabled={locked.includes("apiKey")} placeholder={configured ? "已配置，如需更换请输入新的 Key" : "请输入 API Key"} onChange={event => setKey(event.target.value)} /></label> : null}
+      </>}
+      {category === "custom" ? <label><span>模型 ID (Model ID)</span><input value={model} disabled={locked.includes("model")} onChange={event => setModel(event.target.value)} /></label> : null}
+      <label><span>请求超时 (毫秒)</span><input type="number" value={timeout} min={1000} max={600000} disabled={locked.includes("timeoutMs")} onChange={event => setTimeoutValue(Number(event.target.value))} /></label>
+    </div>
+
+    <div className="model-actions">
+      <button className="is-primary" type="button" disabled={busy} onClick={() => void run("save")}>保存</button>
+      <button type="button" disabled={busy || backend === "acp"} onClick={() => void run("models")}>获取模型</button>
+      <button type="button" disabled={busy} onClick={() => void run("test")}>测试连接</button>
+      <button className="is-danger" type="button" disabled={busy || backend === "acp" || locked.includes("apiKey")} onClick={() => void clearKey()}>清除密钥</button>
+    </div>
+    {models.length ? <div className="model-results"><span>可用模型</span><ul>{models.map(id => <li key={id}>{id}</li>)}</ul></div> : null}
+    <p className="model-status" role="status">{status}</p>
   </section>;
 }

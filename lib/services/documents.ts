@@ -22,7 +22,7 @@ export async function createLinkedDocument(target: string) {
   const documents = await listDocuments();
   const existing = resolveReference(target, documents);
   if (existing) return existing;
-  const path = safeDocumentPath(target.includes("/") ? target : `raw/articles/${target}`);
+  const path = safeDocumentPath(target.includes("/") ? target : `raw/inbox/${target}`);
   if (documents.some(doc => doc.path.toLocaleLowerCase() === path.toLocaleLowerCase())) throw new Error("PATH_EXISTS");
   const title = path.split("/").at(-1)!.replace(/\.md$/i, "");
   const markdown = makeMarkdown(title, "");

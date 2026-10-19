@@ -113,7 +113,10 @@ export async function createSourceInTx(
 ): Promise<Raw> {
   const { userId } = getUserContext();
   const id = `raw_${randomUUID()}`;
-  const path = document ? await availableDocumentPath(tx,document.path,id) : undefined;
+  // Every newly captured note gets a real persisted inbox path.  The sidebar can
+  // therefore render "未整理笔记" from server data instead of temporary UI state.
+  // Explicit import/document paths remain untouched for compatibility.
+  const path = await availableDocumentPath(tx, document?.path ?? `raw/inbox/${id}.md`, id);
   const normalizedTitle = typeof title === "string" && title.trim() ? title.trim() : null;
   const rows = await tx
     .insert(rawNotes)

@@ -175,6 +175,11 @@ try {
     "POST /api/raw 响应形状",
     ["createdAt", "id", "text", "title", "markdown", "path", "version"].every(key => key in (rawA.body?.raw ?? {})),
   );
+  check(
+    "新建笔记持久写入未整理目录",
+    rawA.body?.raw?.path === `raw/inbox/${rawAId}.md`,
+    `实际 path=${rawA.body?.raw?.path}`,
+  );
 
   const empty = await POST("/api/raw", { text: "   " });
   const tooLong = await POST("/api/raw", { text: "x".repeat(50_001) });
@@ -597,9 +602,14 @@ try {
   // 白板是一份单用户工作区文档。仅在测试自己启动的临时库里写它，避免复用开发服务时覆盖用户画布。
   if (owned) {
     const blankCanvas = await GET("/api/canvas");
-    const canvasWrite = await call("PUT", "/api/canvas", { version: 0, document: { cards: [{ id: "card-a", x: 0, y: 0, text: "回归卡片" }], edges: [] } });
+    const canvasWrite = await call("PUT", "/api/canvas", { version: 0, document: {
+      cards: [{ id: "card-a", x: 0, y: 0, text: "回归便签" }],
+      images: [{ id: "image-a", x: 320, y: 40, width: 120, height: 80, src: "data:image/png;base64,iVBORw0KGgo=", name: "fixture.png" }],
+      strokes: [{ id: "stroke-a", color: "#35332f", width: 3, points: [{ x: 10, y: 10 }, { x: 30, y: 35 }] }],
+      edges: [{ from: "card-a", to: "image-a" }],
+    } });
     const canvasConflict = await call("PUT", "/api/canvas", { version: 0, document: { cards: [], edges: [] } });
-    check("白板可建立并保存版本", blankCanvas.status === 200 && canvasWrite.status === 200 && canvasWrite.body?.canvas?.version === 1);
+    check("白板可持久保存便签、图片、笔迹与连线", blankCanvas.status === 200 && canvasWrite.status === 200 && canvasWrite.body?.canvas?.version === 1 && canvasWrite.body?.canvas?.document?.strokes?.length === 1);
     check("白板拒绝旧版本覆盖", canvasConflict.status === 409);
   } else {
     check("白板版本写入回归（复用开发库时跳过）", true);

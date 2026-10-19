@@ -231,7 +231,7 @@ export function toChatToolDefinitions(): ChatToolDefinition[] {
 export const AGENT_INSTRUCTION = [
   "# LLM Wiki 工作流",
   "## 结构与约定",
-  "raw: articles / papers / books / media / data。wilki: index / entitles / concept / sources / synthesis / questions / overview。",
+  "raw: articles / papers / books / media / data。未整理笔记: raw/inbox。wiki: index / entitles / concept / sources / synthesis / questions / overview；现有知识页磁盘路径继续兼容 wilki 前缀。",
   "文档以 Markdown 保存；首个 heading 是标题。Wiki frontmatter: title, source, created, description, tags；未知字段必须保留。",
   "链接统一使用 [[目标路径或标题]]、[[目标|别名]]；不得清洗括号，不得把提及自动变成正式关系。",
   "## Ingest",

@@ -34,7 +34,7 @@ import type { OrganizeDraft } from "../types/organize";
 import type { Proposal } from "../types/proposal";
 import type { Raw } from "../types/raw";
 
-const QUICK_GUIDE = "# readme\n\n写下笔记，停笔后自动保存。笔记名是文档第一行。\n\n输入 [[ 选择笔记；点击虚线链接可新建原始记录。支持 #标签、==高亮==、**粗体**、*斜体* 和 - [ ] 任务。光标进入标记可编辑原始语法。\n\n左侧 raw 保存原始记录，wilki 保存确认后的知识页。右侧 Agent 可用 @ 引用笔记，整理结果经确认后收录。\n\n查找笔记中可查询出链和入链。Schema 展示 Agent 实际读取的工作规则。\n\n删除会进入设置中的归档，可恢复原路径。导出包含完整 Markdown 和路径。";
+const QUICK_GUIDE = "# readme\n\n写下笔记，停笔后自动保存。笔记名是文档第一行。\n\n输入 [[ 选择笔记；点击虚线链接可新建原始记录。支持 #标签、==高亮==、**粗体**、*斜体* 和 - [ ] 任务。光标进入标记可编辑原始语法。\n\n新建内容会持久保存到左侧未整理笔记；raw 保留分类后的原始资料，wiki 保存确认后的知识页。右侧 Agent 可用 @ 引用笔记，整理结果经确认后收录。\n\n查找笔记中可查询出链和入链。Schema 展示 Agent 实际读取的工作规则。\n\n删除会进入设置中的归档，可恢复原路径。导出包含完整 Markdown 和路径。";
 /**
  * 停笔多久就把这段原话收下（毫秒）。
  *
@@ -787,7 +787,7 @@ export default function Home() {
     return <>
       <header className="workspace-heading compact-heading">
         <div>
-          <h1>wilki</h1>
+          <h1>wiki</h1>
         </div>
         <StatusPill tone="accent">{knowledges.length} 篇</StatusPill>
       </header>
@@ -890,7 +890,7 @@ export default function Home() {
           case "agent": return null;
           case "schema": return <SchemaView />;
           case "readme": return <MarkdownEditor value={QUICK_GUIDE} readOnly candidates={documentCandidates} onOpenLink={target => void openDocumentLink(target)} />;
-          case "canvas": return <CanvasWorkspace candidates={documentCandidates} onOpen={id => { const n = knowledges.find(n => n.id === id); if (n) openKnowledgeTab(n); else { const r = raws.find(r => r.id === id); if (r) openRawTab(r); } }} />;
+          case "canvas": return <CanvasWorkspace onOpen={id => { const n = knowledges.find(n => n.id === id); if (n) openKnowledgeTab(n); else { const r = raws.find(r => r.id === id); if (r) openRawTab(r); } }} />;
         }
     }
   }
