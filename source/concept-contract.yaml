@@ -4,33 +4,30 @@ direction: knowledge-architect-worktable
 subject_count: 1
 subject:
   identity: >-
-    A single continuous editorial worktable: warm ivory graph paper, handwritten
-    study notes, small index cards, violet link-lines, and a restrained modular
-    paper knowledge structure. No people, faces, devices, logos, or generated text.
+    One continuous physical study worktable: a pale ash desktop around one large
+    warm-ivory graph-paper sheet, twelve small paper notes, violet link-lines,
+    and a restrained modular paper knowledge structure. No people, devices, logos, or generated text.
   anchors:
-    - top-down three-quarter editorial viewpoint
-    - warm ivory paper with a fine graphite grid
-    - charcoal ink, indigo shadows, and one Chordnote violet accent
-    - precise Swiss editorial geometry with tactile paper edges
-    - same desk, light direction, scale, and paper grain in every shot
+    - top-down, slightly oblique editorial view of a physical pale-ash desk
+    - one large warm ivory graph-paper sheet with a fine graphite grid
+    - twelve unlabelled note cards with charcoal marks and violet link-lines
+    - charcoal ink, soft indigo paper shadows, and one Chordnote violet accent
+    - same desk, paper, card count, light direction, scale, and viewpoint in every shot
 style: >-
-  Calm Swiss Internationalist editorial illustration with the tactility of a
-  refined product worktable: generous negative space, measured grid, sharp black
-  line work, matte paper, and no glossy 3D or neon interface effects. It takes
-  compositional inspiration from a large, clear editorial product story without
-  reproducing any reference site's artwork, layout, text, characters, or assets.
+  A quiet Swiss Internationalist editorial illustration with tactile paper edges,
+  sharp charcoal line work, a restrained violet accent, broad paper margins, and
+  visible surface detail. It is an original knowledge-product story, with no copied artwork, layout,
+  text, characters, or assets from the reference site.
 scene: >-
-  A large physical knowledge worktable. Loose learning notes begin as isolated
-  fragments, then align through visible violet wikilink-like threads into a
-  low paper architecture that reads as a connected knowledge system.
+  A large physical knowledge worktable. Isolated learning notes begin scattered
+  on the central sheet, align into groups, acquire visible violet links, and
+  finish as a low modular paper structure that reads as a connected knowledge system.
 story: >-
-  From isolated note fragments to a stable interdisciplinary knowledge network;
-  the viewer reads the formation as an AI knowledge architect helping structure,
-  never overwriting, a student's material.
+  From scattered learning fragments to a stable interdisciplinary knowledge
+  network; the motion makes AI's organizing role visible without depicting autonomous writing.
 motion_intent: >-
-  Scroll continuously reveals one physical transformation: scattered notes gather,
-  align, connect, and rise into an ordered paper framework. Motion is legible at
-  any paused frame; no cuts, flashes, or ornamental camera moves.
+  Scrolling reveals one physical transformation: notes gather, align, connect,
+  and rise into an ordered paper framework. Every stopped frame remains legible.
 driver: scroll
 input_semantics: scroll-progress
 time_control: scrub
@@ -45,7 +42,7 @@ destination:
   placement: full-width landing hero motion stage on desktop
   maximum_css_size: 1280x720
   target_dpr: 1
-  crop_policy: contain within a wide editorial frame; never crop the central paper architecture
+  crop_policy: contain within a wide editorial frame; never crop the central paper worktable
   reduced_motion_state: K4
 copy_reference:
   title: Chordnote
@@ -53,6 +50,6 @@ copy_reference:
   lede: 一条笔记是音符，连起来才是和弦。
 constraints:
   - Use generated media only as the visual story; keep all readable product copy as HTML.
-  - Preserve a quiet, large-format composition with sufficient contrast for adjacent Chinese copy.
+  - Preserve quiet, large-format drawing margins with sufficient contrast for adjacent Chinese copy.
   - Do not depict direct autonomous writing into a knowledge base; the visual narrative is organization and suggestion.
   - No screenshots, UI mockups, watermarks, literal text, brand marks, or imitation of the reference website.

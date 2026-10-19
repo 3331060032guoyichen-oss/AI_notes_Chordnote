@@ -74,9 +74,9 @@ export function LandingMotionStage({ src, poster, label = "从原始记录到知
           />
           {!ready && <Image className="landing-motion-poster" src={poster} alt="" aria-hidden="true" fill sizes="(max-width: 760px) calc(100vw - 24px), min(1280px, 100vw)" priority />}
           <div className="landing-motion-caption">
-            <span>01 — 工作台</span>
+            <span>01 — 知识工作台</span>
             <strong>{label}</strong>
-            <small>向下滚动，逐帧观察纸页如何连成体系</small>
+            <small>向下滚动，逐帧观察笔记如何归位与连结</small>
           </div>
         </div>
       </div>

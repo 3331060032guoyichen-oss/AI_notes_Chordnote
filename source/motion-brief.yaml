@@ -20,26 +20,25 @@ quality_target:
   maximum_css_size: 1280x720
   target_dpr: 1
   minimum_master_size: 1280x720
-  note: The 768P video master sets the delivery ceiling; do not stretch it beyond this frame.
 scene_continuity: >-
-  One unbroken worktable transformation. Every production segment begins from the
+  One unbroken physical worktable. Every production segment begins from the
   actual decoded tail frame of the segment before it; no runtime source swapping.
 keyframes:
   - id: K0
     progress: 0
-    description: Isolated paper notes rest loosely on the gridded worktable.
+    description: Twelve Raw note cards sit loosely on a large graph-paper sheet.
   - id: K1
     progress: 0.25
-    description: The same notes have aligned into three measured study clusters.
+    description: Cards settle into three measured study clusters.
   - id: K2
     progress: 0.5
-    description: Thin violet lines connect the stable clusters into a visible map.
+    description: Violet relation paths connect the stable clusters.
   - id: K3
     progress: 0.75
-    description: Connected paper pages rise along fold lines into a low framework.
+    description: A shallow paper framework makes cross-disciplinary structure visible.
   - id: K4
     progress: 1
-    description: A complete, quiet paper knowledge architecture holds still in generous space.
+    description: A complete, quiet knowledge worktable holds still in generous space.
 segments:
   - id: segment-01
     from: K0
@@ -66,5 +65,5 @@ pilot:
   segment: segment-01
   first_frame: source/K0.png
   last_frame: source/K1.png
-  video: pilot/segment-01.mp4
-  page_evidence: qa/pilot-page.png
+  video: pilot/worktable-segment-01.mp4
+  page_evidence: qa/worktable-pilot-page.png

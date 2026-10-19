@@ -81,7 +81,7 @@ export function LandingPage({ onEnter }: LandingPageProps) {
         <p>基于 Andrej Karpathy 提出的 LLM Wiki 架构与 Obsidian 双向链接知识图谱，我们为 Chordnote 的 Agent 编写了一份专属《工作手册》。</p>
       </section>
 
-      <LandingMotionStage src="/motion/pilot-segment-01.mp4" poster="/motion/pilot-poster.png" />
+      <LandingMotionStage src="/motion/worktable-pilot.mp4" poster="/motion/worktable-poster.png" />
 
       <section id="principles" className="landing-principles" aria-label="产品原则">
         <div className="landing-section-head">
