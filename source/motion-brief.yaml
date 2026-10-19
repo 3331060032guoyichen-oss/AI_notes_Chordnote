@@ -1,0 +1,70 @@
+schema_version: 1
+contract: source/concept-contract.yaml
+identity_bible: source/identity-bible.md
+driver: scroll
+input_semantics: continuous-scroll-progress
+time_control: scrub
+navigation: continuous
+parameter_space: linear
+media_access: sequential
+gesture_policy:
+  boundary: clamp
+  programmatic_navigation: ignore
+  while_active: retarget
+frame_policy: native
+target_fps: 24
+planned_duration_seconds: 20
+planned_frame_count: 480
+pixel_dimensions: 2048x1152
+quality_target:
+  maximum_css_size: 1280x720
+  target_dpr: 1
+  minimum_master_size: 1280x720
+  note: The 768P video master sets the delivery ceiling; do not stretch it beyond this frame.
+scene_continuity: >-
+  One unbroken worktable transformation. Every production segment begins from the
+  actual decoded tail frame of the segment before it; no runtime source swapping.
+keyframes:
+  - id: K0
+    progress: 0
+    description: Isolated paper notes rest loosely on the gridded worktable.
+  - id: K1
+    progress: 0.25
+    description: The same notes have aligned into three measured study clusters.
+  - id: K2
+    progress: 0.5
+    description: Thin violet lines connect the stable clusters into a visible map.
+  - id: K3
+    progress: 0.75
+    description: Connected paper pages rise along fold lines into a low framework.
+  - id: K4
+    progress: 1
+    description: A complete, quiet paper knowledge architecture holds still in generous space.
+segments:
+  - id: segment-01
+    from: K0
+    to: K1
+    duration_seconds: 5
+  - id: segment-02
+    from: K1
+    to: K2
+    duration_seconds: 5
+  - id: segment-03
+    from: K2
+    to: K3
+    duration_seconds: 5
+  - id: segment-04
+    from: K3
+    to: K4
+    duration_seconds: 5
+runtime:
+  expected_controller: frame-scrub
+  expected_renderer: baked-video
+  loading_fallback: final/poster.png
+  reduced_motion_state: K4
+pilot:
+  segment: segment-01
+  first_frame: source/K0.png
+  last_frame: source/K1.png
+  video: pilot/segment-01.mp4
+  page_evidence: qa/pilot-page.png
