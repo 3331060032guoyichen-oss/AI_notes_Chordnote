@@ -61,7 +61,8 @@
 ## 第四组验收记录
 
 - `AppShell` 重构为固定 56px Ribbon、可折叠左树、中央单文档工作区和可折叠右侧 Agent 对话；CSS grid 让两侧展开时压缩中央区。
-- Ribbon 顺序为 logo、查找、图谱、白板、Agent；左树为 `raw`、`wilki`、`Schema`、`readme`，设置入口在底部。知识页右侧出链/入链面板已移除。
+- Ribbon 顺序为 logo、查找、图谱、白板、Agent；左树为 `raw`、`Schema`、`未整理笔记`、`wiki`、`readme`，设置入口在底部。新建 Raw 由服务端写入 `raw/inbox/`。知识页右侧出链/入链面板已移除。
+- Canvas 已改为浅色点阵自由白板：双击便签、Shift 自由笔迹、拖入或粘贴图片，选中后拖拽连线或归档；旧卡片与连线 JSON 保持兼容。
 - 新增命令式文档搜索、白板工作区和版本冲突保护；`/api/bootstrap` 合并工作区首屏读取，避免 PGlite 冷启动时的并发路由竞争。
 - 浏览器验收：在 861px 时中央区 325px，在 760px 时中央区 274px；两侧均未覆盖正文。白板写入显示“已保存”。
 - 记录：`components/{shell,workspace-tree,document-search,canvas-workspace}.tsx`、`app/page.tsx`、`app/globals.css`、`/api/bootstrap`、`/api/canvas`、`lib/services/{canvases,graph}.ts`、迁移 0007。

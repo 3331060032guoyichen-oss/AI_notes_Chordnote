@@ -92,8 +92,8 @@ components/
   settings/           设置弹层、模型面板与 Archive
   markdown-editor.tsx CM6 连续 Markdown / Live Preview 编辑器
   document-session.tsx 文档保存、frontmatter 属性折叠与版本冲突恢复
-  workspace-tree.tsx  Raw / wilki / Schema / readme 左树
-  canvas-workspace.tsx 本地持久白板
+  workspace-tree.tsx  Raw / Schema / 未整理笔记 / wiki / readme 左树
+  canvas-workspace.tsx 本地版本化自由白板（便签、笔迹、图片与连线）
   ui/                 共享内联图标
   landing-page.tsx            完整落地页（首次进入时出现）
   landing-constellation.tsx   首屏星座
@@ -147,7 +147,7 @@ type Tab =
   | { kind: "draft"; rawId: string; ... }                  // Draft 审阅
 ```
 
-- 最左侧 Ribbon 始终可见，顺序固定为 logo（开合左树）、查找、图谱、白板、Agent。左树顺序固定为 `raw`、`wilki`、`Schema`、`readme`，底部设置入口。
+- 最左侧 Ribbon 始终可见，顺序固定为 logo（开合左树）、查找、图谱、白板、Agent。左树顺序固定为 `raw`、`Schema`、`未整理笔记`、`wiki`、`readme`，底部设置入口。现有知识页路径继续兼容 `wilki/` 前缀。
 - `Schema` 是 `lib/agent/manual.ts` 的只读渲染；应用内不得复制或编辑它。开发者只改这一份源文件。
 - 右栏固定为可收起的 Agent 对话与模型选择。不得恢复 Knowledge 的常驻出链/入链/未链接提及面板；这些查询走命令搜索或 Agent `@mention`。
 - 工作区使用 Ribbon + 可折叠左右 panel + 中央编辑器的 CSS grid。开面板必须压缩中央区域，不能覆盖正文。
@@ -162,7 +162,7 @@ type Tab =
 - 深色主题：底色 `#030712`，强调色紫 `#7c3aed`。全文件只有一套深色令牌，不要再加第二套外观。
 - 中文正文：16px、行高 1.75、段距 1em、行宽上限 700px。
 - 导航与列表字号 15px、行高 34–36px，每屏可见条目不少于 12 条。
-- 新建笔记只写 Raw；自动保存不绕过 Raw → Draft → 用户确认 → Knowledge 的管线。
+- 新建笔记只写 Raw，并由服务端持久分配 `raw/inbox/` 路径，在「未整理笔记」显示；自动保存不绕过 Raw → Draft → 用户确认 → Knowledge 的管线。
 - 没有 title 的原始记录按创建顺序显示为「未命名 1 / 2 / 3」。
 - 助手形象是一把会呼吸的竖琴（内联 SVG，细线，无渐变），左栏 Agent 入口、右栏编辑助理、Agent 页面共用。不要换成星芒、头像或发光圆球。
 - 助手状态四态：空闲 / 整理中 / 已收录 / 已归档，只动 `transform` 与 `opacity`，`prefers-reduced-motion` 下整体停掉。
