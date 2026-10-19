@@ -181,6 +181,20 @@ try {
     `实际 path=${rawA.body?.raw?.path}`,
   );
 
+  const emptyRawA = await POST("/api/raw/new");
+  const emptyRawB = await POST("/api/raw/new");
+  created.raws.push(emptyRawA.body?.raw?.id, emptyRawB.body?.raw?.id);
+  const unnamedA = Number(String(emptyRawA.body?.raw?.title ?? "").match(/^未命名(\d+)$/)?.[1]);
+  const unnamedB = Number(String(emptyRawB.body?.raw?.title ?? "").match(/^未命名(\d+)$/)?.[1]);
+  check(
+    "POST /api/raw/new 每次建立持久的未命名笔记",
+    emptyRawA.status === 201 && emptyRawB.status === 201
+      && emptyRawA.body?.raw?.path === `raw/inbox/${emptyRawA.body?.raw?.id}.md`
+      && emptyRawB.body?.raw?.path === `raw/inbox/${emptyRawB.body?.raw?.id}.md`
+      && emptyRawA.body?.raw?.text === "" && emptyRawB.body?.raw?.text === ""
+      && unnamedB === unnamedA + 1,
+  );
+
   const empty = await POST("/api/raw", { text: "   " });
   const tooLong = await POST("/api/raw", { text: "x".repeat(50_001) });
   check("POST /api/raw 空文本 400", empty.status === 400 && empty.body?.error?.code === "TEXT_EMPTY");

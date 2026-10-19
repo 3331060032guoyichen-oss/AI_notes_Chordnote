@@ -6344,6 +6344,7 @@ button.wiki-link { display:inline; border:0; background:none; padding:0; font:in
 .workspace-ribbon button { width:40px; height:40px; display:grid; place-items:center; border:0; background:transparent; color:var(--ink); border-radius:6px; cursor:pointer; }
 .workspace-ribbon button:hover { background:var(--surface-raised); }
 .workspace-ribbon .ribbon-logo { font-size:23px; font-weight:700; margin-bottom:10px; color:var(--accent); }
+.workspace-ribbon .ribbon-settings { margin-top:auto; }
 .chordnote-workspace .workspace-sidebar { grid-column:2; grid-row:1; position:relative; inset:auto; transform:none; width:auto; height:100%; max-height:100%; min-width:0; display:flex; border-radius:0; background:var(--paper); overflow:hidden; border:0; border-right:1px solid var(--line); padding:8px 0; }
 .chordnote-workspace.sidebar-collapsed .workspace-sidebar { display:none; }
 .chordnote-workspace .workspace-main { grid-column:3; grid-row:1; width:100%; min-width:0; min-height:0; height:100%; border-radius:0; padding:0; overflow:hidden; display:flex; flex-direction:column; }

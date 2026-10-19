@@ -1,5 +1,5 @@
 import { rawMarkdown } from "../documents/compat";
-import { readMarkdown, patchProperties } from "../documents/markdown";
+import { makeMarkdown, readMarkdown, patchProperties } from "../documents/markdown";
 import { availableDocumentPath } from "./document-path";
 import { randomUUID } from "node:crypto";
 
@@ -91,7 +91,7 @@ export async function getSource(id: string): Promise<Raw | null> {
  * 新建原始记录。
  * `title` 可选：原始记录允许先只有正文，笔记名后补（也允许一直不填）。
  */
-export async function createSource(text: string, title?: string | null, document?: {markdown:string;path:string}): Promise<Raw> {
+export async function createSource(text: string, title?: string | null, document?: {markdown:string;path?:string}): Promise<Raw> {
   const { db } = await getDb();
 
   return db.transaction((tx) => createSourceInTx(tx, text, title, document));
@@ -109,7 +109,7 @@ export async function createSourceInTx(
   tx: DbTransaction,
   text: string,
   title?: string | null,
-  document?: {markdown:string;path:string},
+  document?: {markdown:string;path?:string},
 ): Promise<Raw> {
   const { userId } = getUserContext();
   const id = `raw_${randomUUID()}`;
@@ -124,6 +124,32 @@ export async function createSourceInTx(
     .returning();
 
   return toSource(rows[0]);
+}
+
+/**
+ * 直接建立一条可编辑的空白 Raw。
+ *
+ * 「新建笔记」不是临时输入态：点击后立刻在本机库里占一个位置，
+ * 因此刷新、切换标签或关闭面板都不会丢失。编号按同一用户所有 Raw
+ * （也包括归档项）取最大值，避免恢复归档后撞名。
+ */
+export async function createUntitledSource(text = ""): Promise<Raw> {
+  const { db } = await getDb();
+  const { userId } = getUserContext();
+
+  return db.transaction(async (tx) => {
+    const existing = await tx
+      .select({ title: rawNotes.title })
+      .from(rawNotes)
+      .where(eq(rawNotes.userId, userId))
+      .for("update");
+    const next = existing.reduce((highest, row) => {
+      const match = row.title?.trim().match(/^未命名\s*(\d+)$/);
+      return match ? Math.max(highest, Number(match[1])) : highest;
+    }, 0) + 1;
+    const title = `未命名${next}`;
+    return createSourceInTx(tx, text, title, { markdown: makeMarkdown(title, text) });
+  });
 }
 
 /**

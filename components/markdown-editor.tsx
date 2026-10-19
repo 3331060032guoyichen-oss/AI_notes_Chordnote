@@ -64,8 +64,12 @@ function preview(getLinks: () => readonly LinkCandidate[], open: (target: string
       if (node.name === "WikiLink") {
         const [dest, ...aliases] = source.slice(2, -2).split("|");
         const target = dest.split("#")[0].trim();
-        const resolved = Boolean(resolveReference(target, getLinks()));
-        if (!selected) add(from, to, Decoration.replace({ widget: new LinkWidget(target, aliases.join("|") || dest, resolved, open) }));
+        const reference = resolveReference(target, getLinks());
+        const resolved = Boolean(reference);
+        // Keep the stored syntax untouched, but display the destination's title in
+        // Live Preview. An explicit alias still takes precedence.
+        const label = aliases.join("|").trim() || reference?.title?.trim() || dest;
+        if (!selected) add(from, to, Decoration.replace({ widget: new LinkWidget(target, label, resolved, open) }));
         else add(from, to, Decoration.mark({ class: `wiki-link-source${resolved ? "" : " is-unresolved"}` }));
         return false;
       }

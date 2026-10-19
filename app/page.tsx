@@ -34,7 +34,7 @@ import type { OrganizeDraft } from "../types/organize";
 import type { Proposal } from "../types/proposal";
 import type { Raw } from "../types/raw";
 
-const QUICK_GUIDE = "# readme\n\n写下笔记，停笔后自动保存。笔记名是文档第一行。\n\n输入 [[ 选择笔记；点击虚线链接可新建原始记录。支持 #标签、==高亮==、**粗体**、*斜体* 和 - [ ] 任务。光标进入标记可编辑原始语法。\n\n新建内容会持久保存到左侧未整理笔记；raw 保留分类后的原始资料，wiki 保存确认后的知识页。右侧 Agent 可用 @ 引用笔记，整理结果经确认后收录。\n\n查找笔记中可查询出链和入链。Schema 展示 Agent 实际读取的工作规则。\n\n删除会进入设置中的归档，可恢复原路径。导出包含完整 Markdown 和路径。";
+const QUICK_GUIDE = "# Readme\n\n从左侧未整理笔记点击新建，立即建立一条本机持久保存的笔记；未改名时依次为未命名1、未命名2。笔记名是文档第一行，可随时修改。\n\n输入 [[ 选择笔记；点击虚线链接可新建原始记录。已解析链接在预览中显示目标笔记名称。支持 #标签、==高亮==、**粗体**、*斜体* 和 - [ ] 任务。光标进入标记可编辑原始语法。\n\nRaw 保留分类后的原始资料，Wiki 保存确认后的知识页。右侧 Agent 可用 @ 引用笔记，整理结果经确认后收录。\n\n查找笔记中可查询出链和入链。Schema 展示 Agent 实际读取的工作规则。\n\n删除会进入设置中的归档，可恢复原路径。导出包含完整 Markdown 和路径。";
 /**
  * 停笔多久就把这段原话收下（毫秒）。
  *
@@ -125,6 +125,7 @@ export default function Home() {
   const [mentionTarget, setMentionTarget] = useState<MentionItem | null>(null);
   const [, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isCreatingRaw, setIsCreatingRaw] = useState(false);
   const [organizingRawId, setOrganizingRawId] = useState<string | null>(null);
   const [isConfirming, setIsConfirming] = useState(false);
   const [error, setError] = useState("");
@@ -248,20 +249,20 @@ export default function Home() {
   /**
    * 目录里那条原始记录叫什么。
    *
-   * 没起名字的按**创建顺序**编号（未命名 1、未命名 2…）：不然目录里显示的是正文前几个字，
+   * 旧数据没起名字时按**创建顺序**编号（未命名1、未命名2…）：不然目录里显示的是正文前几个字，
    * 一堆「课堂笔记、阅读摘录…」开头的条目分不清谁是谁。编号只在这里算，
    * `raw.title` 仍然是空的 —— 它确实还没有名字。
    */
   const unnamedNumbers = useMemo(() => {
     const numbers = new Map<string, number>();
-    // 列表按创建时间倒序，翻过来才是"第一个没名字的" = 未命名 1
+    // 列表按创建时间倒序，翻过来才是"第一个没名字的" = 未命名1
     [...raws].reverse().forEach((raw) => {
       if (!raw.title?.trim()) numbers.set(raw.id, numbers.size + 1);
     });
     return numbers;
   }, [raws]);
 
-  const rawLabel = (raw: Raw) => raw.title?.trim() || `未命名 ${unnamedNumbers.get(raw.id) ?? 1}`;
+  const rawLabel = (raw: Raw) => raw.title?.trim() || `未命名${unnamedNumbers.get(raw.id) ?? 1}`;
 
   const mentionCandidates = useMemo(() => {
     if (mentionQuery === null) return [];
@@ -269,7 +270,7 @@ export default function Home() {
     const items: MentionItem[] = [
       // 用户给原始记录起过名字时优先用名字：不然按自己写的「错题」去找会搜不到，
       // 因为正文预览里根本没有这两个字。
-      ...raws.map((r) => ({ kind: "raw" as const, id: r.id, label: getPreview(r.title || `未命名 ${unnamedNumbers.get(r.id) ?? 1}`, 24) })),
+      ...raws.map((r) => ({ kind: "raw" as const, id: r.id, label: getPreview(r.title || `未命名${unnamedNumbers.get(r.id) ?? 1}`, 24) })),
       ...knowledges.map((k) => ({ kind: "knowledge" as const, id: k.id, label: k.title })),
     ];
     return (q ? items.filter((item) => item.label.toLowerCase().includes(q)) : items).slice(0, 8);
@@ -383,6 +384,10 @@ export default function Home() {
   }
 
   function navigate(view: ViewKey) {
+    if (view === "new-note") {
+      void createNewRaw();
+      return;
+    }
     if (view === "agent") {
       openSpace("agent");
       return;
@@ -391,8 +396,27 @@ export default function Home() {
     openTab({ id: `view:${view}`, kind: "view", viewKey: view, label: viewMeta[view].label });
   }
 
+  /** A click on New Note must create a server-backed Raw document before opening it. */
+  async function createNewRaw() {
+    if (isCreatingRaw) return;
+    clearFeedback();
+    setIsCreatingRaw(true);
+    try {
+      const response = await fetch("/api/raw/new", { method: "POST" });
+      const payload = (await response.json()) as { raw?: Raw; error?: { message?: string } };
+      if (!response.ok || !payload.raw) throw new Error(payload.error?.message ?? "新笔记暂时无法建立。请稍后重试。");
+      setRaws((current) => [payload.raw as Raw, ...current]);
+      openRawTab(payload.raw);
+      play("success");
+    } catch (createError) {
+      setError(createError instanceof Error ? createError.message : "新笔记暂时无法建立。请稍后重试。");
+    } finally {
+      setIsCreatingRaw(false);
+    }
+  }
+
   function openRawTab(raw: Raw) {
-    // 标签名与左栏用同一个口径：没起名字的显示「未命名 N」，而不是正文前几个字
+    // 标签名与左栏用同一个口径：旧数据没起名字时显示「未命名N」。
     openTab({ id: `raw:${raw.id}`, kind: "raw", rawId: raw.id, label: getPreview(rawLabel(raw), 18) });
   }
 
@@ -941,6 +965,7 @@ export default function Home() {
         <button aria-label="知识图谱" title="知识图谱" onClick={() => openSpace("graph")}><IconGraph /></button>
         <button aria-label="白板 canvas" title="白板 canvas" onClick={() => navigate("canvas")}><IconPen /></button>
         <button aria-label="Agent" title="Agent" onClick={toggleRail}><IconHarp /></button>
+        <button className="ribbon-settings" aria-label="打开设置" title="设置" onClick={() => openSpace("settings")}><IconSettings /></button>
       </nav>}
       sidebarOpen={sidebarOpen}
       railHidden={railHidden}
@@ -956,7 +981,6 @@ export default function Home() {
         <aside id="workspace-nav" className={`workspace-sidebar${mobileNavOpen ? " is-open" : ""}${sidebarOpen ? "" : " is-collapsed"}`}>
           <WorkspaceTree raws={raws} notes={knowledges} rawLabel={rawLabel} onRaw={openRawTab} onNote={openKnowledgeTab} onView={navigate}
             onRawMenu={(raw,x,y) => setContextMenu({ type:"raw", raw,x,y })} onNoteMenu={(knowledge,x,y) => setContextMenu({ type:"knowledge-title", knowledge,x,y })} />
-          <div className="sidebar-bottom"><button className="sidebar-settings-btn" aria-label="打开设置" onClick={() => openSpace("settings")}><IconSettings /> setting</button></div>
         </aside>
       }
       main={

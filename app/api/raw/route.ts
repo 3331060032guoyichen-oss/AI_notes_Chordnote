@@ -4,6 +4,7 @@ import { getActiveNoteByRawId } from "../../../lib/services/notes";
 import {
   archiveSource,
   createSource,
+  createUntitledSource,
   listArchivedSources,
   listSources,
   MAX_RAW_TEXT_LENGTH,
@@ -86,7 +87,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    return NextResponse.json({ raw: await createSource(body.text, title) }, { status: 201 });
+    return NextResponse.json({ raw: title?.trim() ? await createSource(body.text, title) : await createUntitledSource(body.text) }, { status: 201 });
   } catch {
     return errorResponse(
       "这段原话暂时没有留下。内容没有写入，请稍后重试。",

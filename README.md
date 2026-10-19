@@ -72,7 +72,7 @@ pnpm install
 pnpm dev
 ```
 
-打开 <http://localhost:3000>，从左侧「未整理笔记 → 新建笔记」开始。**零配置**：知识库就在本机 —— PGlite（编译成 WASM 的 PostgreSQL，跑在应用进程里），数据落在 `data/pglite`，首次启动自动建目录、补齐 `drizzle/` 里的迁移；不需要数据库服务，也不需要联网。
+打开 <http://localhost:3000>，从左侧「未整理笔记 → 新建笔记」开始。每点一次都会立刻建立一条本机持久化的 Raw；未改名时依次为「未命名1、未命名2…」，随后可直接在文档一级标题修改。左树顺序为 Raw、Wiki、未整理笔记、Schema、Readme，设置入口位于最左侧 Ribbon 底部。**零配置**：知识库就在本机 —— PGlite（编译成 WASM 的 PostgreSQL，跑在应用进程里），数据落在 `data/pglite`，首次启动自动建目录、补齐 `drizzle/` 里的迁移；不需要数据库服务，也不需要联网。
 
 想要「AI 整理」和右侧 AI 问答，可在「设置 → 模型与服务」选择厂商并填写 API Key，也可以使用本地 Ollama、自定义兼容接口或 ACP 外部 Agent。环境变量仍可作为部署期覆盖，说明见 [`.env.example`](.env.example) 与 [`docs/DEV_WORKFLOW.md`](docs/DEV_WORKFLOW.md)。ACP 模式需要本机已有兼容的桥接程序，并由用户完成该程序自己的登录。
 
