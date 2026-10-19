@@ -4,14 +4,6 @@
 
 ---
 
-## 一、当前实际模型（已实现）
-
-> ⚠️ **2026-10-17 现状纠正：存储层早已不是 JSON 文件，也不再依赖云端数据库。**
-> 实际持久化在**本机 PGlite**（PostgreSQL 的 WASM 版，跑在应用进程内，数据在 `data/pglite`），
-> 由 **Drizzle ORM** 读写：schema 在 `lib/db/schema.ts`，
-> 迁移在 `drizzle/0000`–`0005`，服务层在 `lib/services/`（`sources` / `notes` / `links` / `proposals` / `bundle`）。
-> 下面各条目的**字段形状**仍然准确（类型层 `types/` 与之一致），但凡是写着 `data/*.json`、
-> `lib/*-storage.ts`、文件不存在返回空数组的句子，都是 2026-10 早期 JSON 时代的遗留，**以代码为准**。
 > 契约与路由见 [`docs/schema.md`](schema.md)。
 
 ### Raw —— 原始输入（用户可改，AI 不可改）
