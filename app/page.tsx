@@ -93,8 +93,6 @@ function EmptyState({ title, body, action }: { title: string; body: string; acti
   return <div className="empty-state-block"><span className="empty-index" aria-hidden="true">01</span><div><h3>{title}</h3><p>{body}</p>{action ? <div className="empty-action">{action}</div> : null}</div></div>;
 }
 
-const LANDING_KEY = "chordnote:entered";
-
 /** AI 权限：从紧到松，默认「可提议」。 */
 const AGENT_PERMISSIONS: { id: AgentPermission; label: string; hint: string }[] = [
   { id: "ask", label: "仅对话", hint: "不检索知识库" },
@@ -104,8 +102,8 @@ const AGENT_PERMISSIONS: { id: AgentPermission; label: string; hint: string }[] 
 
 export default function Home() {
   const { play } = useInterfaceSound();
-  /** null = 还没读到 localStorage；避免老用户每次刷新先闪一下落地页。 */
-  const [entered, setEntered] = useState<boolean | null>(null);
+  /** 每次载入都从产品介绍开始，用户选择后才进入工作区。 */
+  const [entered, setEntered] = useState(false);
   const [activeSpace, setActiveSpace] = useState<Space>("home");
   const [settingsSection, setSettingsSection] = useState<SettingsSection>("models");
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -199,16 +197,6 @@ export default function Home() {
     | { type: "knowledge-title"; knowledge: Knowledge; x: number; y: number }
     | null
   >(null);
-
-  useEffect(() => {
-    let hasEntered = false;
-    try {
-      hasEntered = window.localStorage.getItem(LANDING_KEY) === "1";
-    } catch {
-      /* 隐私模式下读不到：按首次进入处理 */
-    }
-    setEntered(hasEntered);
-  }, []);
 
   /** 主题在 Settings 之外也要生效：空间卸载后 `<html data-studio>` 已经写在 DOM 上，但启动时需要恢复一次。 */
   useEffect(() => {
@@ -1038,17 +1026,10 @@ export default function Home() {
       ? activeTab.label
       : SPACE_META[activeSpace].label;
 
-  if (entered === null) return null;
-
   if (!entered) {
     return (
       <LandingPage
         onEnter={() => {
-          try {
-            window.localStorage.setItem(LANDING_KEY, "1");
-          } catch {
-            /* 存不下也让他进；下次仍会看到落地页 */
-          }
           setEntered(true);
         }}
       />
