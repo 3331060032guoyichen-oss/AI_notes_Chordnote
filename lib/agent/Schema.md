@@ -74,9 +74,22 @@ tags: []
 
 ### 整理稿正文格式
 
-`draft_knowledge` 的 `content` 必须是可以直接审阅的完整 Markdown 正文，按下面顺序组织；没有依据的区块可以省略，但不得用空话补齐：
+`draft_knowledge` 的 `content` 必须是可以直接审阅的完整 Markdown 文档：先给出 YAML frontmatter，再给出 `#` 标题和正文。frontmatter 至少包含 `title`、`source`、`created`、`description`、`tags`、`type`；有实际依据时补充 `aliases`、`keyPoints`、`concepts` 与 `keywords`。没有依据的正文区块可以省略，但不得用空话补齐：
 
 ```markdown
+---
+title: 页面标题
+source: raw/inbox/<原始记录 id>.md
+created: YYYY-MM-DD
+description: 一句话摘要
+tags: []
+type: source
+aliases: []
+keyPoints: []
+concepts: []
+keywords: []
+---
+
 # 页面标题
 
 一句话摘要，说明这页解决什么问题。
