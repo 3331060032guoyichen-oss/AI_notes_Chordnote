@@ -63,6 +63,7 @@ pnpm dev                     # http://localhost:3000
 | `pnpm lint` | 代码检查 |
 | `pnpm test` | HTTP 回归测试（75 条断言）；3000 端口空闲时会自起临时 dev server |
 | `pnpm test:unit` | 离线单元测试（Provider / 配置），不联网、不需要密钥 |
+| `pnpm test:vault` | Vault 文件层验收：读写、扫描、Watcher、权限、审计、归档恢复 |
 | `pnpm verify:db` | 在内存库上执行全部迁移并断言结构、约束、外键行为、归属隔离。不需要 dev server，不碰本机数据 |
 | `pnpm seed:demo` | 幂等写入演示数据（`seed/demo-notes.json`），需先启动 dev，只增不删 |
 | `pnpm seed:reset` | 清空业务表，必须先停止 `pnpm dev`。默认 dry-run，加 `--yes` 才执行，执行前备份到 `.tmp/` |
@@ -148,7 +149,7 @@ type Tab =
 ```
 
 - 最左侧 Ribbon 始终可见，顺序固定为 logo（开合左树）、查找、图谱、白板、Agent，底部固定设置图标。左树顺序固定为 `Raw`、`Wiki`、`未整理笔记`、`Schema`、`Readme`。现有知识页路径继续兼容 `wilki/` 前缀。
-- `Schema` 是 `lib/agent/manual.ts` 的只读渲染；应用内不得复制或编辑它。开发者只改这一份源文件。
+- `Schema` 使用 Markdown 编辑器；默认内容在 `lib/agent/Schema.md`，用户保存到模型配置同目录的 `Schema.md`，下次 Agent 运行读取。`lib/agent/manual.ts` 保留宿主边界与工具权限，编辑 Schema 不改变工具授权。
 - 右栏固定为可收起的 Agent 对话与模型选择。不得恢复 Knowledge 的常驻出链/入链/未链接提及面板；这些查询走命令搜索或 Agent `@mention`。
 - 工作区使用 Ribbon + 可折叠左右 panel + 中央编辑器的 CSS grid。开面板必须压缩中央区域，不能覆盖正文。
 
@@ -164,8 +165,8 @@ type Tab =
 - 导航与列表字号 15px、行高 34–36px，每屏可见条目不少于 12 条。
 - 每次点击新建笔记都由服务端立刻创建一条 Raw，并持久分配 `raw/inbox/` 路径，在「未整理笔记」显示；自动保存不绕过 Raw → Draft → 用户确认 → Knowledge 的管线。
 - 新建 Raw 由服务端依次命名为「未命名1 / 未命名2 / 未命名3」，编辑文档第一个 heading 可修改标题；旧数据的空标题按创建顺序以同一格式回退显示。
-- 助手形象是一把会呼吸的竖琴（内联 SVG，细线，无渐变），左栏 Agent 入口、右栏编辑助理、Agent 页面共用。不要换成星芒、头像或发光圆球。
-- 助手状态四态：空闲 / 整理中 / 已收录 / 已归档，只动 `transform` 与 `opacity`，`prefers-reduced-motion` 下整体停掉。
+- 助手形象是「抚琴司天监 · Zhiyin」：几何拼色官袍、金框三弦古琴、八角宫灯与星宿网络，前景内联 SVG + 背景 Canvas。视觉规范见 `docs/AGENT_VISUAL_SPEC.md`。图标入口继续用竖琴，不要换成星芒、头像或发光圆球。
+- 助手状态两态：静息中 / 工作中。用户发出指令后进入工作态（拨弦、音波涟漪、星云与星网），没有指令时静息（星云隐去、双手平搭、宫灯低亮）。动效只动 `transform` / `opacity` 与 Canvas 绘制，`prefers-reduced-motion` 下停掉动画。
 - 界面声音开关在「Settings → Voice」，顶栏与侧栏底部都不放。
 - 已归档内容统一放在 Settings → Archive。图谱不提供孤立节点、方向箭头或重新布局选项。
 
@@ -201,7 +202,7 @@ type Tab =
 | `/api/assistant` | POST | AI 问答，服务端按 contextType + contextId 重新读取内容 |
 | `/api/assistant/propose` | POST | 针对知识页生成改写提议（`note_update`），只落 pending 提议，不写正文 |
 | `/api/agent/organize` | POST | Agent 工具循环，返回步骤与待确认提议 |
-| `/api/agent/schema` | GET | 从 `lib/agent/manual.ts` 读取同一份只读 LLM Wiki Schema |
+| `/api/agent/schema` | GET / PATCH | 读取 / 保存 Markdown Schema，hash 乐观并发；工具权限仍由宿主控制 |
 | `/api/bootstrap` | GET | 一次读取工作区启动所需的 Raw、Knowledge、图谱和提议，避免 PGlite 并发冷启动 |
 | `/api/documents` | GET / POST | Markdown 文档引用索引 / 用户显式创建未解析 Raw 链接目标 |
 | `/api/canvas` | GET / PUT | 白板工作区，`version` 乐观并发 |
@@ -304,7 +305,10 @@ jsonb 列直接传数组或对象，**不要手动 `JSON.stringify`**。Drizzle 
 | `docs/PROJECT_RULES.md` | 产品方向与长期模型 |
 | `docs/DATA_MODEL.md` | 长期模型与当前实际 schema，注意区分 |
 | `docs/schema.md` | 数据契约，只描述已实现状态，未实现标注 NOT IMPLEMENTED |
+| `docs/VAULT_SCHEMA.md` | Markdown-first Vault 数据契约（草案）：目录、frontmatter、身份、链接、Source↔Concept |
+| `docs/STORAGE_LAYER.md` | 文件读写、Watcher、hash 校验、索引重建、归档与删除（草案） |
 | `docs/DESIGN_SYSTEM.md` | 视觉规范 |
+| `docs/AGENT_VISUAL_SPEC.md` | Agent 形象「抚琴司天监」的双层渲染与两态动效规范 |
 | `docs/DEV_WORKFLOW.md` | 分支与提交规范。个人开发直接提交 main 并 push，多人协作再走 feature 分支 + PR |
 | `docs/THIRD_PARTY.md` | 第三方依赖登记 |
 | `GLOSSARY.md` | 领域术语与 _Avoid_ 命名 |
@@ -314,7 +318,7 @@ jsonb 列直接传数组或对象，**不要手动 `JSON.stringify`**。Drizzle 
 
 ## 12. 产品内 Agent 的知识工作流
 
-产品内的整理助手遵循 Karpathy 的 LLM Wiki 模式：Raw 用户可改、AI 不可改，知识库由 AI 持续整理，工作规则写在 schema 里。本项目的 schema 是 `lib/agent/manual.ts`，不在本文件。本节只规定改动相关代码时必须守住的约束。
+产品内的整理助手遵循 Karpathy 的 LLM Wiki 模式：Raw 用户可改、AI 不可改，知识库由 AI 持续整理，工作规则写在 schema 里。本项目的默认 Schema 是 `lib/agent/Schema.md`，宿主边界与工具权限在 `lib/agent/manual.ts`，不在本文件。本节只规定改动相关代码时必须守住的约束。
 
 ### 对应关系
 
@@ -322,7 +326,7 @@ jsonb 列直接传数组或对象，**不要手动 `JSON.stringify`**。Drizzle 
 |---|---|
 | Raw sources | `raw_notes` |
 | Wiki | `notes`、`note_revisions`、`links` |
-| Schema | `lib/agent/manual.ts` |
+| Schema | `lib/agent/Schema.md`（默认）与用户保存的 `Schema.md` |
 | index.md | `GET /api/knowledge` 与 `/api/graph`，不另建文件 |
 | log.md | `audit_log` |
 

@@ -8,11 +8,13 @@
 
 **Source（原始记录）**：
 用户随手写下的原始材料，未经 AI 整理。用户可以改，AI 永远不能改写它的正文。
-_Avoid_：Raw、raw_notes、原始笔记
+在 Schema / LLM Wiki 语境下，这一层写作 `Raw/`；两者是同一个概念，不是两层数据。
+_Avoid_：raw_notes、原始笔记（`Raw` 仅在 Schema 与目录语境下使用）
 
 **Note（知识页）**：
 由一条 Source 晋升而来的结构化知识页（标题 / 摘要 / 正文 / 概念 / 关键词）。晋升动作必须由用户确认。
-_Avoid_：Knowledge、notes、知识
+在 Schema / LLM Wiki 语境下，这一层写作 `Wiki/`；`Wiki` 指知识层，不指单个页面。
+_Avoid_：Knowledge、notes、知识（`Wiki` 仅在 Schema 与目录语境下使用）
 
 **Link（关系）**：
 两条 Note 之间的正式关联，唯一索引建在无序 ID 对上。删除是可恢复的软删除；重建同一关系时必须复活原行，不能插入新行。
@@ -23,7 +25,7 @@ AI 针对一条 Source 产出的整理结果，**不持久化**。用户确认�
 _Avoid_：草稿、OrganizeDraft（后者仅作类型名保留）
 
 **Proposal（提议）**：
-AI 想要改变知识网络时提交的可审阅对象。**状态机**：`pending → approved → applied`（用户同意并执行）/ `rejected`（用户拒绝）/ `stale`（同意时目标已经变了，只能让 AI 重新生成）。服务在 `lib/services/proposals.ts`，接口在 `/api/proposals*`；`kind` 目前放行 `link_create` / `source_create` / `note_update`。
+AI 想要改变知识网络时提交的可审阅对象。**状态机**：`pending → approved → applied`（用户同意并执行）/ `rejected`（用户拒绝）/ `stale`（同意时目标已经变了，只能让 AI 重新生成）。服务在 `lib/services/proposals.ts`，接口在 `/api/proposals*`；`kind` 目前放行 `link_create` / `source_create` / `note_update` / `schema_preferences`。
 **提议不是写入**：approved 只是"同意"，真正落库发生在 `apply`，两者分开是为了让"谁在什么时候同意了什么"可查。
 _Avoid_：建议、suggestion
 

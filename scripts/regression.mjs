@@ -94,14 +94,16 @@ async function ensureServer() {
   }
 
   const dataDir = await mkdtemp(join(tmpdir(), "chordnote-regression-"));
-  console.log(`3000 端口空闲 —— 自己起一个仅本次使用的 dev server（知识库：${dataDir}）。`);
+  const port = new URL(BASE).port || "3000";
+  console.log(`${port} 端口空闲 —— 自己起一个仅本次使用的 dev server（知识库：${dataDir}）。`);
 
   // 直接起 next 本体：中间隔一层 `pnpm` 的话，它只是个壳，收进程时容易留下孤儿 dev server。
   const require = createRequire(import.meta.url);
   const nextBin = require.resolve("next/dist/bin/next");
-  const child = spawn(process.execPath, [nextBin, "dev", "--port", "3000"], {
+  const child = spawn(process.execPath, [nextBin, "dev", "--port", port], {
     cwd: process.cwd(),
-    env: { ...process.env, PGLITE_DATA_DIR: dataDir,
+    env: { ...process.env, PGLITE_DATA_DIR: dataDir, CHORDNOTE_SETTINGS_FILE: join(dataDir, "settings.json"),
+      CHORDNOTE_NEXT_DIST_DIR: ".tmp/regression-next",
       CHORDNOTE_PROVIDER: "ollama", CHORDNOTE_MODEL: "regression-offline",
       CHORDNOTE_BASE_URL: "http://127.0.0.1:9/v1", CHORDNOTE_TIMEOUT_MS: "1000" },
     stdio: "ignore",
@@ -159,6 +161,32 @@ try {
   }
 
   const bootstrap = await GET("/api/bootstrap");
+  check("结束会话拒绝无效编号", (await POST("/api/agent/session", { sessionId: "../../outside" })).status === 400);
+  check("结束会话拒绝不存在的会话", (await POST("/api/agent/session", { sessionId: "00000000-0000-0000-0000-000000000000" })).status === 404);
+  check("Agent 拒绝过长单条消息", (await POST("/api/agent/organize", { question: "中".repeat(3000), contextType: "none" })).status === 400);
+  check("Agent 拒绝未知会话", (await POST("/api/agent/organize", { question: "继续", contextType: "none", sessionId: "00000000-0000-0000-0000-000000000000" })).status === 404);
+  const schema = await GET("/api/agent/schema");
+  check("Schema 返回 Markdown 与版本", schema.status === 200 && schema.body?.schema?.startsWith("# ") && typeof schema.body?.hash === "string");
+  if (schema.status === 200) {
+    const saved = await PATCH("/api/agent/schema", { schema: schema.body.schema, hash: schema.body.hash });
+    check("Schema 可保存并重新读取", saved.status === 200 && (await GET("/api/agent/schema")).body?.schema === schema.body.schema);
+    check("Schema 拒绝过期版本", (await PATCH("/api/agent/schema", { schema: schema.body.schema, hash: "stale" })).status === 409);
+    check("Schema 拒绝空内容", (await PATCH("/api/agent/schema", { schema: "", hash: schema.body.hash })).status === 400);
+    if (owned) {
+      const preferences = await POST("/api/proposals", { kind: "schema_preferences", reason: "明确偏好", payload: { content: "- 以后多用表格。", evidence: "以后多用表格", schemaHash: schema.body.hash } });
+      const preferenceId = preferences.body?.proposal?.id;
+      check("偏好提议创建但不修改 Schema", preferences.status === 201 && (await GET("/api/agent/schema")).body?.hash === schema.body.hash);
+      check("未批准的偏好不能应用", (await POST(`/api/proposals/${preferenceId}/apply`)).status === 409);
+      await POST(`/api/proposals/${preferenceId}/approve`);
+      const applied = await POST(`/api/proposals/${preferenceId}/apply`);
+      const updatedSchema = await GET("/api/agent/schema");
+      check("用户确认后只更新偏好", applied.status === 200 && updatedSchema.body?.schema.includes("以后多用表格") && updatedSchema.body?.schema.includes("## 运行边界"));
+      const old = await POST("/api/proposals", { kind: "schema_preferences", reason: "过期偏好", payload: { content: "- 使用 TS。", evidence: "使用 TS", schemaHash: schema.body.hash } });
+      await POST(`/api/proposals/${old.body?.proposal?.id}/approve`);
+      check("旧版本偏好应用返回409", (await POST(`/api/proposals/${old.body?.proposal?.id}/apply`)).status === 409);
+      await PATCH("/api/agent/schema", { schema: schema.body.schema, hash: updatedSchema.body.hash });
+    }
+  }
   check(
     "工作区初始化一次读取资料、图谱和待确认提议",
     bootstrap.status === 200 && Array.isArray(bootstrap.body?.raws) && Array.isArray(bootstrap.body?.knowledges) && Array.isArray(bootstrap.body?.proposals) && Array.isArray(bootstrap.body?.graph?.nodes),
@@ -181,6 +209,13 @@ try {
     `实际 path=${rawA.body?.raw?.path}`,
   );
 
+  const nextUntitled = (raws) => {
+    const used = new Set(raws.map(raw => Number(raw.title?.trim().match(/^未命名\s*(\d+)$/)?.[1])));
+    let next = 1;
+    while (used.has(next)) next += 1;
+    return `未命名${next}`;
+  };
+  const beforeEmpty = (await GET("/api/raw")).body?.raws ?? [];
   const emptyRawA = await POST("/api/raw/new");
   const emptyRawB = await POST("/api/raw/new");
   created.raws.push(emptyRawA.body?.raw?.id, emptyRawB.body?.raw?.id);
@@ -192,8 +227,31 @@ try {
       && emptyRawA.body?.raw?.path === `raw/inbox/${emptyRawA.body?.raw?.id}.md`
       && emptyRawB.body?.raw?.path === `raw/inbox/${emptyRawB.body?.raw?.id}.md`
       && emptyRawA.body?.raw?.text === "" && emptyRawB.body?.raw?.text === ""
-      && unnamedB === unnamedA + 1,
+      && unnamedA > 0 && unnamedB > 0 && unnamedA !== unnamedB
+      && emptyRawA.body?.raw?.title === nextUntitled(beforeEmpty)
+      && emptyRawB.body?.raw?.title === nextUntitled([...beforeEmpty, emptyRawA.body.raw]),
   );
+
+  await DELETE("/api/raw", { rawId: emptyRawA.body?.raw?.id });
+  const reusedRaw = await POST("/api/raw/new");
+  created.raws.push(reusedRaw.body?.raw?.id);
+  check("归档未命名笔记后复用最小空号", reusedRaw.status === 201 && reusedRaw.body?.raw?.title === emptyRawA.body?.raw?.title);
+  const renamedRaw = await PATCH(`/api/raw/${reusedRaw.body?.raw?.id}`, {
+    text: "编号释放测试", markdown: "# 编号释放测试\n\n编号释放测试", version: reusedRaw.body?.raw?.version,
+  });
+  const afterRename = await POST("/api/raw/new");
+  created.raws.push(afterRename.body?.raw?.id);
+  check("修改未命名标题后释放编号", renamedRaw.status === 200 && afterRename.status === 201 && afterRename.body?.raw?.title === reusedRaw.body?.raw?.title);
+
+  if (owned) {
+    // 仅在测试自建的临时库中清空本次夹具，不触碰用户已有笔记。
+    for (const rawId of created.raws) await DELETE("/api/raw", { rawId });
+    const restarted = await POST("/api/raw/new");
+    created.raws.push(restarted.body?.raw?.id);
+    check("未命名笔记全部归档后从1开始", restarted.status === 201 && restarted.body?.raw?.title === "未命名1");
+    // 后续知识页测试需要两条未归档来源。
+    for (const rawId of [rawAId, rawBId]) await PATCH("/api/archive", { kind: "raw", id: rawId });
+  }
 
   const empty = await POST("/api/raw", { text: "   " });
   const tooLong = await POST("/api/raw", { text: "x".repeat(50_001) });

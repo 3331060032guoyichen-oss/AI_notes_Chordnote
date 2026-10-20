@@ -3,6 +3,7 @@
 import { useEffect,useMemo,useRef,useState } from "react";
 
 import { AgentModelSelect } from "../components/agent-model-select";
+import { AgentStage } from "../components/agent/agent-stage";
 import { CanvasWorkspace } from "../components/canvas-workspace";
 import { DocumentSearch } from "../components/document-search";
 import { DocumentSession } from "../components/document-session";
@@ -25,6 +26,7 @@ IconSettings
 } from "../components/ui/icons";
 import { WorkspaceTree } from "../components/workspace-tree";
 import { makeMarkdown,readMarkdown,resolveReference,type LinkCandidate } from "../lib/documents/markdown";
+import type { AgentPermission } from "../lib/agent/manual";
 
 import { getPreview } from "../lib/text-preview";
 import type { AgentRunTrace,AgentStep } from "../types/agent";
@@ -93,6 +95,13 @@ function EmptyState({ title, body, action }: { title: string; body: string; acti
 
 const LANDING_KEY = "chordnote:entered";
 
+/** AI 权限：从紧到松，默认「可提议」。 */
+const AGENT_PERMISSIONS: { id: AgentPermission; label: string; hint: string }[] = [
+  { id: "ask", label: "仅对话", hint: "不检索知识库" },
+  { id: "read", label: "只读", hint: "可检索与阅读" },
+  { id: "propose", label: "可提议", hint: "改动等你确认" },
+];
+
 export default function Home() {
   const { play } = useInterfaceSound();
   /** null = 还没读到 localStorage；避免老用户每次刷新先闪一下落地页。 */
@@ -117,9 +126,15 @@ export default function Home() {
   const [graphRefresh, setGraphRefresh] = useState(0);
   const [aiMessage, setAiMessage] = useState("");
   const [aiQuestion, setAiQuestion] = useState("");
+  const [agentPermission, setAgentPermission] = useState<AgentPermission>("propose");
   /** 当前知识页上待确认的改写提议（`note_update`）。只活在界面上，真正的待办状态在库里。 */
   const [pendingProposals, setPendingProposals] = useState<Proposal[]>([]);
   const [conversation,setConversation]=useState<{role:"user"|"assistant";text:string}[]>([]);
+  const [agentSessionId, setAgentSessionId] = useState<string>();
+  const [proposalCards, setProposalCards] = useState<AgentStep[]>([]);
+  const [sessionEnding, setSessionEnding] = useState(false);
+  const gateLock = useRef(false);
+  const runLock = useRef(false);
   const [gateBusy,setGateBusy]=useState<string|null>(null);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [mentionTarget, setMentionTarget] = useState<MentionItem | null>(null);
@@ -132,19 +147,26 @@ export default function Home() {
   const [notice, setNotice] = useState("");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   /**
-   * 侧栏默认**展开**：进来先看见目录（原始记录 / 笔记各几条），要专心写作时再收起。
+   * 侧栏默认**收起**：进来先看见正文，点顶栏的 C 再打开目录。
    * 收起时列宽由 `.app-shell.sidebar-collapsed` 真正收掉（56px 图标条），不是只藏内容。
    */
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   /** 右栏（上下文面板）在 ≤860px 放不下，改为可开合的抽屉；这里记它的开合状态。 */
   const [railOpen, setRailOpen] = useState(false);
+  const [railDrawer, setRailDrawer] = useState(false);
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 860px)");
+    const update = () => setRailDrawer(media.matches);
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
   /**
    * 宽屏下右栏是常驻列，默认展开；`railHidden` 记它是不是被收起来了。
    *
    * 两个状态而不是一个：窄屏抽屉与宽屏常驻列的可见性由不同规则决定，
-   * 一个布尔量表达不了。顶栏与底部导航那颗「上下文」按钮同时翻转两者，
-   * 于是两个断点下都是"按一下开、再按一下关"。
+   * 按钮只翻转当前断点对应的状态，缩放窗口不会混用两种开合规则。
    *
    * 初始为收起：Home 的新建页不显示右栏，打开原始记录时再展开整理助手。
    * 进入 Knowledge / Agent 时默认展开（见 openSpace / openTab），
@@ -168,7 +190,8 @@ export default function Home() {
   const [agentTrace, setAgentTrace] = useState<AgentRunTrace | null>(null);
   const [isAgentRunning, setIsAgentRunning] = useState(false);
   /** 每个提议门禁的本地状态：待定 / 已建立 / 已忽略。 */
-  const [gateStates, setGateStates] = useState<Record<string, "pending" | "accepted" | "ignored">>({});
+  const [gateStates, setGateStates] = useState<Record<string, "pending" | "accepted" | "ignored" | "stale" | "failed">>({});
+  const [gateErrors, setGateErrors] = useState<Record<string, string>>({});
   /** 自增一次就重新拉原始记录与知识页列表（确认提议后左栏需要跟上）。 */
   const [listRefresh, setListRefresh] = useState(0);
   const [contextMenu, setContextMenu] = useState<
@@ -295,8 +318,8 @@ export default function Home() {
 
   /** 顶栏 / 底部导航的「上下文」按钮：窄屏开合抽屉，宽屏显示或收起右栏。 */
   function toggleRail() {
-    setRailOpen((current) => !current);
-    setRailHidden((current) => !current);
+    if (railDrawer) setRailOpen((current) => !current);
+    else setRailHidden((current) => !current);
   }
 
   /** 右栏自己的收起按钮：两种断点下都是"把它收掉"这一个意思。 */
@@ -623,8 +646,10 @@ export default function Home() {
    * 轨迹不落库，所以"重放"就是重跑一次（会真的再调一次模型）。
    */
   async function runAgentOrganize(body: Record<string, unknown>) {
-    if(isAgentRunning)return;
+    if(runLock.current || sessionEnding)return;
+    runLock.current = true;
     setIsAgentRunning(true);
+    setAiQuestion("");
     setConversation(current=>[...current,{role:"user" as const,text:String(body.question ?? "整理笔记")}].slice(-40));
     setAiMessage("");
 
@@ -632,7 +657,7 @@ export default function Home() {
       const response = await fetch("/api/agent/organize", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({...body,history:conversation.slice(-12)}),
+        body: JSON.stringify({...body,sessionId:agentSessionId,permission:agentPermission}),
       });
       const payload = (await response.json()) as {
         trace?: AgentRunTrace;
@@ -644,10 +669,10 @@ export default function Home() {
       }
 
       setAgentTrace(payload.trace);
+      setProposalCards(current => [...new Map([...current, ...payload.trace!.steps.filter(s => s.kind === "gate" && s.proposalId)].map(s => [s.proposalId, s])).values()]);
+      setAgentSessionId(payload.trace.sessionId);
       setConversation(current=>[...current,{role:"assistant" as const,text:payload.trace!.message}].slice(-40));
       if (payload.trace.draft) { setDraft(payload.trace.draft.value); setDraftRawId(payload.trace.draft.rawId); openDraftTab(payload.trace.draft.rawId); }
-      setGateStates({});
-      setAiQuestion("");
       setRailHidden(false);
     } catch (agentError) {
       setAiMessage(
@@ -656,20 +681,40 @@ export default function Home() {
           : "这次整理暂时没有完成。你的内容仍然安全，请稍后重试。",
       );
     } finally {
+      runLock.current = false;
       setIsAgentRunning(false);
+      setListRefresh(current => current + 1);
     }
   }
 
+  async function endAgentSession() {
+    if (runLock.current || sessionEnding) return;
+    setSessionEnding(true);
+    try {
+      if (agentSessionId) {
+        const response = await fetch("/api/agent/session", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId: agentSessionId }) });
+        if (!response.ok && response.status !== 404) throw new Error("会话暂时无法结束，请稍后重试。");
+      }
+      setAgentSessionId(undefined); setConversation([]); setAgentTrace(null); setAiMessage("");
+    } catch (error) { setAiMessage(error instanceof Error ? error.message : "会话暂时无法结束。"); }
+    finally { setSessionEnding(false); }
+  }
+
   /** 确认一条提议：先批准、再执行。两步都是用户主体发起的写入。 */
-  async function handleGateAccept(step: AgentStep) {
+  async function handleGateAccept(step: AgentStep, batch = false) {
     const proposalId = step.proposalId;
 
-    if (!proposalId || gateBusy) return;
+    if (!proposalId || (gateLock.current && !batch)) return false;
+    setProposalCards(cards => cards.some(card => card.proposalId === proposalId) ? cards : [...cards, step]);
+    if (!batch) gateLock.current = true;
     setGateBusy(proposalId);
-
-
+    setGateErrors(errors => { const next = { ...errors }; delete next[proposalId]; return next; });
     try {
-      const approved = pendingProposals.some(p => p.id === proposalId && p.status === "approved") ? null : await fetch(`/api/proposals/${proposalId}/approve`, { method: "POST" });
+      const currentResponse = await fetch(`/api/proposals/${proposalId}`);
+      const current = await currentResponse.json() as { proposal?: Proposal };
+      if (!currentResponse.ok || !current.proposal) throw new Error("提议已不存在，请刷新。");
+      if (current.proposal.status === "applied") { setGateStates(states => ({ ...states, [proposalId]: "accepted" })); return true; }
+      const approved = current.proposal.status === "approved" ? null : await fetch(`/api/proposals/${proposalId}/approve`, { method: "POST" });
 
       if (approved && !approved.ok) {
         const payload = (await approved.json()) as { error?: { message?: string } };
@@ -683,7 +728,8 @@ export default function Home() {
       });
 
       if (!applied.ok) {
-        const payload = (await applied.json()) as { error?: { message?: string } };
+        const payload = (await applied.json()) as { error?: { message?: string; code?: string } };
+        if (payload.error?.code === "PROPOSAL_TARGET_STALE") setGateStates(current => ({ ...current, [proposalId]: "stale" }));
         throw new Error(payload.error?.message ?? "这条提议暂时无法执行。");
       }
 
@@ -692,17 +738,33 @@ export default function Home() {
       // 目标是知识网络/原始记录，两个列表都刷新一次让左栏与图谱跟上
       setGraphRefresh((current) => current + 1);
       setListRefresh((current) => current + 1);
+      return true;
     } catch (gateError) {
-      setGateStates((current) => ({ ...current, [proposalId]: "pending" }));
+      const current = await fetch(`/api/proposals/${proposalId}`).then(r => r.json()).catch(() => null);
+      const status = current?.proposal?.status;
+      if (["stale", "failed", "applied", "rejected"].includes(status)) setGateStates(states => ({ ...states, [proposalId]: status === "applied" ? "accepted" : status === "rejected" ? "ignored" : status }));
+      setGateErrors(errors => ({ ...errors, [proposalId]: gateError instanceof Error ? gateError.message : "暂时无法执行" }));
       setError(gateError instanceof Error ? gateError.message : "这条提议暂时无法执行。");
-    } finally { setGateBusy(null); setListRefresh(current=>current+1); }
+      return false;
+    } finally { if (!batch) { gateLock.current = false; setGateBusy(null); } setListRefresh(current=>current+1); }
+  }
+
+  async function acceptAll(steps: AgentStep[]) {
+    if (gateLock.current) return;
+    gateLock.current = true;
+    let count = 0;
+    try { for (const step of steps) if (await handleGateAccept(step, true)) count++; }
+    finally { gateLock.current = false; setGateBusy(null); setNotice(`已应用 ${count} 项；${steps.length - count} 项未应用，请查看对应卡片。`); }
   }
 
   async function handleGateIgnore(step: AgentStep) {
     const proposalId = step.proposalId;
 
-    if (!proposalId || gateBusy) return;
+    if (!proposalId || gateLock.current) return;
+    setProposalCards(cards => cards.some(card => card.proposalId === proposalId) ? cards : [...cards, step]);
+    gateLock.current = true;
     setGateBusy(proposalId);
+    setGateErrors(errors => { const next = { ...errors }; delete next[proposalId]; return next; });
 
     try {
       const response = await fetch(`/api/proposals/${proposalId}/reject`, { method: "POST" });
@@ -716,7 +778,7 @@ export default function Home() {
     } catch (gateError) {
       setGateStates((current) => ({ ...current, [proposalId]: "pending" }));
       setError(gateError instanceof Error ? gateError.message : "这条提议暂时无法忽略。");
-    } finally { setGateBusy(null); setListRefresh(current=>current+1); }
+    } finally { gateLock.current = false; setGateBusy(null); setListRefresh(current=>current+1); }
   }
 
   async function handleAskAssistant(question: string) {
@@ -880,24 +942,60 @@ export default function Home() {
   }
   function renderRail() {
     const currentRaw = activeTab.kind === "raw" ? raws.find(r => r.id === activeTab.rawId) : null;
+    const cards: AgentStep[] = [...new Map([...proposalCards, ...pendingProposals.map(p => ({
+      index: 0, tool: p.kind === "schema_preferences" ? "propose_preferences" : p.kind === "note_update" ? "propose_update" : p.kind === "link_create" ? "propose_link" : "propose_source",
+      label: p.kind === "schema_preferences" ? "更新用户偏好" : p.kind === "note_update" ? "更新笔记" : p.kind === "link_create" ? "建立关联" : "保存原始记录",
+      hint: null, kind: "gate" as const, status: "pending" as const, detail: p.reason ?? "", proposalId: p.id, payload: p.payload,
+    }))].map(step => [step.proposalId, step])).values()];
+    const actionable = cards.filter(step => !gateStates[step.proposalId!] || gateStates[step.proposalId!] === "pending");
+    const gateLabels = { pending: "待确认", accepted: "已应用", ignored: "已拒绝", stale: "内容已变化，请重新生成提议", failed: "应用失败，请重新生成提议" };
     return <div className="agent-chat">
-      <header className="agent-chat-head"><IconHarp /><span>Agent</span><button onClick={hideRail} aria-label="关闭 Agent">×</button></header>
+      <header className="agent-chat-head"><IconHarp /><span>Agent</span><button className="agent-new-session" disabled={isAgentRunning || sessionEnding} onClick={() => void endAgentSession()}>新会话</button><button onClick={hideRail} aria-label="关闭 Agent">×</button></header>
       <div className="agent-chat-history" aria-live="polite">
+        <AgentStage mode={isAgentRunning ? "work" : "rest"} />
         {isAgentRunning ? <p role="status">正在处理…</p> : null}
         {aiMessage ? <p>{aiMessage}</p> : null}
         {conversation.map((message,i)=><p key={i} className={`agent-message agent-message-${message.role}`}>{message.text}</p>)}
         {agentTrace ? <details><summary>运行过程</summary><ol className="agent-step-list">{agentTrace.steps.map(renderAgentStep)}</ol></details> : null}
-        {[...(agentTrace?.steps.filter(step => step.kind === "gate" && step.proposalId)??[]),...pendingProposals.filter(p=>!agentTrace?.steps.some(s=>s.proposalId===p.id)).map(p=>({index:0,tool:p.kind==="note_update"?"propose_update":p.kind==="link_create"?"propose_link":"propose_source",label:p.kind==="note_update"?"更新笔记":"待确认提议",hint:null,kind:"gate" as const,status:"pending" as const,detail:p.reason??"",proposalId:p.id,payload:p.payload}))].map(step => <article className="agent-proposal" key={step.proposalId}>
-          <b>{step.label}</b><p>{step.detail}</p>
-          {typeof step.payload?.content === "string" ? <pre>{step.payload.content}</pre> : null}
-          {gateStates[step.proposalId!] && gateStates[step.proposalId!] !== "pending" ? <span>{gateStates[step.proposalId!] === "accepted" ? "已应用" : "已忽略"}</span> : <div className="review-actions"><button disabled={isAgentRunning || gateBusy !== null} onClick={() => void handleGateAccept(step)}>确认应用</button>{pendingProposals.some(p=>p.id===step.proposalId && p.status==="approved") ? null : <button disabled={isAgentRunning || gateBusy !== null} onClick={() => void handleGateIgnore(step)}>忽略</button>}</div>}
+        {actionable.length > 1 ? <button className="text-button" disabled={gateBusy !== null} onClick={() => void acceptAll(actionable)}>确认应用全部 {actionable.length} 项</button> : null}
+        {cards.map(step => <article className="agent-proposal" key={step.proposalId}>
+          <b>{step.label} · {String(step.payload?.targetTitle ?? step.payload?.noteId ?? step.payload?.title ?? (step.tool === "propose_preferences" ? "Schema · 用户偏好" : "知识库"))}</b><p>{step.detail}</p>
+          {typeof step.payload?.evidence === "string" ? <blockquote>你的原话：{step.payload.evidence}</blockquote> : null}
+          {typeof step.payload?.content === "string" ? <details><summary>查看修改内容</summary><pre>{step.payload.content}</pre></details> : null}
+          {gateErrors[step.proposalId!] ? <p role="status">{gateErrors[step.proposalId!]}</p> : null}
+          {gateStates[step.proposalId!] && gateStates[step.proposalId!] !== "pending" ? <span>{gateLabels[gateStates[step.proposalId!]]}</span> : <div className="review-actions"><button disabled={gateBusy !== null} onClick={() => void handleGateAccept(step)}>确认应用</button>{pendingProposals.some(p=>p.id===step.proposalId && p.status==="approved") ? null : <button disabled={gateBusy !== null} onClick={() => void handleGateIgnore(step)}>拒绝</button>}</div>}
         </article>)}
         {currentRaw ? <button className="text-button" disabled={organizingRawId !== null} onClick={() => void handleOrganize(currentRaw.id)}>{organizingRawId ? "整理中…" : "提出整理稿"}</button> : null}
       </div>
       <form className="agent-composer" onSubmit={e => { e.preventDefault(); void handleAskAssistant(aiQuestion); }}>
         {mentionQuery !== null ? <div className="mention-menu">{mentionCandidates.map(item => <button key={item.id} type="button" onClick={() => pickMention(item)}>{item.label}</button>)}</div> : null}
-        <textarea aria-label="与 Agent 对话" placeholder="输入问题，@ 提及笔记" value={aiQuestion} onChange={e => handleQuestionChange(e.target.value)} rows={3} />
-        <div className="composer-actions"><AgentModelSelect /><button type="submit" disabled={isAgentRunning || !aiQuestion.trim()}>发送</button></div>
+        <textarea
+          aria-label="与 Agent 对话"
+          placeholder="输入问题，@ 提及笔记"
+          value={aiQuestion}
+          onChange={e => handleQuestionChange(e.target.value)}
+          onKeyDown={event => {
+            // Enter 发送，Shift+Enter 保留换行；中文输入法确认候选时不抢 Enter。
+            if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+              event.preventDefault();
+              if (!isAgentRunning && !sessionEnding && aiQuestion.trim()) void handleAskAssistant(aiQuestion);
+            }
+          }}
+          rows={3}
+        />
+        <div className="composer-actions">
+          <details className="composer-permission">
+            <summary aria-label="AI 权限" title={`AI 权限：${AGENT_PERMISSIONS.find(item => item.id === agentPermission)?.label}`}>＋</summary>
+            <div className="permission-menu" role="menu">
+              {AGENT_PERMISSIONS.map(item => (
+                <button key={item.id} type="button" role="menuitemradio" aria-checked={agentPermission === item.id} className={agentPermission === item.id ? "is-active" : ""} onClick={event => { setAgentPermission(item.id); event.currentTarget.closest("details")?.removeAttribute("open"); }}>
+                  <b>{item.label}</b><small>{item.hint}</small>
+                </button>
+              ))}
+            </div>
+          </details>
+          <div className="composer-send"><AgentModelSelect /><button type="submit" disabled={isAgentRunning || sessionEnding || !aiQuestion.trim()}>发送</button></div>
+        </div>
       </form>
     </div>;
   }
@@ -933,7 +1031,7 @@ export default function Home() {
   /**
    * 右栏此刻是否可见：宽屏看「有没有被收起来」，窄屏看抽屉状态。
    */
-  const railShow = railOpen || !railHidden;
+  const railShow = railDrawer ? railOpen : !railHidden;
   const showInspector = true;
   const breadcrumbLabel =
     activeSpace === "home" || activeSpace === "knowledge"
@@ -968,7 +1066,7 @@ export default function Home() {
         <button className="ribbon-settings" aria-label="打开设置" title="设置" onClick={() => openSpace("settings")}><IconSettings /></button>
       </nav>}
       sidebarOpen={sidebarOpen}
-      railHidden={railHidden}
+      railHidden={!railShow}
       showInspector={showInspector}
       mobileTopbar={
         <div className="mobile-topbar">
@@ -998,7 +1096,7 @@ export default function Home() {
           {activeSpace === "home" || activeSpace === "knowledge" ? (
             <div className="tab-bar" role="tablist">
               {visibleTabs.map((tab) => (
-                <div key={tab.id} className={`tab-chip${activeTabId === tab.id ? " is-active" : ""}`} role="tab" tabIndex={activeTabId === tab.id ? 0 : -1} data-sound="select" aria-selected={activeTabId === tab.id} onClick={() => setActiveTabId(tab.id)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setActiveTabId(tab.id); } }}>
+                <div key={tab.id} className={`tab-chip${activeTabId === tab.id ? " is-active" : ""}`} role="tab" tabIndex={activeTabId === tab.id ? 0 : -1} data-sound="select" aria-selected={activeTabId === tab.id} onClick={() => { setActiveTabId(tab.id); setRailOpen(false); }} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setActiveTabId(tab.id); setRailOpen(false); } }}>
                   <span>{tab.label}</span>
                   <button type="button" data-sound="select" aria-label="关闭标签" onClick={(event) => { event.stopPropagation(); closeTab(tab.id); }}>×</button>
                 </div>
@@ -1018,7 +1116,7 @@ export default function Home() {
       inspector={
         <InspectorHost
           visible={showInspector}
-          hidden={railHidden}
+          hidden={!railShow}
         >
           {renderRail()}
         </InspectorHost>
@@ -1030,9 +1128,6 @@ export default function Home() {
               <span>{SPACE_META[space].shortLabel}</span>
             </button>
           ))}
-          {showInspector ? (
-            <button className={railOpen ? "is-active" : ""} type="button" data-sound="select" aria-expanded={railOpen} aria-controls="context-rail" onClick={toggleRail}><span>上下文</span></button>
-          ) : null}
         </nav>
       }
       overlays={

@@ -130,8 +130,8 @@ export async function createSourceInTx(
  * 直接建立一条可编辑的空白 Raw。
  *
  * 「新建笔记」不是临时输入态：点击后立刻在本机库里占一个位置，
- * 因此刷新、切换标签或关闭面板都不会丢失。编号按同一用户所有 Raw
- * （也包括归档项）取最大值，避免恢复归档后撞名。
+ * 因此刷新、切换标签或关闭面板都不会丢失。编号取同一用户未归档 Raw
+ * 标题中未占用的最小正整数；归档或改名后可复用编号。
  */
 export async function createUntitledSource(text = ""): Promise<Raw> {
   const { db } = await getDb();
@@ -141,12 +141,14 @@ export async function createUntitledSource(text = ""): Promise<Raw> {
     const existing = await tx
       .select({ title: rawNotes.title })
       .from(rawNotes)
-      .where(eq(rawNotes.userId, userId))
+      .where(and(eq(rawNotes.userId, userId), isNull(rawNotes.archivedAt)))
       .for("update");
-    const next = existing.reduce((highest, row) => {
+    const occupied = new Set(existing.flatMap((row) => {
       const match = row.title?.trim().match(/^未命名\s*(\d+)$/);
-      return match ? Math.max(highest, Number(match[1])) : highest;
-    }, 0) + 1;
+      return match ? [Number(match[1])] : [];
+    }));
+    let next = 1;
+    while (occupied.has(next)) next += 1;
     const title = `未命名${next}`;
     return createSourceInTx(tx, text, title, { markdown: makeMarkdown(title, text) });
   });

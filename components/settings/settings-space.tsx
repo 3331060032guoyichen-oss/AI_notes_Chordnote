@@ -87,18 +87,19 @@ type SettingsSpaceProps = {
 export function SettingsSpace({ section }: SettingsSpaceProps) {
   const { enabled: soundEnabled, preference: soundPreference, toggle: toggleSound } = useInterfaceSound();
   const [bundleNote, setBundleNote] = useState("");
-  const [studio, setStudio] = useState<Studio>("darkroom");
+  const [studio, setStudio] = useState<Studio | null>(null);
   useEffect(() => {
-    const savedStudio = readStorage(STUDIO_KEY) as Studio | null;
-    if (savedStudio && ["darkroom", "editorial", "tactile"].includes(savedStudio)) {
-      setStudio(savedStudio);
-    }
+    const saved = readStorage(STUDIO_KEY);
+    const current = document.documentElement.getAttribute("data-studio");
+    const selected = saved ?? current;
+    setStudio(selected === "darkroom" || selected === "tactile" ? selected : "editorial");
   }, []);
 
-  useEffect(() => {
-    document.documentElement.setAttribute("data-studio", studio);
-    writeStorage(STUDIO_KEY, studio);
-  }, [studio]);
+  function selectStudio(selected: Studio) {
+    setStudio(selected);
+    document.documentElement.setAttribute("data-studio", selected);
+    writeStorage(STUDIO_KEY, selected);
+  }
 
   return (
     <div className="settings-space">
@@ -180,7 +181,7 @@ export function SettingsSpace({ section }: SettingsSpaceProps) {
                   key={item.id}
                   type="button"
                   className={`theme-card${studio === item.id ? " is-active" : ""}`}
-                  onClick={() => setStudio(item.id)}
+                  onClick={() => selectStudio(item.id)}
                 >
                   <span className="theme-swatches" aria-hidden="true">
                     {item.swatches.map((color) => <i key={color} style={{ background: color }} />)}

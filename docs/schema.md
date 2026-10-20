@@ -133,7 +133,8 @@ All business tables carry `user_id text NOT NULL`. 所有时间列为 `timestamp
 | `POST /api/organize` | `{ rawId }` | `200 { draft }` | 需已配置 provider；缺凭据 → `503 DEEPSEEK_CONFIG_MISSING` |
 | `POST /api/assistant` | `{ question, contextType, contextId? }` | `200 { answer }` | 同上；`contextType`: `knowledge \| raw \| draft \| none` |
 | `POST /api/assistant/propose` | `{ knowledgeId, question? }` | `200 { proposal }` | 编辑助理对一张知识页提出**改写正文**的提议（`note_update`），只落 `pending`，不写正文 |
-| `POST /api/agent/organize` | `{ question, contextType, contextId?, draftContext? }` | `200 { trace }` | Agent 工具循环（检索 → 通读 → 提提议），返回可渲染轨迹；提议真的落进 `proposals`（`status=pending`），正式数据一条不动 |
+| `POST /api/agent/organize` | `{ question, contextType, contextId?, draftContext?, sessionId? }` | `200 { trace }` | Agent 工具循环，返回 `trace.sessionId`；服务端保留最近完整对话轮次，写操作只创建 pending 提议 |
+| `POST /api/agent/session` | `{ sessionId }` | `200 { ended: true }` | 追加结束日志并清除当前用户会话；忙碌返回 409，不存在或失效返回 404 |
 | `GET /api/proposals` | `?status=&targetNoteId=` | `200 { proposals }` | 提议列表 |
 | `POST /api/proposals` | 提议内容 | `201 { proposal }` | 提交提议 |
 | `POST /api/proposals/:id/approve` `reject` `apply` | — | `200` | 决议与执行；`apply` 需要已 `approved`，支持 `Idempotency-Key`；目标版本变了 → 提议推进到 `stale` |
@@ -167,9 +168,11 @@ All business tables carry `user_id text NOT NULL`. 所有时间列为 `timestamp
 
 ---
 
+偏好更新使用 `schema_preferences` 提议，payload 为 `{ content, schemaHash, evidence }`；只替换 Schema 的用户偏好区块。确认前不写文件，hash 过期转为 `stale`。上下文与审批细节见 [Agent 上下文](AGENT_CONTEXT.md)。
+
 ## 7. Migration and Local Database
 
-- 迁移文件：`drizzle/0000`–`0005`（6 个 SQL）。应用启动时由 `lib/db/client.ts` 的 `migrate()` 按 journal **增量**执行，已应用过的跳过 —— 所以首次 `pnpm dev` 就自动建好表，不存在"记得手动跑迁移"这一步。
+- 迁移文件：`drizzle/0000`–`0008`（9 个 SQL）。应用启动时由 `lib/db/client.ts` 的 `migrate()` 按 journal **增量**执行，已应用过的跳过。0008 为提议类型增加 `schema_preferences`，不新增记忆表。
 - 数据目录：`data/pglite`（可用 `PGLITE_DATA_DIR` 改）；桌面安装包版是 `%LOCALAPPDATA%\Chordnote\db`。本机数据不进版本库，仓库里只有 `data/.gitkeep`。
 - **单写者**：同一份数据目录同一时刻只能有一个进程写。不要一边跑 `pnpm dev` 一边让别的进程去连同一目录 —— 它读到的是打开那一刻的快照，写回去的内容还会被应用随后的写入覆盖（"删了像没删"）。脚本要跟库打交道，要么走 HTTP 接口（`scripts/regression.mjs`），要么自己起一份内存库（`scripts/db-verify.mjs`）。
 - 备份与恢复：**拷走 `data/` 目录就是完整备份**；界面里的「导出知识包」（`GET /api/export`）给出可读、可再导入的快照。没有云端历史窗口，恢复能力等于你手上那份拷贝。

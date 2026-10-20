@@ -10,6 +10,8 @@ import { auditLog, idempotencyKeys, notes, proposals } from "../db/schema";
 import { createOrReviveLinkInTx } from "./links";
 import { updateNoteInTx } from "./notes";
 import { MAX_RAW_TEXT_LENGTH, createSourceInTx } from "./sources";
+import { applyPreferences } from "./agent-schema";
+import { validPreferences } from "../agent/preferences";
 
 // 变更提议（proposals）服务层。
 //
@@ -75,6 +77,7 @@ const SUPPORTED_KINDS: readonly ProposalKind[] = [
   "link_create",
   "source_create",
   "note_update",
+  "schema_preferences",
 ];
 
 function assertTransition(from: ProposalStatus, to: ProposalStatus): void {
@@ -308,6 +311,11 @@ export async function createProposal(input: CreateProposalInput): Promise<Propos
   if (input.kind === "link_create") assertLinkCreatePayload(input.payload);
   if (input.kind === "source_create") assertSourceCreatePayload(input.payload);
   if (input.kind === "note_update") assertNoteUpdatePayload(input.payload);
+  if (input.kind === "schema_preferences" && (!validPreferences(input.payload.content)
+    || typeof input.payload.schemaHash !== "string" || !/^[a-f0-9]{64}$/.test(input.payload.schemaHash)
+    || !isNonEmptyString(input.payload.evidence) || !isNonEmptyString(input.reason))) {
+    throw new ProposalError("PROPOSAL_PAYLOAD_INVALID", "偏好提议需包含偏好内容、Schema 版本、用户原话和理由。");
+  }
 
   const { db } = await getDb();
   const { userId, actor } = getUserContext();
@@ -460,6 +468,11 @@ async function applyKindEffect(
 ): Promise<Record<string, unknown>> {
   const { userId } = getUserContext();
   const payload = asRecord(row.payload);
+  if (row.kind === "schema_preferences") {
+    const saved = await applyPreferences(String(payload.content), String(payload.schemaHash), proposalId);
+    if (!saved) throw new ProposalError("PROPOSAL_TARGET_STALE", "Schema 已修改，请重新生成偏好提议。");
+    return { schemaHash: saved.hash, target: "Schema.md#用户偏好" };
+  }
 
   if (row.kind === "link_create") {
     const sourceId = payload.sourceId;
@@ -675,7 +688,8 @@ export async function applyProposal(
       return { idempotent: false as const, updated };
     });
   } catch (error) {
-    // 事务已回滚，正式数据没被改动。失败也要留下痕迹，否则提议会永远卡在 approved。
+    // 数据库事务已回滚。Schema 文件可能已写入：非业务错误保留 approved，
+    // 允许依靠文件内的提议回执重试并补齐数据库状态。
     if (error instanceof ProposalError && error.code !== "PROPOSAL_NOT_FOUND") {
       // 目标被改过属于「过期」而不是「失败」：状态机里 approved → stale 是独立的一条边，
       // 过期提议不能重新执行，只能重新生成。
