@@ -170,7 +170,7 @@ export function GraphView({ nodes, edges, params, onOpenNote, onPinnedChange }: 
    */
   const pulseRef = useRef<{ id: string; startedAt: number } | null>(null);
 
-  /** 全局斥力句柄：拖拽期间要临时压低它，避免几跳以外的节点被一起唤醒。 */
+  /** 全局斥力句柄：拖拽期间保持网络的整体响应。 */
   const chargeForceRef = useRef<ForceManyBody<SimNode> | null>(null);
 
   // 让长驻的绘制循环与交互回调读到最新的参数，而不必重建仿真
@@ -448,7 +448,7 @@ export function GraphView({ nodes, edges, params, onOpenNote, onPinnedChange }: 
     resize();
 
     // ---- 力学 ----
-    // 斥力留个句柄：拖拽期间要把它压到 25%，让位移只影响直接相连的邻居。
+    // 保留斥力句柄，拖动时让整张图在新的位置附近重新平衡。
     const chargeForce = forceManyBody<SimNode>()
       .strength(-P0.repelForce)
       .distanceMin(30)
@@ -554,18 +554,29 @@ export function GraphView({ nodes, edges, params, onOpenNote, onPinnedChange }: 
           Math.hypot(event.clientX - dragStartX, event.clientY - dragStartY) > DRAG_MOVE_THRESHOLD
         ) {
           dragMoved = true;
+          // 只有真正拖动才解除旧固定；普通单击仍保留布局。
+          for (const pinnedId of pinnedRef.current) {
+            if (pinnedId === dragRef.current.id) continue;
+            const pinned = byId.get(pinnedId);
+            if (pinned) { pinned.fx = null; pinned.fy = null; }
+          }
+          pinnedRef.current.clear();
+          syncPinned();
+          if (reducedMotion) simulation.alpha(0.3).alphaTarget(0).stop();
+          else simulation.alpha(0.3).alphaTarget(0.18).restart();
         }
         const p = toWorld(event.clientX, event.clientY);
         dragRef.current.fx = p.x;
         dragRef.current.fy = p.y;
         if (reducedMotion) {
-          // 静态模式下力学已停，没人会把 fx/fy 落到 x/y 上，得自己挪，否则节点不跟手
+          // 减少动态效果时只在指针移动时推进力场，邻居仍跟随位置变化。
           dragRef.current.x = p.x;
           dragRef.current.y = p.y;
+          if (dragMoved) simulation.tick(8);
           draw();
         }
-        // 动态模式不需要在这里加温：拖拽开始时已经把 alphaTarget 设成一个小值，
-        // 仿真会一直维持那一档温度，直到松手把它归零。
+        // 长距离拖动时持续给力场一点温度，让相邻节点跟上指针而非停在原位。
+        if (!reducedMotion && dragMoved) simulation.alpha(Math.max(simulation.alpha(), 0.18));
         return;
       }
       const hit = pick(event.clientX, event.clientY);
@@ -584,12 +595,6 @@ export function GraphView({ nodes, edges, params, onOpenNote, onPinnedChange }: 
       if (!hit) return;
       dragRef.current = hit;
       dragMoved = false;
-      // 拖拽期间维持一档很低的温度（用 alphaTarget，不是每次移动都 alpha(...)）：
-      // 刚够让直接相连的弹簧把邻居带过来。原来每次移动都 alpha(0.35)，等于把整张图
-      // 反复重新加热，几跳以外的节点也被唤醒，松手后还要自己颤两三秒。
-      simulation.alphaTarget(0.05).restart();
-      // 同时把全局斥力压到 25%：位移能量因此被限制在邻域内，远端节点几乎无感。
-      chargeForce.strength(-Math.abs(paramsRef.current.repelForce) * 0.25);
       dragStartX = event.clientX;
       dragStartY = event.clientY;
       hit.fx = hit.x;
@@ -615,13 +620,12 @@ export function GraphView({ nodes, edges, params, onOpenNote, onPinnedChange }: 
         node.fx = null;
         node.fy = null;
       }
-      // 松手：温度归零 + 斥力还原，让扰动尽快静止。
-      simulation.alphaTarget(0);
-      chargeForce.strength(-Math.abs(paramsRef.current.repelForce));
+      // 松手后让邻居短暂收敛到新的网络布局。
+      simulation.alphaTarget(0).alpha(Math.max(simulation.alpha(), 0.16));
       dragRef.current = null;
       canvas.style.cursor = "grab";
       if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
-      if (reducedMotion) draw();
+      if (reducedMotion) { simulation.tick(50); draw(); }
     };
 
     /** 指针捕获意外丢失时的兜底，避免节点永远黏在光标上。 */
@@ -638,10 +642,9 @@ export function GraphView({ nodes, edges, params, onOpenNote, onPinnedChange }: 
         node.fy = null;
       }
       simulation.alphaTarget(0);
-      chargeForce.strength(-Math.abs(paramsRef.current.repelForce));
       dragRef.current = null;
       canvas.style.cursor = "grab";
-      if (reducedMotion) draw();
+      if (reducedMotion) { simulation.tick(50); draw(); }
     };
 
     const onWheel = (event: WheelEvent) => {

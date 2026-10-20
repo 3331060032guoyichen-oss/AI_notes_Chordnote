@@ -3074,11 +3074,10 @@ input::placeholder {
   align-items: center;
   gap: 2px;
   padding: 2px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   border-radius: 999px;
-  background: rgb(10 17 34 / 84%);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  background: var(--surface-raised);
+  box-shadow: var(--control-shadow);
   pointer-events: auto;
 }
 
@@ -3089,17 +3088,19 @@ input::placeholder {
   height: 26px;
   border: 0;
   border-radius: 999px;
-  color: var(--muted);
+  color: var(--ink);
   background: transparent;
   font-size: 14px;
   line-height: 1;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 
 .graph-zoom button:hover {
-  color: var(--ink);
+  color: var(--accent-strong);
   background: var(--accent-soft);
 }
+
+.graph-zoom button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
 /* 「适应」按文字宽度，不跟 +/− 一样是方块 */
 .graph-zoom button.graph-zoom-fit {
@@ -3110,7 +3111,7 @@ input::placeholder {
 
 .graph-zoom-value {
   min-width: 42px;
-  color: var(--muted);
+  color: var(--ink);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
   text-align: center;
