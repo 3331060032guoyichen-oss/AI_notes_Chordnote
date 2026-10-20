@@ -10,11 +10,12 @@ import type { ModelSettings } from "../ai/config";
 import { ProviderError, type ChatToolDefinition } from "../ai/provider";
 import type { SessionEvent } from "@deepseek-ai/dsh-session";
 import { contextBudget, estimateTokens, MESSAGE_BUDGET } from "./context";
+import type { AgentPermission } from "./manual";
 
-export function runtimeInformation(settings: ModelSettings, tools: ChatToolDefinition[]) {
+export function runtimeInformation(settings: ModelSettings, tools: ChatToolDefinition[], permission: AgentPermission = "propose") {
   return { engine: "dsh", version: "0.2.1-rc.2", provider: settings.agentBackend === "acp" ? `acp:${settings.acp?.label ?? "external"}` : settings.provider,
     model: settings.model, tools: tools.map(t => t.function.name),
-    permissions: { read: true, mutations: "pending proposals only", shell: false, database: false } };
+    permissions: { mode: permission, read: true, mutations: permission === "full" ? "automatic task-scoped changes" : permission === "read" ? "none" : "pending proposals only", rawText: "read only", shell: false, database: false } };
 }
 
 /** dsh owns the multi-turn loop. This host owns authentication and business permissions. */
@@ -24,6 +25,7 @@ export async function runHarness(options: {
   signal?: AbortSignal;
   history?: SessionEvent[];
   onDiagnostic?: (message: string) => void;
+  permission?: AgentPermission;
 }) {
   const { settings, tools } = options;
   if (settings.agentBackend !== "acp" && settings.provider !== "ollama" && !settings.apiKey) {
@@ -40,7 +42,7 @@ export async function runHarness(options: {
   let ready = false;
   let calls = 0;
   let budgetExceeded = false;
-  const runtime = runtimeInformation(settings, tools);
+  const runtime = runtimeInformation(settings, tools, options.permission);
   const server = createServer(async (req, res) => {
     res.setHeader("content-type", "application/json");
     const admin = req.headers.authorization === `Bearer ${adminToken}`;

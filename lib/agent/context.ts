@@ -1,3 +1,5 @@
+import { rawCategory } from "../documents/structure";
+
 /** Conservative UTF-8 byte budget: a byte is an upper bound for byte-tokenizers.
  * This intentionally overcounts Chinese text instead of risking an overflowing request.
  */
@@ -20,7 +22,7 @@ export function clipContext(text: string, budget: number): string {
   return output + suffix;
 }
 
-export type ContextDocument = { id: string; path: string; title: string; content: string };
+export type ContextDocument = { id: string; path: string; title: string; content: string; kind?: "raw" | "knowledge"; organized?: boolean };
 export function retrieveContext(question: string, documents: ContextDocument[]) {
   const words = question.toLowerCase().match(/[a-z0-9_+-]+|[\p{Script=Han}]+/gu) ?? [];
   const terms = [...new Set(words.flatMap(word => /^[\p{Script=Han}]+$/u.test(word) && word.length > 2
@@ -36,7 +38,12 @@ export function retrieveContext(question: string, documents: ContextDocument[]) 
       snippet, truncated: start > 0 || start + snippet.length < doc.content.length };
   }).filter(doc => doc.score > 0).sort((a, b) => b.score - a.score || a.path.localeCompare(b.path));
   return {
-    directory: clipContext(documents.map(doc => `${doc.path} [${doc.id}]`).sort().join("\n"), 4_000),
+    directory: clipContext([...documents].sort((a, b) => a.path.localeCompare(b.path)).map(doc => {
+      const parts = doc.path.replace(/\\/g, "/").split("/");
+      const kind = doc.kind ?? (parts[0].toLowerCase() === "raw" ? "raw" : "knowledge");
+      return JSON.stringify({ title: doc.title || "未命名", layer: kind === "raw" ? "Raw" : "Wiki", category: kind === "raw" ? doc.organized ? rawCategory(doc.path) : "未整理笔记" : parts.length > 2 ? parts[1] : "未分类",
+        path: doc.path, id: doc.id, status: kind === "knowledge" ? "已收录" : doc.organized === undefined ? undefined : doc.organized ? "已整理" : "未整理" });
+    }).join("\n"), 4_000),
     hits: ranked.slice(0, 5),
   };
 }

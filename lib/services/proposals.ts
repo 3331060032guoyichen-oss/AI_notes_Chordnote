@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { and, desc, eq, inArray, lt, or, type SQL } from "drizzle-orm";
 
 import type { Proposal } from "../../types/proposal";
-import { getUserContext } from "../auth/context";
+import { getUserContext, type Actor } from "../auth/context";
 import { getDb, type DbTransaction } from "../db/client";
 import type { ContentOrigin, ProposalKind, ProposalStatus, RiskLevel } from "../db/enums";
 import { auditLog, idempotencyKeys, notes, proposals } from "../db/schema";
@@ -377,9 +377,10 @@ export async function createProposal(input: CreateProposalInput): Promise<Propos
 async function resolveProposal(
   id: string,
   next: Extract<ProposalStatus, "approved" | "rejected" | "cancelled">,
+  actorOverride?: Actor,
 ): Promise<Proposal> {
   const { db } = await getDb();
-  const { userId, actor } = getUserContext();
+  const { userId, actor } = getUserContext(actorOverride);
 
   const rows = await db.transaction(async (tx) => {
     const current = (
@@ -426,8 +427,8 @@ async function resolveProposal(
 }
 
 /** 批准。批准本身不写入任何正式数据，只把提议推进到可执行的 approved。 */
-export async function approveProposal(id: string): Promise<Proposal> {
-  return resolveProposal(id, "approved");
+export async function approveProposal(id: string, actor?: Actor): Promise<Proposal> {
+  return resolveProposal(id, "approved", actor);
 }
 
 export async function rejectProposal(id: string): Promise<Proposal> {
@@ -443,6 +444,8 @@ export async function cancelProposal(id: string): Promise<Proposal> {
 // ---------------------------------------------------------------------------
 
 export type ApplyProposalInput = {
+  /** Host-only attribution for an explicit full-permission run. Never read from a request body. */
+  actor?: Actor;
   /**
    * 幂等键。与状态检查构成双保险（docs/reports/07 §7.2）：
    * 同一把钥匙重复提交直接返回上次的结果，不会执行第二次。
@@ -465,6 +468,7 @@ async function applyKindEffect(
   tx: DbTransaction,
   proposalId: string,
   row: ProposalRow,
+  actor?: Actor,
 ): Promise<Record<string, unknown>> {
   const { userId } = getUserContext();
   const payload = asRecord(row.payload);
@@ -533,6 +537,7 @@ async function applyKindEffect(
       noteId,
       isNonEmptyString(summary) ? { content, summary } : { content },
       row.baseVersion ?? undefined,
+      actor,
     );
 
     if (result.status === "not_found") {
@@ -575,7 +580,7 @@ export async function applyProposal(
   input: ApplyProposalInput = {},
 ): Promise<ApplyProposalResult> {
   const { db } = await getDb();
-  const { userId, actor } = getUserContext();
+  const { userId, actor } = getUserContext(input.actor);
   const idempotencyKey = input.idempotencyKey ?? null;
 
   const existing = await getProposal(id);
@@ -646,7 +651,7 @@ export async function applyProposal(
         );
       }
 
-      const effect = await applyKindEffect(tx, id, locked);
+      const effect = await applyKindEffect(tx, id, locked, actor);
       const now = new Date();
 
       const updated = (
@@ -697,6 +702,7 @@ export async function applyProposal(
         id,
         error.message,
         error.code === "PROPOSAL_TARGET_STALE" ? "stale" : "failed",
+        actor,
       );
     }
     throw error;
@@ -725,9 +731,10 @@ async function markFailed(
   id: string,
   message: string,
   status: Extract<ProposalStatus, "failed" | "stale"> = "failed",
+  actorOverride?: Actor,
 ): Promise<void> {
   const { db } = await getDb();
-  const { userId, actor } = getUserContext();
+  const { userId, actor } = getUserContext(actorOverride);
 
   try {
     await db.transaction(async (tx) => {

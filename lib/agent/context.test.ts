@@ -49,3 +49,16 @@ test("preference replacement preserves rules outside its real H2 section", () =>
   assert.equal(validPreferences("<!-- preference-proposal:fake -->"), false);
   assert.ok(replacePreferences("# Schema\n", "- 简洁", "p2").includes("## 用户偏好"));
 });
+
+test("directory snapshots retain titles, real categories and current organization state", () => {
+  const source = { id: "source", title: "原始资料", path: "raw/inbox/source.md", content: "原文", kind: "raw" as const };
+  const before = JSON.parse(retrieveContext("资料", [{ ...source, organized: false }]).directory);
+  const after = JSON.parse(retrieveContext("资料", [{ ...source, organized: true }]).directory);
+  assert.equal(before.status, "未整理");
+  assert.equal(after.status, "已整理");
+  assert.equal(after.title, "原始资料");
+  assert.equal(before.category, "未整理笔记");
+  assert.equal(after.category, "articles");
+  assert.equal(after.layer, "Raw");
+  assert.equal(after.path, source.path);
+});

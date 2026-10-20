@@ -73,7 +73,7 @@ test("5. AI 可创建 Raw、末尾追加，且不能改变已有字节", async (
   const root = await makeVault(t);
   const { service, audit } = await openService(root);
   const created = await service.createRaw({ title: "PID 控制", content: "课堂笔记正文" });
-  assert.equal(created.path, "raw/inbox/PID 控制.md");
+  assert.equal(created.path, "raw/PID 控制.md");
   const file = path.join(root, created.path);
   assert.equal(await readFile(file, "utf8"), "# PID 控制\n\n课堂笔记正文\n");
 
@@ -216,7 +216,7 @@ test("审计可落盘到 .chordnote/audit.jsonl", async (t) => {
 
   const lines = (await readFile(path.join(root, ".chordnote/audit.jsonl"), "utf8")).trim().split("\n");
   const event = JSON.parse(lines[0]) as { operation: string; actorId: string; path: string };
-  assert.deepEqual([event.operation, event.actorId, event.path], ["raw.create", "agent-audit", "raw/inbox/审计.md"]);
+  assert.deepEqual([event.operation, event.actorId, event.path], ["raw.create", "agent-audit", "raw/审计.md"]);
 });
 
 test("路径约束：Vault 外、内部目录与非法路径一律拒绝", async (t) => {

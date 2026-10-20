@@ -80,6 +80,7 @@ export async function POST(request: Request) {
 
     const result = await promoteFromSource({
       rawId: raw.id,
+      rawCategory: body.draft.rawCategory,
       title: body.draft.title,
       summary: body.draft.summary,
       content: body.draft.content,
@@ -89,7 +90,7 @@ export async function POST(request: Request) {
       origin: body.origin === "ai" ? "ai" : "user",
     });
 
-    return NextResponse.json(result, { status: result.created ? 201 : 200 });
+    return NextResponse.json({ ...result, raw: await getSource(raw.id) }, { status: result.created ? 201 : 200 });
   } catch {
     return errorResponse(
       "整理稿暂时无法收录。原始记录仍然安全，请稍后重试。",

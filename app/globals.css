@@ -3106,7 +3106,7 @@ input::placeholder {
   background: transparent;
   font-size: 14px;
   line-height: 1;
-  cursor: var(--cursor-pointer);
+  cursor: pointer;
 }
 
 .graph-zoom button:hover {
@@ -6598,6 +6598,31 @@ button.wiki-link { display:inline; border:0; background:none; padding:0; font:in
 .agent-chat-head .agent-new-session:disabled { opacity:.5; cursor:default; }
 .agent-chat-head .agent-new-session + button { margin-left:0; }
 .agent-chat-history { flex:1; min-height:0; overflow:auto; padding:18px; font-size:14px; line-height:1.7; }
+.agent-conversation-message { scroll-margin-top:18px; }
+.agent-proposal-heading { margin:20px 0 8px; }
+.review-source-category { display:flex; align-items:center; gap:8px; margin-left:auto; font-size:14px; color:var(--muted); }
+.review-source-category select { max-width:150px; padding:5px 8px; border:1px solid var(--line); border-radius:var(--radius); background:var(--paper); color:var(--ink); font:inherit; }
+.readme-guide { max-width:700px; margin:0 auto; padding:12px 0 40px; color:var(--ink); font-size:16px; line-height:1.75; }
+.readme-guide .readme-eyebrow { margin:0 0 12px; font-size:12px; letter-spacing:.12em; color:var(--muted); }
+.readme-guide h1 { margin:0 0 16px; font-size:clamp(25px,3vw,34px); line-height:1.4; }
+.readme-guide .readme-intro { color:var(--muted); }
+.readme-guide section { margin-top:36px; padding-top:24px; border-top:1px solid var(--line); }
+.readme-guide h2 { margin:0 0 18px; font-size:21px; line-height:1.5; }
+.readme-guide h3 { margin:0 0 7px; font-size:17px; }
+.readme-guide p { margin:0 0 1em; }
+.readme-guide ul, .readme-guide ol { padding-left:24px; }
+.readme-guide li { margin:0 0 12px; }
+.readme-steps > li { padding-left:6px; margin-bottom:24px; }
+.readme-guide blockquote { margin:12px 0 18px; padding:10px 16px; border-left:2px solid var(--accent); background:var(--surface-raised); }
+.readme-guide code { padding:2px 5px; border-radius:4px; background:var(--surface-raised); font-size:.9em; overflow-wrap:anywhere; }
+.readme-directory { margin:0; }
+.readme-directory > div { margin-bottom:18px; }
+.readme-directory dt { font-weight:600; }
+.readme-directory dd { margin:4px 0 0; color:var(--muted); }
+.readme-table { max-width:100%; overflow-x:auto; margin-bottom:18px; }
+.readme-table table { width:100%; border-collapse:collapse; font-size:15px; }
+.readme-table th, .readme-table td { padding:10px 12px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; }
+.readme-table th { white-space:nowrap; font-weight:600; }
 .agent-message { margin:12px 0; padding:12px 14px; border:1px solid var(--line); border-radius:var(--radius); background:var(--paper); overflow-wrap:anywhere; }
 .agent-message-user { margin-left:22px; background:var(--surface-raised); }
 .agent-message > :first-child { margin-top:0; }
@@ -6619,6 +6644,7 @@ button.wiki-link { display:inline; border:0; background:none; padding:0; font:in
 .agent-message th, .agent-message td { border-bottom:1px solid var(--line); padding:6px; text-align:left; vertical-align:top; }
 .agent-message th { color:var(--muted); font-weight:600; }
 .agent-wikilink { padding:0; border:0; background:none; color:var(--accent-strong); text-decoration:underline; cursor:var(--cursor-pointer); font:inherit; }
+.agent-unresolved-link { color:var(--muted); text-decoration:underline dotted; text-underline-offset:3px; }
 .agent-answer { white-space:pre-wrap; overflow-wrap:anywhere; }
 .agent-composer { position:relative; flex-shrink:0; padding:12px; border-top:1px solid var(--line); }
 .agent-composer textarea { min-height:76px; width:100%; resize:vertical; border:1px solid var(--line); border-radius:8px; background:transparent; color:var(--ink); padding:10px; font:inherit; }
@@ -6865,8 +6891,7 @@ button.wiki-link { display:inline; border:0; background:none; padding:0; font:in
 
 .canvas-hint,
 .canvas-status,
-.canvas-loading,
-.canvas-archive-toggle {
+.canvas-loading {
   position: sticky;
   z-index: 5;
   left: 20px;
@@ -6884,33 +6909,15 @@ button.wiki-link { display:inline; border:0; background:none; padding:0; font:in
 .canvas-hint { top: calc(100% - 42px); margin: 0; padding: 7px 9px; pointer-events: none; }
 .canvas-status { top: 18px; margin: 0; padding: 7px 9px; }
 .canvas-loading { top: 50%; margin: 0; padding: 9px 12px; }
-.canvas-archive-toggle { top: 54px; padding: 7px 9px; cursor: var(--cursor-pointer); }
-.canvas-archive-panel {
-  position: sticky;
-  z-index: 6;
-  top: 88px;
-  left: 20px;
-  display: grid;
-  width: 240px;
-  max-height: 320px;
-  overflow: auto;
-  padding: 10px;
-  border-radius: 8px;
-  background: #fffdf8;
-  color: #35332f;
-  box-shadow: 0 18px 44px rgb(65 57 43 / .2);
-}
-.canvas-archive-panel header { display: flex; align-items: center; justify-content: space-between; padding: 3px 5px 8px; }
-.canvas-archive-panel button { padding: 8px 5px; border: 0; background: transparent; color: inherit; text-align: left; cursor: var(--cursor-pointer); }
-.canvas-archive-panel button:hover { background: rgb(53 51 47 / .06); }
 @media (max-width:1100px) { .app-shell.chordnote-workspace { --left-col:190px; --right-col:290px; } }
 @media (max-width:760px) { .app-shell.chordnote-workspace { --left-col:min(160px,26vw); --right-col:min(270px,40vw); } .chordnote-workspace .workspace-content { padding:18px 10px; } .chordnote-workspace .breadcrumb { min-width:0; overflow:hidden; white-space:nowrap; } .chordnote-workspace .sidebar-bottom { padding:6px; } }
 @media (max-width:860px) {
   .app-shell.chordnote-workspace { grid-template-columns:56px var(--left-col) minmax(0,1fr); }
-  .chordnote-workspace .ai-rail { position:fixed; inset:0 0 0 auto; z-index:30; width:min(360px,calc(100vw - 56px)); height:100dvh; border-left:1px solid var(--line); box-shadow:var(--shadow); }
+  .chordnote-workspace .ai-rail { position:fixed; inset:0 0 0 56px; z-index:30; width:auto; height:100dvh; border-left:1px solid var(--line); box-shadow:none; }
 }
 @media (max-width:760px) {
-  .app-shell.chordnote-workspace { padding-bottom:67px; }
+  .app-shell.chordnote-workspace { padding-bottom:0; }
+  .chordnote-workspace .workspace-main { padding-bottom:calc(67px + env(safe-area-inset-bottom)); }
   .chordnote-workspace .mobile-bottom-nav { display:grid; left:56px; background:var(--paper); }
 }
 

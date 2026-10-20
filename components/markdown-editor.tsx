@@ -17,7 +17,7 @@ class LinkWidget extends WidgetType {
   toDOM() {
     const button = document.createElement("button");
     button.type = "button"; button.className = `wiki-link${this.resolved ? "" : " is-unresolved"}`;
-    button.textContent = this.label; button.title = this.resolved ? this.target : `创建 ${this.target}`;
+    button.textContent = this.label; button.title = this.resolved ? this.label : `创建 ${this.target}`;
     button.addEventListener("mousedown", e => e.preventDefault());
     button.addEventListener("click", () => this.open(this.target));
     return button;
@@ -107,7 +107,7 @@ class MathWidget extends WidgetType {
 }
 
 const rebuildPreview = StateEffect.define<void>();
-function preview(getLinks: () => readonly LinkCandidate[], open: (target: string) => void, focused: () => boolean, latex: () => boolean) {
+function preview(getLinks: () => readonly LinkCandidate[], open: (target: string) => void, focused: () => boolean, latex: () => boolean, getSourcePath: () => string | undefined) {
   return StateField.define<DecorationSet>({
     create: build, update(value, tr) { return tr.docChanged || tr.selection || tr.effects.some(e => e.is(rebuildPreview)) ? build(tr.state) : value; },
     provide: field => EditorView.decorations.from(field),
@@ -157,12 +157,12 @@ function preview(getLinks: () => readonly LinkCandidate[], open: (target: string
           add(embed ? from - 1 : from, to, Decoration.replace({ widget, block: kind === "pdf" && embed }));
           return false;
         }
-        const reference = resolveReference(target, getLinks());
+        const reference = resolveReference(target, getLinks(), getSourcePath());
         const resolved = Boolean(reference);
         // Keep the stored syntax untouched, but display the destination's title in
         // Live Preview. An explicit alias still takes precedence.
         const label = aliases.join("|").trim() || reference?.title?.trim() || dest;
-        if (!selected) add(from, to, Decoration.replace({ widget: new LinkWidget(target, label, resolved, open) }));
+        if (!selected) add(from, to, Decoration.replace({ widget: new LinkWidget(reference?.id ?? target, label, resolved, open) }));
         else add(from, to, Decoration.mark({ class: `wiki-link-source${resolved ? "" : " is-unresolved"}` }));
         return false;
       }
@@ -181,14 +181,15 @@ function preview(getLinks: () => readonly LinkCandidate[], open: (target: string
   }
 }
 
-export function MarkdownEditor({ value, onChange, candidates, onOpenLink, readOnly = false, label = "笔记正文" }: {
+export function MarkdownEditor({ value, onChange, candidates, onOpenLink, sourcePath, readOnly = false, label = "笔记正文" }: {
   value: string; onChange?: (markdown: string) => void; candidates: readonly LinkCandidate[];
-  onOpenLink: (target: string) => void; readOnly?: boolean; label?: string;
+  onOpenLink: (target: string) => void; sourcePath?: string; readOnly?: boolean; label?: string;
 }) {
   const host = useRef<HTMLDivElement>(null), view = useRef<EditorView | null>(null);
   const callbacks = useRef({ onChange, onOpenLink }); callbacks.current = { onChange, onOpenLink };
   const linkCandidates = useRef(candidates); linkCandidates.current = candidates;
   const latex = useRef(isLatexEnabled());
+  const currentPath = useRef(sourcePath); currentPath.current = sourcePath;
   const externalUpdate = useRef(false);
   const initial = useRef(value);
   useEffect(() => {
@@ -222,7 +223,7 @@ export function MarkdownEditor({ value, onChange, candidates, onOpenLink, readOn
           v.dispatch({ changes: { from, to, insert: target + suffix }, selection: { anchor: from + target.length + 2 } });
         } })) };
       }] }),
-      preview(() => linkCandidates.current, target => callbacks.current.onOpenLink(target),()=>Boolean(view.current?.hasFocus), () => latex.current),
+      preview(() => linkCandidates.current, target => callbacks.current.onOpenLink(target),()=>Boolean(view.current?.hasFocus), () => latex.current, () => currentPath.current),
       EditorState.transactionFilter.of(tr => {
         if (!tr.docChanged || readOnly || externalUpdate.current) return tr;
         const offset = splitFrontmatter(tr.newDoc.toString()).offset;
@@ -242,7 +243,7 @@ export function MarkdownEditor({ value, onChange, candidates, onOpenLink, readOn
     view.current = editor;
     return () => { editor.destroy(); view.current = null; };
   }, [readOnly, label]);
-  useEffect(() => { view.current?.dispatch({ effects: rebuildPreview.of() }); }, [candidates]);
+  useEffect(() => { view.current?.dispatch({ effects: rebuildPreview.of() }); }, [candidates, sourcePath]);
   useEffect(() => onLatexPreferenceChange(() => {
     latex.current = isLatexEnabled();
     view.current?.dispatch({ effects: rebuildPreview.of() });

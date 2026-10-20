@@ -75,7 +75,7 @@ export class VaultService {
 
   async createRaw(input: { title: string; content?: string; dir?: string }): Promise<VaultFileState> {
     this.authorize("create_raw");
-    const dir = this.assertScope(input.dir ?? "raw/inbox", "raw");
+    const dir = input.dir ? this.assertScope(input.dir, "raw") : "raw";
     const stem = fileStemFromTitle(input.title.trim() || "未命名");
     const relative = await this.availablePath(dir, stem);
     const body = (input.content ?? "").replace(/\s+$/, "");

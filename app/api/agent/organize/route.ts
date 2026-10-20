@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { ProviderError } from "../../../../lib/ai/provider";
 import { SessionError } from "../../../../lib/agent/sessions";
 import { estimateTokens, MESSAGE_BUDGET } from "../../../../lib/agent/context";
+import { AGENT_PERMISSIONS } from "../../../../lib/agent/manual";
 import {
   AgentContextError,
   runOrganizeAgent,
@@ -21,7 +22,7 @@ export const runtime = "nodejs";
  */
 
 const CONTEXT_TYPES: AgentRunContextType[] = ["raw", "knowledge", "draft", "none"];
-const PERMISSIONS = ["ask", "read", "propose"] as const;
+const PERMISSIONS = AGENT_PERMISSIONS.map(item => item.id);
 
 type RequestBody = {
   sessionId?: unknown;

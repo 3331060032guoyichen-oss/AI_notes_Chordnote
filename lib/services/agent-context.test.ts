@@ -10,9 +10,9 @@ import * as schema from "../db/schema";
 import type { DbHandle } from "../db/client";
 import { readAgentSchema, saveAgentSchema, applyPreferences } from "./agent-schema";
 import { createProposal, approveProposal, rejectProposal, applyProposal, getProposal } from "./proposals";
-import { createSource, archiveSource } from "./sources";
+import { createSource, archiveSource, getSource, listSources } from "./sources";
 import { agentContext, logAgentEvent } from "./agent-context";
-import { promoteFromSource, getNote } from "./notes";
+import { promoteFromSource, getNote, listNotes } from "./notes";
 import { runOrganizeAgent } from "../agent/loop";
 import { createServer } from "node:http";
 import { closeSession } from "../agent/sessions";
@@ -75,7 +75,13 @@ test("preferences require approval, preserve rules, reject stale edits and remai
     // Run the real Agent + dsh + tool bridge against a local scripted provider.
     const source = await createSource("协程由事件循环调度", "协程来源");
     const { knowledge } = await promoteFromSource({ rawId: source.id, title: "Python 协程", summary: "调度", content: "原有正文", keyPoints: [], concepts: [], keywords: [], origin: "user" });
+    const currentDirectory = (await agentContext("协程")).directory.split("\n").map(line => JSON.parse(line));
+    assert.deepEqual(currentDirectory.find(row => row.id === source.id), {
+      title: "协程来源", layer: "Raw", category: "articles", path: `raw/articles/${source.id}.md`, id: source.id, status: "已整理",
+    });
+    assert.equal(currentDirectory.find(row => row.id === knowledge.id)?.layer, "Wiki");
     let requests = 0;
+    let scenario = "propose", fullRawId = "", fullNoteId = "";
     const mock = createServer(async (req, res) => {
       let body = ""; for await (const chunk of req) body += chunk;
       const request = JSON.parse(body);
@@ -86,6 +92,42 @@ test("preferences require approval, preserve rules, reject stale edits and remai
       assert.ok(serialized.includes("近期工作日志"));
       assert.ok(serialized.includes("目录索引"));
       const tools = messages.filter(m => m.role === "tool");
+      const respond = (name: string, args: Record<string, unknown>, message = "已按本轮权限完成任务。") => {
+        const delta = name ? { role: "assistant", tool_calls: [{ index: 0, id: `call_${requests}`, type: "function", function: { name, arguments: JSON.stringify(args) } }] } : { role: "assistant", content: message };
+        res.setHeader("content-type", "text/event-stream");
+        res.write(`data: ${JSON.stringify({ id: "fixture", choices: [{ index: 0, delta, finish_reason: null }] })}\n\n`);
+        res.write(`data: ${JSON.stringify({ id: "fixture", choices: [{ index: 0, delta: {}, finish_reason: name ? "tool_calls" : "stop" }] })}\n\n`);
+        res.end("data: [DONE]\n\n");
+      };
+      if (scenario === "read") {
+        const names = request.tools.map((tool: { function: { name: string } }) => tool.function.name);
+        assert.ok(names.includes("read_raw"));
+        assert.ok(!names.includes("draft_knowledge"));
+        assert.ok(!names.includes("classify_document"));
+        respond("", {}, "只读回答，没有修改内容。"); return;
+      }
+      if (scenario === "full") {
+        if (tools.length >= 2 && !fullNoteId) fullNoteId = (await listNotes()).find(note => note.rawId === fullRawId)?.id ?? "";
+        const current = fullNoteId ? await getNote(fullNoteId) : null;
+        const actions: [string, Record<string, unknown>][] = [
+          ["read_raw", { id: fullRawId }],
+          ["draft_knowledge", { rawId: fullRawId, draftJson: JSON.stringify({ title: "授权整理页", summary: "测试", content: "# 授权整理页\n\n来源明确的正文", rawCategory: "papers", keyPoints: [], concepts: [], keywords: [], relatedKnowledge: [] }) }],
+          ["read_note", { noteId: fullNoteId }],
+          ["propose_operations", { operations: [
+            { type: "update_note", target_note_id: fullNoteId, expected_version: current?.version, reason: "按任务更新", changes: { content: "完全允许更新后的正文" } },
+            { type: "schema_preferences", reason: "用户明确偏好", evidence: "以后多用表格", changes: { content: "- 以后多用表格。" } },
+          ] }],
+          ["read_note", { noteId: knowledge.id }],
+          ["read_note", { noteId: fullNoteId }],
+          ["propose_link", { sourceId: fullNoteId, targetId: knowledge.id, reason: "两页共同解释事件循环与协程调度" }],
+          ["classify_document", { kind: "knowledge", id: fullNoteId, category: "sources", expectedVersion: current?.version }],
+          ["read_note", { noteId: fullNoteId }],
+          ["archive_knowledge", { noteId: fullNoteId, expectedVersion: current?.version }],
+          ["propose_source", { title: "补充来源", text: "补充来源原文" }],
+        ];
+        const action = actions[tools.length];
+        respond(action?.[0] ?? "", action?.[1] ?? {}); return;
+      }
       let name = "", args: Record<string, unknown> = {};
       if (tools.length === 0) { name = "read_note"; args = { noteId: knowledge.id }; }
       else if (tools.length === 1) {
@@ -116,6 +158,38 @@ test("preferences require approval, preserve rules, reject stale edits and remai
       assert.equal(continued.sessionId, trace.sessionId);
       assert.equal(closeSession(getUserContext().userId, trace.sessionId!), 2);
       assert.equal(requests, 4, "continuing the conversation must replay history without re-executing old tools");
+
+      const originalRaw = await createSource("原文不可由 AI 改写", "授权整理来源");
+      fullRawId = originalRaw.id;
+      const beforeFullSchema = await readAgentSchema();
+      scenario = "full";
+      const full = await runOrganizeAgent({ question: "整理来源，建立联系，分类并归档整理页；保留补充来源原文；以后多用表格", contextType: "raw", contextId: fullRawId, permission: "full" });
+      assert.equal(full.counters.pendingProposals, 0);
+      assert.equal(full.draft, undefined, "full mode must not leave a draft awaiting confirmation");
+      assert.equal(full.runtime?.permissions.mode, "full");
+      assert.ok(!full.steps.some(step => step.status === "failed"), JSON.stringify(full.steps));
+      const rawAfter = await getSource(fullRawId);
+      assert.equal(rawAfter?.text, originalRaw.text);
+      assert.equal(rawAfter?.markdown, originalRaw.markdown);
+      assert.equal(rawAfter?.path, `raw/papers/${fullRawId}.md`);
+      const written = await getNote(fullNoteId);
+      assert.equal(written?.content, "完全允许更新后的正文");
+      assert.equal(written?.path, `wilki/sources/${fullNoteId}.md`);
+      assert.ok(written?.archivedAt);
+      assert.notEqual((await readAgentSchema()).hash, beforeFullSchema.hash);
+      assert.ok((await listSources()).some(raw => raw.title === "补充来源"));
+      for (const step of trace.steps.filter(step => step.proposalId)) assert.equal((await getProposal(step.proposalId!))?.status, "pending", "full mode must not approve proposals from earlier runs");
+      const revisions = (await db.select().from(schema.noteRevisions)).filter(row => row.noteId === fullNoteId);
+      assert.ok(revisions.length >= 3 && revisions.every(row => row.authorType === "agent"));
+      assert.ok((await db.select().from(schema.auditLog)).some(row => row.operation === "proposal.apply" && row.actorType === "agent"));
+
+      scenario = "read";
+      const rawCount = (await listSources()).length;
+      const read = await runOrganizeAgent({ question: "继续，但本轮只读", contextType: "none", permission: "read", sessionId: full.sessionId });
+      assert.equal(read.runtime?.permissions.mode, "read");
+      assert.equal((await listSources()).length, rawCount);
+      assert.equal((await getNote(fullNoteId))?.content, written?.content);
+      assert.equal(closeSession(getUserContext().userId, full.sessionId!), 2);
     } finally {
       mock.closeAllConnections(); await new Promise<void>(ok => mock.close(() => ok()));
       for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }

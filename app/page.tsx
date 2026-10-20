@@ -26,8 +26,10 @@ IconPen,IconSearch,
 IconSettings
 } from "../components/ui/icons";
 import { WorkspaceTree } from "../components/workspace-tree";
+import { ReadmeView } from "../components/readme-view";
 import { makeMarkdown,readMarkdown,resolveReference,type LinkCandidate } from "../lib/documents/markdown";
-import type { AgentPermission } from "../lib/agent/manual";
+import { AGENT_PERMISSIONS, type AgentPermission } from "../lib/agent/manual";
+import { RAW_FOLDERS } from "../lib/documents/structure";
 
 import { getPreview } from "../lib/text-preview";
 import type { AgentRunTrace,AgentStep } from "../types/agent";
@@ -37,7 +39,6 @@ import type { OrganizeDraft } from "../types/organize";
 import type { Proposal } from "../types/proposal";
 import type { Raw } from "../types/raw";
 
-const QUICK_GUIDE = "# Readme\n\n从左侧未整理笔记点击新建，立即建立一条本机持久保存的笔记；未改名时依次为未命名1、未命名2。笔记名是文档第一行，可随时修改。\n\n输入 [[ 选择笔记；点击虚线链接可新建原始记录。已解析链接在预览中显示目标笔记名称。支持 #标签、==高亮==、**粗体**、*斜体* 和 - [ ] 任务。光标进入标记可编辑原始语法。\n\nRaw 保留分类后的原始资料，Wiki 保存确认后的知识页。右侧 Agent 可用 @ 引用笔记，整理结果经确认后收录。\n\n查找笔记中可查询出链和入链。Schema 展示 Agent 实际读取的工作规则。\n\n删除会进入设置中的归档，可恢复原路径。导出包含完整 Markdown 和路径。";
 /**
  * 停笔多久就把这段原话收下（毫秒）。
  *
@@ -94,13 +95,6 @@ function EmptyState({ title, body, action }: { title: string; body: string; acti
   return <div className="empty-state-block"><span className="empty-index" aria-hidden="true">01</span><div><h3>{title}</h3><p>{body}</p>{action ? <div className="empty-action">{action}</div> : null}</div></div>;
 }
 
-/** AI 权限：从紧到松，默认「可提议」。 */
-const AGENT_PERMISSIONS: { id: AgentPermission; label: string; hint: string }[] = [
-  { id: "ask", label: "仅对话", hint: "不检索知识库" },
-  { id: "read", label: "只读", hint: "可检索与阅读" },
-  { id: "propose", label: "可提议", hint: "改动等你确认" },
-];
-
 export default function Home() {
   const { play } = useInterfaceSound();
   /** 每次载入都从产品介绍开始，用户选择后才进入工作区。 */
@@ -130,6 +124,7 @@ export default function Home() {
   const [pendingProposals, setPendingProposals] = useState<Proposal[]>([]);
   const [conversation,setConversation]=useState<{role:"user"|"assistant";text:string}[]>([]);
   const [agentSessionId, setAgentSessionId] = useState<string>();
+  const agentHistoryRef = useRef<HTMLDivElement>(null);
   const [proposalCards, setProposalCards] = useState<AgentStep[]>([]);
   const [sessionEnding, setSessionEnding] = useState(false);
   const gateLock = useRef(false);
@@ -181,6 +176,11 @@ export default function Home() {
     linkDist: 104,
   });
   const [graphSearch, setGraphSearch] = useState("");
+
+  useEffect(() => {
+    const currentQuestion = agentHistoryRef.current?.querySelector<HTMLElement>('[data-current-agent-question="true"]');
+    currentQuestion?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [conversation]);
 
 
   /** 被固定在落点的节点数量（拖动即固定），由 GraphView 回调上来供右栏显示。 */
@@ -534,7 +534,7 @@ export default function Home() {
     setSelectedRelationIds([]);
     setOrganizingRawId(rawId);
 
-    try { await runAgentOrganize({ question:"请检索现有知识后整理这条原始记录，用 draft_knowledge 提出待确认整理稿；保留 wikilink。",contextType:"raw",contextId:rawId }); }
+    try { await runAgentOrganize({ question: agentPermission === "full" ? "请检索现有知识后整理这条原始记录，用 draft_knowledge 直接收录知识页并分类来源；保留 wikilink。" : "请检索现有知识后整理这条原始记录，用 draft_knowledge 提出待确认整理稿；保留 wikilink。",contextType:"raw",contextId:rawId }); }
     finally { setOrganizingRawId(null); }
   }
 
@@ -549,8 +549,9 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ rawId: draftRawId, draft, origin: "ai" }),
       });
-      const payload = (await response.json()) as { knowledge?: Knowledge; created?: boolean; error?: { message?: string } };
+      const payload = (await response.json()) as { knowledge?: Knowledge; raw?: Raw; created?: boolean; error?: { message?: string } };
       if (!response.ok || !payload.knowledge) throw new Error(payload.error?.message ?? "整理稿暂时无法收录。它仍保留在当前页面，请稍后重试。");
+      if (payload.raw) setRaws(current => current.map(raw => raw.id === payload.raw!.id ? payload.raw! : raw));
 
       for (const suggestion of draft.relatedKnowledge) {
         if (!selectedRelationIds.includes(suggestion.knowledgeId)) continue;
@@ -662,6 +663,12 @@ export default function Home() {
       setAgentSessionId(payload.trace.sessionId);
       setConversation(current=>[...current,{role:"assistant" as const,text:payload.trace!.message}].slice(-40));
       if (payload.trace.draft) { setDraft(payload.trace.draft.value); setDraftRawId(payload.trace.draft.rawId); openDraftTab(payload.trace.draft.rawId); }
+      const savedKnowledge = payload.trace.steps.findLast(step => step.tool === "draft_knowledge" && step.status === "done")?.payload?.knowledge as Knowledge | undefined;
+      if (savedKnowledge) {
+        setKnowledges(current => [savedKnowledge, ...current.filter(note => note.id !== savedKnowledge.id)]);
+        openKnowledgeTab(savedKnowledge);
+      }
+      setGraphRefresh(current => current + 1);
       setRailHidden(false);
     } catch (agentError) {
       setAiMessage(
@@ -684,7 +691,16 @@ export default function Home() {
         const response = await fetch("/api/agent/session", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId: agentSessionId }) });
         if (!response.ok && response.status !== 404) throw new Error("会话暂时无法结束，请稍后重试。");
       }
-      setAgentSessionId(undefined); setConversation([]); setAgentTrace(null); setAiMessage("");
+      setAgentSessionId(undefined);
+      setConversation([]);
+      setAgentTrace(null);
+      setProposalCards([]);
+      setGateStates({});
+      setGateErrors({});
+      setAiQuestion("");
+      setMentionQuery(null);
+      setMentionTarget(null);
+      setAiMessage("新对话已开始。");
     } catch (error) { setAiMessage(error instanceof Error ? error.message : "会话暂时无法结束。"); }
     finally { setSessionEnding(false); }
   }
@@ -814,7 +830,7 @@ export default function Home() {
   function renderDraftReview() {
     if (!draft) return null;
     return <section className="document-session">
-      <div className="review-header"><StatusPill tone="warning">待确认</StatusPill></div>
+      <div className="review-header"><StatusPill tone="warning">待确认</StatusPill><label className="review-source-category">来源分类<select aria-label="来源分类" value={draft.rawCategory ?? "articles"} onChange={event => setDraft({ ...draft, rawCategory: event.target.value as OrganizeDraft["rawCategory"] })}>{RAW_FOLDERS.map(folder => <option key={folder} value={folder}>{folder}</option>)}</select></label></div>
       <MarkdownEditor value={makeMarkdown(draft.title, draft.content, { description: draft.summary, tags: draft.keywords })} candidates={documentCandidates}
         onOpenLink={target => void openDocumentLink(target)} onChange={next => {
           const parsed = readMarkdown(next);
@@ -938,14 +954,16 @@ export default function Home() {
     }))].map(step => [step.proposalId, step])).values()];
     const actionable = cards.filter(step => !gateStates[step.proposalId!] || gateStates[step.proposalId!] === "pending");
     const gateLabels = { pending: "待确认", accepted: "已应用", ignored: "已拒绝", stale: "内容已变化，请重新生成提议", failed: "应用失败，请重新生成提议" };
+    const currentQuestionIndex = conversation.reduce((last, message, index) => message.role === "user" ? index : last, -1);
     return <div className="agent-chat">
       <header className="agent-chat-head"><IconHarp /><span>Agent</span><button className="agent-new-session" disabled={isAgentRunning || sessionEnding} onClick={() => void endAgentSession()}>新会话</button><button onClick={hideRail} aria-label="关闭 Agent">×</button></header>
-      <div className="agent-chat-history" aria-live="polite">
+      <div className="agent-chat-history" aria-live="polite" ref={agentHistoryRef}>
         <AgentStage mode={isAgentRunning ? "work" : "rest"} />
         {isAgentRunning ? <p role="status">正在处理…</p> : null}
         {aiMessage ? <p>{aiMessage}</p> : null}
-        {conversation.map((message,i)=><AgentMessage key={i} role={message.role} text={message.text} onOpenLink={target => void openDocumentLink(target)} />)}
+        {conversation.map((message,i)=><div className="agent-conversation-message" data-current-agent-question={i === currentQuestionIndex ? "true" : undefined} key={i}><AgentMessage role={message.role} text={message.text} candidates={documentCandidates} onOpenLink={target => void openDocumentLink(target)} /></div>)}
         {agentTrace ? <details><summary>运行过程</summary><ol className="agent-step-list">{agentTrace.steps.map(renderAgentStep)}</ol></details> : null}
+        {actionable.length > 0 ? <p className="muted-note agent-proposal-heading">待确认提议</p> : null}
         {actionable.length > 1 ? <button className="text-button" disabled={gateBusy !== null} onClick={() => void acceptAll(actionable)}>确认应用全部 {actionable.length} 项</button> : null}
         {cards.map(step => <article className="agent-proposal" key={step.proposalId}>
           <b>{step.label} · {String(step.payload?.targetTitle ?? step.payload?.noteId ?? step.payload?.title ?? (step.tool === "propose_preferences" ? "Schema · 用户偏好" : "知识库"))}</b><p>{step.detail}</p>
@@ -954,7 +972,7 @@ export default function Home() {
           {gateErrors[step.proposalId!] ? <p role="status">{gateErrors[step.proposalId!]}</p> : null}
           {gateStates[step.proposalId!] && gateStates[step.proposalId!] !== "pending" ? <span>{gateLabels[gateStates[step.proposalId!]]}</span> : <div className="review-actions"><button disabled={gateBusy !== null} onClick={() => void handleGateAccept(step)}>确认应用</button>{pendingProposals.some(p=>p.id===step.proposalId && p.status==="approved") ? null : <button disabled={gateBusy !== null} onClick={() => void handleGateIgnore(step)}>拒绝</button>}</div>}
         </article>)}
-        {currentRaw ? <button className="text-button" disabled={organizingRawId !== null} onClick={() => void handleOrganize(currentRaw.id)}>{organizingRawId ? "整理中…" : "提出整理稿"}</button> : null}
+        {currentRaw && agentPermission !== "read" ? <button className="text-button" disabled={organizingRawId !== null} onClick={() => void handleOrganize(currentRaw.id)}>{organizingRawId ? "整理中…" : agentPermission === "full" ? "整理并收录" : "提出整理稿"}</button> : null}
       </div>
       <form className="agent-composer" onSubmit={e => { e.preventDefault(); void handleAskAssistant(aiQuestion); }}>
         {mentionQuery !== null ? <div className="mention-menu">{mentionCandidates.map(item => <button key={item.id} type="button" onClick={() => pickMention(item)}>{item.label}</button>)}</div> : null}
@@ -1000,7 +1018,7 @@ export default function Home() {
           case "knowledge-index": return renderKnowledgeIndex();
           case "agent": return null;
           case "schema": return <SchemaView />;
-          case "readme": return <MarkdownEditor value={QUICK_GUIDE} readOnly candidates={documentCandidates} onOpenLink={target => void openDocumentLink(target)} />;
+          case "readme": return <ReadmeView />;
           case "canvas": return <CanvasWorkspace onOpen={id => { const n = knowledges.find(n => n.id === id); if (n) openKnowledgeTab(n); else { const r = raws.find(r => r.id === id); if (r) openRawTab(r); } }} />;
         }
     }
@@ -1059,7 +1077,7 @@ export default function Home() {
       }
       sidebar={
         <aside id="workspace-nav" className={`workspace-sidebar${mobileNavOpen ? " is-open" : ""}${sidebarOpen ? "" : " is-collapsed"}`}>
-          <WorkspaceTree raws={raws} notes={knowledges} rawLabel={rawLabel} onRaw={openRawTab} onNote={openKnowledgeTab} onView={navigate}
+          <WorkspaceTree raws={raws} notes={knowledges} archivedNotes={archivedNotes} rawLabel={rawLabel} onRaw={openRawTab} onNote={openKnowledgeTab} onView={navigate}
             onRawMenu={(raw,x,y) => setContextMenu({ type:"raw", raw,x,y })} onNoteMenu={(knowledge,x,y) => setContextMenu({ type:"knowledge-title", knowledge,x,y })} />
         </aside>
       }

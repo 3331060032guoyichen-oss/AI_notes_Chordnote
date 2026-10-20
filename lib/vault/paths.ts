@@ -10,7 +10,6 @@ export function resolveVaultRoot(explicit?: string): string {
 }
 
 const VAULT_DIRS = [
-  "raw/inbox",
   "raw/notes",
   "raw/papers",
   "raw/books",

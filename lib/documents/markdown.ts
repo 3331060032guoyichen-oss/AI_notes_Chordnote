@@ -102,11 +102,22 @@ export function parseWikiReferences(markdown: string): WikiReference[] {
 }
 
 export type LinkCandidate = { id: string; title: string | null; path?: string | null };
-export function resolveReference(target: string, candidates: readonly LinkCandidate[]) {
+export function resolveReference(target: string, candidates: readonly LinkCandidate[], sourcePath?: string) {
   const normalized = target.replace(/\\/g, "/").replace(/\.md$/i, "").normalize("NFC").toLocaleLowerCase();
   const paths = candidates.filter(c => c.path?.replace(/\.md$/i, "").normalize("NFC").toLocaleLowerCase() === normalized);
   if (paths.length === 1) return paths[0];
+  // Generated ids stay stable when a source moves from capture into its category.
+  const basename = normalized.split("/").pop();
+  if (basename && /^(raw|knowledge)_[a-f0-9-]{36}$/i.test(basename)) {
+    const ids = candidates.filter(c => c.id.toLocaleLowerCase() === basename);
+    if (ids.length === 1) return ids[0];
+  }
   const names = candidates.filter(c => c.title?.normalize("NFC").toLocaleLowerCase() === normalized || c.id === target);
+  if (names.length > 1 && sourcePath && !normalized.includes("/")) {
+    const layer = (path: string) => path.replace(/\\/g, "/").split("/")[0].toLowerCase().replace(/^wilki$/, "wiki");
+    const sameLayer = names.filter(c => c.path && layer(c.path) === layer(sourcePath));
+    if (sameLayer.length === 1) return sameLayer[0];
+  }
   return names.length === 1 ? names[0] : null;
 }
 

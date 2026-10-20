@@ -204,8 +204,8 @@ try {
     ["createdAt", "id", "text", "title", "markdown", "path", "version"].every(key => key in (rawA.body?.raw ?? {})),
   );
   check(
-    "新建笔记持久写入未整理目录",
-    rawA.body?.raw?.path === `raw/inbox/${rawAId}.md`,
+    "新建笔记持久写入 Raw 根路径，未整理笔记独立展示",
+    rawA.body?.raw?.path === `raw/${rawAId}.md`,
     `实际 path=${rawA.body?.raw?.path}`,
   );
 
@@ -224,8 +224,8 @@ try {
   check(
     "POST /api/raw/new 每次建立持久的未命名笔记",
     emptyRawA.status === 201 && emptyRawB.status === 201
-      && emptyRawA.body?.raw?.path === `raw/inbox/${emptyRawA.body?.raw?.id}.md`
-      && emptyRawB.body?.raw?.path === `raw/inbox/${emptyRawB.body?.raw?.id}.md`
+      && emptyRawA.body?.raw?.path === `raw/${emptyRawA.body?.raw?.id}.md`
+      && emptyRawB.body?.raw?.path === `raw/${emptyRawB.body?.raw?.id}.md`
       && emptyRawA.body?.raw?.text === "" && emptyRawB.body?.raw?.text === ""
       && unnamedA > 0 && unnamedB > 0 && unnamedA !== unnamedB
       && emptyRawA.body?.raw?.title === nextUntitled(beforeEmpty)

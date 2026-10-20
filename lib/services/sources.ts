@@ -7,7 +7,8 @@ import { and, desc, eq, isNotNull, isNull } from "drizzle-orm";
 
 import type { Raw } from "../../types/raw";
 import { requireUserActor } from "../auth/authorize";
-import { getUserContext } from "../auth/context";
+import { getUserContext, type Actor } from "../auth/context";
+import { isRawCategory, type RawCategory } from "../documents/structure";
 import { getDb, type DbTransaction } from "../db/client";
 import { auditLog, rawNotes } from "../db/schema";
 
@@ -87,6 +88,28 @@ export async function getSource(id: string): Promise<Raw | null> {
   return row ? toSource(row) : null;
 }
 
+/** Change only source metadata; the original Markdown and text remain untouched. */
+export async function classifySourceInTx(tx: DbTransaction, id: string, category: RawCategory, actor?: Actor, expectedVersion?: number) {
+  if (!isRawCategory(category)) throw new Error("INVALID_RAW_CATEGORY");
+  const ctx = getUserContext(actor);
+  const current = (await tx.select().from(rawNotes).where(and(eq(rawNotes.id, id), eq(rawNotes.userId, ctx.userId), isNull(rawNotes.archivedAt))).limit(1).for("update"))[0];
+  if (!current) throw new Error("RAW_NOT_FOUND");
+  if (expectedVersion !== undefined && current.version !== expectedVersion) throw new Error("VERSION_CONFLICT");
+  const filename = current.path?.replace(/\\/g, "/").split("/").pop() ?? `${id}.md`;
+  const path = await availableDocumentPath(tx, `raw/${category}/${filename}`, id);
+  if (path === current.path) return toSource(current);
+  const [updated] = await tx.update(rawNotes).set({ path, version: current.version + 1, updatedAt: new Date() })
+    .where(and(eq(rawNotes.id, id), eq(rawNotes.userId, ctx.userId))).returning();
+  await tx.insert(auditLog).values({ id: `audit_${randomUUID()}`, userId: ctx.userId, actorType: ctx.actor.type, actorId: ctx.actor.id,
+    operation: "raw.classify", targetType: "raw", targetId: id, result: "ok", detail: { beforePath: current.path, afterPath: path, version: updated.version } });
+  return toSource(updated);
+}
+
+export async function classifySource(id: string, category: RawCategory, actor?: Actor, expectedVersion?: number) {
+  const { db } = await getDb();
+  return db.transaction(tx => classifySourceInTx(tx, id, category, actor, expectedVersion));
+}
+
 /**
  * 新建原始记录。
  * `title` 可选：原始记录允许先只有正文，笔记名后补（也允许一直不填）。
@@ -113,10 +136,9 @@ export async function createSourceInTx(
 ): Promise<Raw> {
   const { userId } = getUserContext();
   const id = `raw_${randomUUID()}`;
-  // Every newly captured note gets a real persisted inbox path.  The sidebar can
-  // therefore render "未整理笔记" from server data instead of temporary UI state.
+  // Newly captured notes live at the Raw root until organized into a category.
   // Explicit import/document paths remain untouched for compatibility.
-  const path = await availableDocumentPath(tx, document?.path ?? `raw/inbox/${id}.md`, id);
+  const path = await availableDocumentPath(tx, document?.path ?? `raw/${id}.md`, id);
   const normalizedTitle = typeof title === "string" && title.trim() ? title.trim() : null;
   const rows = await tx
     .insert(rawNotes)

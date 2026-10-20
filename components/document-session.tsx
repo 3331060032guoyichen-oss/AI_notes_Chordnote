@@ -70,7 +70,7 @@ export function DocumentSession({ document, kind, candidates, onOpenLink, onSave
         value={key === "tags" ? properties!.tags.join(", ") : properties![key]}
         onChange={event => change(patchProperties(local.current, { [key]: key === "tags" ? event.target.value.split(/[,，]/).map(s => s.trim()).filter(Boolean) : event.target.value }))} /></label>)}</div>
     </details> : null}
-    <MarkdownEditor value={value} onChange={change} candidates={candidates} onOpenLink={onOpenLink} />
+    <MarkdownEditor value={value} onChange={change} candidates={candidates} sourcePath={document.path} onOpenLink={onOpenLink} />
     <div className="document-status" role="status">{status}</div>
   </section>;
 }

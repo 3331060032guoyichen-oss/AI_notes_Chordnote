@@ -6,9 +6,11 @@ import { availableDocumentPath } from "./document-path";
 import { and,desc,eq,isNotNull,isNull } from "drizzle-orm";
 
 import type { Knowledge } from "../../types/knowledge";
-import { getUserContext } from "../auth/context";
+import { getUserContext, type Actor } from "../auth/context";
+import { rawCategory, WIKI_FOLDERS, type RawCategory } from "../documents/structure";
+import { classifySourceInTx } from "./sources";
 import { getDb,type DbTransaction } from "../db/client";
-import { auditLog,noteRevisions,notes } from "../db/schema";
+import { auditLog,noteRevisions,notes,rawNotes } from "../db/schema";
 
 // 知识页（notes）服务层。
 // 读路径默认只返回"未归档且未软删除"的行；按 id / rawId 单条读取不过滤（与旧存储行为一致）。
@@ -78,9 +80,9 @@ export async function listArchivedNotes(): Promise<Knowledge[]> {
 export type ArchiveNoteResult = { status: "ok"; knowledge: Knowledge } | { status: "not_found" };
 
 /** 归档 / 恢复。`archived: false` 即恢复。 */
-export async function setNoteArchived(id: string, archived: boolean): Promise<ArchiveNoteResult> {
+export async function setNoteArchived(id: string, archived: boolean, actorOverride?: Actor, expectedVersion?: number): Promise<ArchiveNoteResult> {
   const { db } = await getDb();
-  const { userId, actor } = getUserContext();
+  const { userId, actor } = getUserContext(actorOverride);
 
   return db.transaction(async (tx) => {
     const current = (
@@ -93,6 +95,7 @@ export async function setNoteArchived(id: string, archived: boolean): Promise<Ar
     )[0];
 
     if (!current) return { status: "not_found" as const };
+    if (expectedVersion !== undefined && current.version !== expectedVersion) throw new Error("VERSION_CONFLICT");
 
     const updated = (
       await tx
@@ -162,6 +165,7 @@ export async function getActiveNoteByRawId(rawId: string): Promise<Knowledge | n
 }
 
 export type PromoteInput = {
+  rawCategory?: RawCategory;
   rawId: string;
   title: string;
   summary: string;
@@ -180,11 +184,15 @@ export type PromoteInput = {
  */
 export async function promoteFromSource(
   input: PromoteInput,
+  actorOverride?: Actor,
 ): Promise<{ knowledge: Knowledge; created: boolean }> {
   const { db } = await getDb();
-  const { userId } = getUserContext();
+  const { userId, actor } = getUserContext(actorOverride);
 
   return db.transaction(async (tx) => {
+    // Lock the source first so concurrent confirmations cannot duplicate a page.
+    const source = (await tx.select().from(rawNotes).where(and(eq(rawNotes.id, input.rawId), eq(rawNotes.userId, userId), isNull(rawNotes.archivedAt))).limit(1).for("update"))[0];
+    if (!source) throw new Error("RAW_NOT_FOUND");
     const existing = await tx
       .select()
       .from(notes)
@@ -192,6 +200,7 @@ export async function promoteFromSource(
       .limit(1);
 
     if (existing[0]) {
+      await classifySourceInTx(tx, input.rawId, input.rawCategory ?? rawCategory(source.path), actor);
       return { knowledge: toKnowledge(existing[0]), created: false };
     }
 
@@ -232,9 +241,13 @@ export async function promoteFromSource(
       keyPoints: row.keyPoints,
       concepts: row.concepts,
       keywords: row.keywords,
-      authorType: "user",
-      authorId: userId,
+      authorType: actor.type,
+      authorId: actor.id,
     });
+
+    await classifySourceInTx(tx, input.rawId, input.rawCategory ?? rawCategory(source.path), actor);
+    await tx.insert(auditLog).values({ id: `audit_${randomUUID()}`, userId, actorType: actor.type, actorId: actor.id,
+      operation: "note.create", targetType: "note", targetId: row.id, result: "ok", detail: { rawId: input.rawId, permission: actor.type === "agent" ? "full" : "propose" } });
 
     return { knowledge: toKnowledge(row), created: true };
   });
@@ -244,6 +257,19 @@ export type UpdateNoteResult =
   | { status: "ok"; knowledge: Knowledge }
   | { status: "not_found" }
   | { status: "conflict"; knowledge: Knowledge };
+
+export async function classifyNote(id: string, category: string, expectedVersion: number, actorOverride?: Actor) {
+  if (!WIKI_FOLDERS.includes(category)) throw new Error("INVALID_WIKI_CATEGORY");
+  const { db } = await getDb();
+  const { userId, actor } = getUserContext(actorOverride);
+  return db.transaction(async tx => {
+    const result = await updateNoteInTx(tx, id, { path: `wilki/${category}/${id}.md` }, expectedVersion, actor);
+    if (result.status !== "ok") throw new Error(result.status === "conflict" ? "VERSION_CONFLICT" : "NOTE_NOT_FOUND");
+    await tx.insert(auditLog).values({ id: `audit_${randomUUID()}`, userId, actorType: actor.type, actorId: actor.id,
+      operation: "note.classify", targetType: "note", targetId: id, result: "ok", detail: { path: result.knowledge.path, version: result.knowledge.version } });
+    return result.knowledge;
+  });
+}
 
 export type UpdateNotePatch = Partial<
   Pick<Knowledge, "title" | "summary" | "content" | "keyPoints" | "concepts" | "keywords" | "markdown" | "path">
@@ -276,8 +302,9 @@ export async function updateNoteInTx(
   id: string,
   patch: UpdateNotePatch,
   expectedVersion?: number,
+  actorOverride?: Actor,
 ): Promise<UpdateNoteResult> {
-  const { userId } = getUserContext();
+  const { userId, actor } = getUserContext(actorOverride);
 
   const current = (
     await tx
@@ -321,8 +348,8 @@ export async function updateNoteInTx(
     keyPoints: updated.keyPoints,
     concepts: updated.concepts,
     keywords: updated.keywords,
-    authorType: "user",
-    authorId: userId,
+    authorType: actor.type,
+    authorId: actor.id,
   });
 
   return { status: "ok" as const, knowledge: toKnowledge(updated) };

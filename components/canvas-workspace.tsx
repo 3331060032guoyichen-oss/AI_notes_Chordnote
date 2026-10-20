@@ -46,7 +46,6 @@ export function CanvasWorkspace({ onOpen }: { onOpen: (id: string) => void }) {
   const [selection, setSelection] = useState<Selection>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [linkDraft, setLinkDraft] = useState<LinkDraft>(null);
-  const [showArchive, setShowArchive] = useState(false);
   const boardRef = useRef<HTMLDivElement | null>(null);
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const version = useRef(0), revision = useRef(0), saved = useRef(0), busy = useRef(false), latest = useRef(doc);
@@ -148,11 +147,17 @@ export function CanvasWorkspace({ onOpen }: { onOpen: (id: string) => void }) {
     setSelection({ kind, id });
   }
 
-  function archiveSelected() {
+  function deleteSelected() {
     if (!selection) return;
-    edit(current => selection.kind === "card"
-      ? { ...current, cards: current.cards.map(card => card.id === selection.id ? { ...card, archived: true } : card) }
-      : { ...current, images: (current.images ?? []).map(image => image.id === selection.id ? { ...image, archived: true } : image) });
+    edit(current => ({
+      ...current,
+      cards: selection.kind === "card" ? current.cards.filter(card => card.id !== selection.id) : current.cards,
+      images: selection.kind === "image" ? (current.images ?? []).filter(image => image.id !== selection.id) : current.images,
+      edges: current.edges.filter(edge => edge.from !== selection.id && edge.to !== selection.id),
+    }));
+    setEditingId(null);
+    setLinkDraft(null);
+    drag.current = null;
     setSelection(null);
   }
 
@@ -179,7 +184,6 @@ export function CanvasWorkspace({ onOpen }: { onOpen: (id: string) => void }) {
     setLinkDraft(null);
   }
 
-  const archivedCards = doc.cards.filter(card => card.archived), archivedImages = (doc.images ?? []).filter(image => image.archived);
   return <section className="canvas-workspace" aria-label="自由白板">
     <div ref={viewportRef} className="canvas-viewport" onDragOver={event => { if (event.dataTransfer.types.includes("Files")) event.preventDefault(); }} onDrop={event => { event.preventDefault(); void addImages(Array.from(event.dataTransfer.files), pointFromClient(event.clientX, event.clientY)); }} onPaste={event => { const files = Array.from(event.clipboardData.files); if (files.some(file => file.type.startsWith("image/"))) { event.preventDefault(); void addImages(files, visibleCenter()); } }}>
       <div ref={boardRef} className="canvas-board" tabIndex={0}
@@ -212,7 +216,7 @@ export function CanvasWorkspace({ onOpen }: { onOpen: (id: string) => void }) {
         onPointerUp={() => { drag.current = null; drawing.current = null; }} onPointerCancel={() => { drag.current = null; drawing.current = null; setLinkDraft(null); }}
         onKeyDown={event => {
           if ((event.target as HTMLElement).matches("textarea, input")) return;
-          if ((event.key === "Delete" || event.key === "Backspace") && selection) { event.preventDefault(); archiveSelected(); }
+          if ((event.key === "Delete" || event.key === "Backspace") && selection) { event.preventDefault(); deleteSelected(); }
           else if (event.key === "Escape") setSelection(null);
           else if (event.key.toLowerCase() === "n") { event.preventDefault(); addSticky(visibleCenter()); }
         }}>
@@ -224,14 +228,14 @@ export function CanvasWorkspace({ onOpen }: { onOpen: (id: string) => void }) {
         {doc.cards.filter(card => !card.archived).map(card => {
           const selected = selection?.kind === "card" && selection.id === card.id;
           return <article className={`canvas-card${selected ? " is-selected" : ""}${card.noteId ? " is-note" : ""}`} data-canvas-node-id={card.id} key={card.id} style={{ left: card.x, top: card.y }} onPointerDown={event => startMove(event, "card", card.id, card.x, card.y)} onClick={() => setSelection({ kind: "card", id: card.id })}>
-            {selected ? <><div className="canvas-item-actions"><button type="button" onClick={archiveSelected}>归档</button></div><button className="canvas-connect-handle" type="button" aria-label="拖到另一个项目建立连线" title="拖拽连线" onPointerDown={event => beginLink(event, card.id)} onPointerMove={moveLink} onPointerUp={finishLink} /></> : null}
+            {selected ? <><div className="canvas-item-actions"><button type="button" onClick={event => { event.stopPropagation(); deleteSelected(); }}>删除</button></div><button className="canvas-connect-handle" type="button" aria-label="拖到另一个项目建立连线" title="拖拽连线" onPointerDown={event => beginLink(event, card.id)} onPointerMove={moveLink} onPointerUp={finishLink} /></> : null}
             {card.noteId ? <button className="canvas-note-link" type="button" onDoubleClick={() => onOpen(card.noteId!)}>{card.text || "未命名笔记"}</button> : <textarea aria-label="白板便签" autoFocus={editingId === card.id} value={card.text} placeholder="写点什么…" onFocus={() => { setSelection({ kind: "card", id: card.id }); setEditingId(card.id); }} onBlur={() => setEditingId(current => current === card.id ? null : current)} onChange={event => edit(current => ({ ...current, cards: current.cards.map(item => item.id === card.id ? { ...item, text: event.target.value } : item) }))} />}
           </article>;
         })}
         {(doc.images ?? []).filter(image => !image.archived).map(image => {
           const selected = selection?.kind === "image" && selection.id === image.id;
           return <figure className={`canvas-image${selected ? " is-selected" : ""}`} data-canvas-node-id={image.id} key={image.id} style={{ left: image.x, top: image.y, width: image.width, height: image.height }} onPointerDown={event => startMove(event, "image", image.id, image.x, image.y)} onClick={() => setSelection({ kind: "image", id: image.id })}>
-            {selected ? <><div className="canvas-item-actions"><button type="button" onClick={archiveSelected}>归档</button></div><button className="canvas-connect-handle" type="button" aria-label="拖到另一个项目建立连线" title="拖拽连线" onPointerDown={event => beginLink(event, image.id)} onPointerMove={moveLink} onPointerUp={finishLink} /></> : null}
+            {selected ? <><div className="canvas-item-actions"><button type="button" onClick={event => { event.stopPropagation(); deleteSelected(); }}>删除</button></div><button className="canvas-connect-handle" type="button" aria-label="拖到另一个项目建立连线" title="拖拽连线" onPointerDown={event => beginLink(event, image.id)} onPointerMove={moveLink} onPointerUp={finishLink} /></> : null}
             {/* eslint-disable-next-line @next/next/no-img-element -- local pasted image data has no remote optimizer URL. */}
             <img src={image.src} alt={image.name || "白板图片"} draggable={false} />
           </figure>;
@@ -239,8 +243,6 @@ export function CanvasWorkspace({ onOpen }: { onOpen: (id: string) => void }) {
         {!ready ? <p className="canvas-loading">正在展开白板…</p> : null}
         <p className="canvas-hint">双击写字 · N 新建便签 · Shift 拖动涂画 · 拖入或粘贴图片</p>
         {status ? <p className="canvas-status" role="status">{status}</p> : null}
-        {archivedCards.length + archivedImages.length > 0 ? <button className="canvas-archive-toggle" type="button" onClick={() => setShowArchive(current => !current)}>已归档 {archivedCards.length + archivedImages.length}</button> : null}
-        {showArchive ? <aside className="canvas-archive-panel"><header><strong>已归档</strong><button type="button" onClick={() => setShowArchive(false)} aria-label="关闭">×</button></header>{archivedCards.map(card => <button key={card.id} type="button" onClick={() => edit(current => ({ ...current, cards: current.cards.map(item => item.id === card.id ? { ...item, archived: false } : item) }))}>恢复 {card.text || "空白便签"}</button>)}{archivedImages.map(image => <button key={image.id} type="button" onClick={() => edit(current => ({ ...current, images: (current.images ?? []).map(item => item.id === image.id ? { ...item, archived: false } : item) }))}>恢复 {image.name || "图片"}</button>)}</aside> : null}
       </div>
     </div>
   </section>;

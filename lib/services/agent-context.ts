@@ -3,17 +3,19 @@ import { and, desc, eq, inArray } from "drizzle-orm";
 import { getDb } from "../db/client";
 import { auditLog, proposals } from "../db/schema";
 import { getUserContext } from "../auth/context";
-import { listNotes } from "./notes";
+import { listArchivedNotes, listNotes } from "./notes";
 import { listSources } from "./sources";
 import { listProposals } from "./proposals";
 import { clipContext, retrieveContext } from "../agent/context";
 
 export async function agentContext(question: string) {
   const notes = await listNotes();
+  const archivedNotes = await listArchivedNotes();
+  const organizedRawIds = new Set([...notes, ...archivedNotes].map(note => note.rawId));
   const raws = await listSources();
   const documents = [
-    ...notes.filter(n => !n.archivedAt).map(n => ({ id: n.id, path: n.path ?? `wilki/${n.id}.md`, title: n.title, content: n.markdown ?? n.content })),
-    ...raws.map(r => ({ id: r.id, path: r.path ?? `raw/${r.id}.md`, title: r.title ?? "", content: r.markdown ?? r.text })),
+    ...notes.filter(n => !n.archivedAt).map(n => ({ id: n.id, path: n.path ?? `wilki/${n.id}.md`, title: n.title, content: n.markdown ?? n.content, kind: "knowledge" as const })),
+    ...raws.map(r => ({ id: r.id, path: r.path ?? `raw/${r.id}.md`, title: r.title ?? "", content: r.markdown ?? r.text, kind: "raw" as const, organized: organizedRawIds.has(r.id) })),
   ];
   const context = retrieveContext(question, documents);
   const { db } = await getDb();

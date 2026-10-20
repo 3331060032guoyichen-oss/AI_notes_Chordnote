@@ -4,6 +4,7 @@ export type RelatedKnowledgeSuggestion = {
 };
 
 export type OrganizeDraft = {
+  rawCategory?: import("../lib/documents/structure").RawCategory;
   title: string;
   summary: string;
   content: string;
