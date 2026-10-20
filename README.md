@@ -141,8 +141,8 @@ Raw 原始记录 → 知音 Draft → 用户确认 → Knowledge 知识页 → R
 ## 快速开始
 
 ```bash
-git clone https://github.com/3331060032guoyichen-oss/AI_notes_Chordnote.git
-cd AI_notes_Chordnote
+git clone https://github.com/3331060032guoyichen-oss/awesome_notes_agent_Chordnote.git
+cd awesome_notes_agent_Chordnote.git
 pnpm install
 pnpm dev
 ```
