@@ -6579,6 +6579,27 @@ button.wiki-link { display:inline; border:0; background:none; padding:0; font:in
 .agent-chat-head .agent-new-session:disabled { opacity:.5; cursor:default; }
 .agent-chat-head .agent-new-session + button { margin-left:0; }
 .agent-chat-history { flex:1; min-height:0; overflow:auto; padding:18px; font-size:14px; line-height:1.7; }
+.agent-message { margin:12px 0; padding:12px 14px; border:1px solid var(--line); border-radius:var(--radius); background:var(--paper); overflow-wrap:anywhere; }
+.agent-message-user { margin-left:22px; background:var(--surface-raised); }
+.agent-message > :first-child { margin-top:0; }
+.agent-message > :last-child { margin-bottom:0; }
+.agent-message p { margin:8px 0; }
+.agent-message h2, .agent-message h3, .agent-message h4 { margin:16px 0 7px; line-height:1.35; color:var(--ink); }
+.agent-message h2 { font-size:16px; }
+.agent-message h3 { font-size:15px; }
+.agent-message h4 { font-size:14px; }
+.agent-message ul, .agent-message ol { margin:8px 0; padding-left:21px; }
+.agent-message li { margin:4px 0; }
+.agent-message blockquote { margin:10px 0; padding:2px 0 2px 12px; border-left:2px solid var(--accent); color:var(--muted); }
+.agent-message code { font-size:.88em; padding:1px 3px; background:var(--surface-raised); border-radius:3px; }
+.agent-message-source, .agent-message-properties { margin:10px 0; border:1px solid var(--line); border-radius:var(--radius); padding:8px 10px; }
+.agent-message-source summary, .agent-message-properties summary { cursor:var(--cursor-pointer); font-weight:600; color:var(--accent-strong); }
+.agent-message pre { max-height:280px; overflow:auto; white-space:pre-wrap; }
+.agent-message-table-wrap { width:100%; overflow-x:auto; margin:10px 0; }
+.agent-message table { width:100%; border-collapse:collapse; font-size:12px; line-height:1.5; }
+.agent-message th, .agent-message td { border-bottom:1px solid var(--line); padding:6px; text-align:left; vertical-align:top; }
+.agent-message th { color:var(--muted); font-weight:600; }
+.agent-wikilink { padding:0; border:0; background:none; color:var(--accent-strong); text-decoration:underline; cursor:var(--cursor-pointer); font:inherit; }
 .agent-answer { white-space:pre-wrap; overflow-wrap:anywhere; }
 .agent-composer { position:relative; flex-shrink:0; padding:12px; border-top:1px solid var(--line); }
 .agent-composer textarea { min-height:76px; width:100%; resize:vertical; border:1px solid var(--line); border-radius:8px; background:transparent; color:var(--ink); padding:10px; font:inherit; }

@@ -3,6 +3,7 @@
 import { useEffect,useMemo,useRef,useState } from "react";
 
 import { AgentModelSelect } from "../components/agent-model-select";
+import { AgentMessage } from "../components/agent/agent-message";
 import { AgentStage } from "../components/agent/agent-stage";
 import { CanvasWorkspace } from "../components/canvas-workspace";
 import { DocumentSearch } from "../components/document-search";
@@ -943,7 +944,7 @@ export default function Home() {
         <AgentStage mode={isAgentRunning ? "work" : "rest"} />
         {isAgentRunning ? <p role="status">正在处理…</p> : null}
         {aiMessage ? <p>{aiMessage}</p> : null}
-        {conversation.map((message,i)=><p key={i} className={`agent-message agent-message-${message.role}`}>{message.text}</p>)}
+        {conversation.map((message,i)=><AgentMessage key={i} role={message.role} text={message.text} onOpenLink={target => void openDocumentLink(target)} />)}
         {agentTrace ? <details><summary>运行过程</summary><ol className="agent-step-list">{agentTrace.steps.map(renderAgentStep)}</ol></details> : null}
         {actionable.length > 1 ? <button className="text-button" disabled={gateBusy !== null} onClick={() => void acceptAll(actionable)}>确认应用全部 {actionable.length} 项</button> : null}
         {cards.map(step => <article className="agent-proposal" key={step.proposalId}>
