@@ -57,6 +57,13 @@
       "when": 1792323402892,
       "tag": "0007_canvas_workspace",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1792415302320,
+      "tag": "0008_schema_preferences",
+      "breakpoints": true
     }
   ]
 }

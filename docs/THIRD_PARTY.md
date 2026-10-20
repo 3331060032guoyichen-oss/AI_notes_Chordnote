@@ -24,6 +24,7 @@
 | @codemirror/* | https://codemirror.net | ^6.x | 见 lockfile | MIT | 单文档 Markdown 编辑器、补全和 Live Preview | 不使用 UI 组件库 |
 | @lezer/common、@lezer/markdown | https://lezer.codemirror.net | ^1.x | 见 lockfile | MIT | Markdown / wikilink 语法树 | 前后端共用解析语义 |
 | yaml | https://eemeli.org/yaml/ | ^2.9.1 | 2.9.1 | ISC | 保留 frontmatter 的未知字段和注释 | |
+| chokidar | https://github.com/paulmillr/chokidar | 5.0.0 | 5.0.0 | MIT | Vault 文件变化监听（`lib/vault/watcher.ts`） | 仅服务端；4.x 起 `ignored` 不支持 glob 字符串，本仓库用函数匹配 |
 
 ### 关于 d3-force
 

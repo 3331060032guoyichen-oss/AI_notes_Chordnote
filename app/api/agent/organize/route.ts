@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 
 import { ProviderError } from "../../../../lib/ai/provider";
+import { SessionError } from "../../../../lib/agent/sessions";
+import { estimateTokens, MESSAGE_BUDGET } from "../../../../lib/agent/context";
 import {
   AgentContextError,
   runOrganizeAgent,
@@ -19,13 +21,15 @@ export const runtime = "nodejs";
  */
 
 const CONTEXT_TYPES: AgentRunContextType[] = ["raw", "knowledge", "draft", "none"];
+const PERMISSIONS = ["ask", "read", "propose"] as const;
 
 type RequestBody = {
-  history?: unknown;
+  sessionId?: unknown;
   question?: unknown;
   contextType?: unknown;
   contextId?: unknown;
   draftContext?: unknown;
+  permission?: unknown;
 };
 
 function errorResponse(message: string, status: number, code: string) {
@@ -34,6 +38,10 @@ function errorResponse(message: string, status: number, code: string) {
 
 function isContextType(value: unknown): value is AgentRunContextType {
   return typeof value === "string" && CONTEXT_TYPES.includes(value as AgentRunContextType);
+}
+
+function isPermission(value: unknown): value is (typeof PERMISSIONS)[number] {
+  return typeof value === "string" && PERMISSIONS.includes(value as (typeof PERMISSIONS)[number]);
 }
 
 export async function POST(request: Request) {
@@ -59,19 +67,26 @@ export async function POST(request: Request) {
     return errorResponse("无法识别引用材料的类型，请重新选择。", 400, "INVALID_CONTEXT_TYPE");
   }
 
-  if (body.question.length > 20_000 || (body.history !== undefined && (!Array.isArray(body.history) || body.history.length > 12 || body.history.some(m=>!m || !["user","assistant"].includes(m.role) || typeof m.text !== "string" || m.text.length > 20_000)))) return errorResponse("对话内容过长或格式无效。",400,"INVALID_HISTORY");
+  if (body.permission !== undefined && !isPermission(body.permission)) {
+    return errorResponse("无法识别 AI 权限，请重新选择。", 400, "INVALID_PERMISSION");
+  }
+
+  if (estimateTokens(body.question) > MESSAGE_BUDGET) return errorResponse("消息过长，请分段发送。", 400, "MESSAGE_TOO_LONG");
+  if (body.sessionId !== undefined && (typeof body.sessionId !== "string" || !/^[a-f0-9-]{36}$/.test(body.sessionId))) return errorResponse("会话编号无效。", 400, "INVALID_SESSION");
   try {
     const trace = await runOrganizeAgent({
       question: body.question.trim(),
-      history: body.history as {role:"user"|"assistant";text:string}[] | undefined,
+      sessionId: body.sessionId as string | undefined,
       signal: request.signal,
       contextType: body.contextType,
       contextId: typeof body.contextId === "string" ? body.contextId : null,
       draftContext: typeof body.draftContext === "string" ? body.draftContext : null,
+      permission: isPermission(body.permission) ? body.permission : undefined,
     });
 
     return NextResponse.json({ trace });
   } catch (error) {
+    if (error instanceof SessionError) return errorResponse(error.message, error.code === "SESSION_BUSY" ? 409 : 404, error.code);
     // 材料读不到：这是用户能自己修的问题，不要伪装成服务端故障
     if (error instanceof AgentContextError) {
       const status = error.code === "CONTEXT_NOT_FOUND" ? 404 : 400;
@@ -105,7 +120,7 @@ export async function POST(request: Request) {
       }
 
       return errorResponse(
-        "agent 暂时无法回应。你的内容仍然安全，请稍后重新发起。",
+        error.message === "本轮上下文已达到长度上限，请缩小引用范围或开始新会话。" ? error.message : "agent 暂时无法回应。你的内容仍然安全，请稍后重新发起。",
         502,
         "DEEPSEEK_UPSTREAM_ERROR",
       );

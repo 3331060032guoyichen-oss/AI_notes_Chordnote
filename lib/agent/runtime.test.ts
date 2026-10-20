@@ -30,6 +30,13 @@ test("real dsh subprocess performs multiple model/tool turns with a restricted r
     assert.equal(result.message, "runtime verified");
     assert.equal(result.runtime.model, "test-model");
     assert.ok(requests >= 2);
+    assert.ok(result.events.some(event => event.type === "tool/result"));
+    const continued = await runHarness({ settings: { provider: "ollama", model: "test-model", baseUrl: `http://127.0.0.1:${(mock.address() as {port:number}).port}/v1`, timeoutMs: 45_000, apiKey: null },
+      schema: "Use runtime_info then answer.", input: "Continue the previous conversation.", history: result.events,
+      tools: [{ type: "function", function: { name: "runtime_info", description: "Current runtime", parameters: { type: "object", properties: {}, required: [] } } }],
+      onDiagnostic: console.error, execute: async () => { throw new Error("Historical tools must not execute again"); } });
+    assert.equal(continued.message, "runtime verified");
+    assert.equal(continued.events.filter(event => event.type === "user/message").length, 1, JSON.stringify(continued.events.filter(event => event.type === "user/message").map(e => e.data)));
   } finally { mock.closeAllConnections(); await new Promise<void>(ok => mock.close(() => ok())); }
 });
 

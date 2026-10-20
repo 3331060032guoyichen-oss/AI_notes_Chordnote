@@ -1,0 +1,1 @@
+{"desktop-capability":{"identifier":"desktop-capability","description":"Only the main Chordnote window receives the default core permissions.","local":true,"windows":["main"],"permissions":["core:default"]}}

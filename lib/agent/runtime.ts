@@ -3,12 +3,13 @@ import { randomBytes } from "node:crypto";
 import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve, join } from "node:path";
-import { createRequire } from "node:module";
 import { execFile } from "node:child_process";
 import { stringify } from "yaml";
 import { DeepSeekHarness } from "@deepseek-ai/dsh-sdk-client";
 import type { ModelSettings } from "../ai/config";
 import { ProviderError, type ChatToolDefinition } from "../ai/provider";
+import type { SessionEvent } from "@deepseek-ai/dsh-session";
+import { contextBudget, estimateTokens, MESSAGE_BUDGET } from "./context";
 
 export function runtimeInformation(settings: ModelSettings, tools: ChatToolDefinition[]) {
   return { engine: "dsh", version: "0.2.1-rc.2", provider: settings.agentBackend === "acp" ? `acp:${settings.acp?.label ?? "external"}` : settings.provider,
@@ -21,6 +22,7 @@ export async function runHarness(options: {
   settings: ModelSettings; schema: string; tools: ChatToolDefinition[]; input: string;
   execute: (name: string, args: Record<string, unknown>) => Promise<string>;
   signal?: AbortSignal;
+  history?: SessionEvent[];
   onDiagnostic?: (message: string) => void;
 }) {
   const { settings, tools } = options;
@@ -37,6 +39,7 @@ export async function runHarness(options: {
   const allowed = new Set(tools.map(t => t.function.name));
   let ready = false;
   let calls = 0;
+  let budgetExceeded = false;
   const runtime = runtimeInformation(settings, tools);
   const server = createServer(async (req, res) => {
     res.setHeader("content-type", "application/json");
@@ -44,9 +47,10 @@ export async function runHarness(options: {
     if (!admin && req.headers.authorization !== `Bearer ${token}`) { res.writeHead(403).end(); return; }
     try {
       if (req.url === "/config" && req.method === "GET") {
-        res.end(JSON.stringify({ schema: options.schema, runtime, tools, acp:{...settings.acp,mcpScript:resolve("lib/agent/acp-mcp.mjs")} })); return;
+        res.end(JSON.stringify({ schema: options.schema, history: options.history ?? [], contextBudget: contextBudget(), runtime, tools, acp:{...settings.acp,mcpScript:resolve("lib/agent/acp-mcp.mjs")} })); return;
       }
       if (req.url === "/ready" && req.method === "POST") { ready = true; res.end("{}"); return; }
+      if (req.url === "/budget-exceeded" && req.method === "POST") { budgetExceeded = true; res.end("{}"); return; }
       if (admin && ["/child","/runtime"].includes(req.url ?? "") && req.method === "POST") {
         let body=""; for await (const chunk of req) { body+=chunk; if(body.length>8192) throw new Error("Too large"); }
         const data=JSON.parse(body);
@@ -63,6 +67,9 @@ export async function runHarness(options: {
         if (Buffer.byteLength(body) > 1_000_000) throw new Error("Tool request too large");
       }
       const { name, args } = JSON.parse(body);
+      if (estimateTokens(JSON.stringify(args)) > MESSAGE_BUDGET) {
+        res.end(JSON.stringify({ result: "工具参数超过单条消息上限，请缩短内容或拆分任务。" })); return;
+      }
       if (!allowed.has(name) || !args || typeof args !== "object" || Array.isArray(args)) {
         res.writeHead(403).end(); return;
       }
@@ -77,7 +84,11 @@ export async function runHarness(options: {
   await mkdir(workspace);
   await new Promise<void>((ok, fail) => { server.once("error", fail); server.listen(0, "127.0.0.1", ok); });
   const port = (server.address() as { port: number }).port;
-  const requireModule = createRequire(resolve("package.json"));
+  // dsh loads this adapter by file path from its generated patch. Do not use
+  // `createRequire()` here: Next's server bundler replaces that call with
+  // `undefined` in an App Route, so Agent runs fail before reaching the model.
+  // The package version is pinned and this is its public entry point.
+  const modelAdapterPath = resolve("node_modules/@deepseek-ai/dsh-llm-pi-ai/lib/index.js");
   const disabled = ["llm-deepseek", "deepseek-llm-api-extensions", "session-log-deepseek", "plugin-package-inventory-deepseek",
     "sandbox", "attachment-local", "tool-fs", "tool-working-directory", "sandbox-policy", "subprocess", "pty",
     "terminal-bash", "terminal-pwsh", "persistent-bash", "persistent-pwsh", "image-offload", "jobs"];
@@ -86,7 +97,7 @@ export async function runHarness(options: {
     { id: "sdk-jsonrpc-server", inject: ["sdkAppStartup", "loader", "chordnotePolicy"] },
     { insert: [
       { id: "chordnote-policy", name: resolve("lib/agent/dsh-policy.mjs") },
-      ...(settings.agentBackend === "acp" ? [{id:"chordnote-acp",name:resolve("lib/agent/dsh-acp.mjs")}] : [{ id: "chordnote-models", name: requireModule.resolve("@deepseek-ai/dsh-llm-pi-ai"), config: { providers: {
+      ...(settings.agentBackend === "acp" ? [{id:"chordnote-acp",name:resolve("lib/agent/dsh-acp.mjs")}] : [{ id: "chordnote-models", name: modelAdapterPath, config: { providers: {
         chordnote: { api: "openai-completions", baseURL: settings.baseUrl,
           apiKeyEnv: "CHORDNOTE_RUNTIME_KEY", models: [{ id: settings.model }] },
       } } }]),
@@ -102,14 +113,18 @@ export async function runHarness(options: {
     CHORDNOTE_RUNTIME_KEY: settings.apiKey ?? "ollama" });
   harness = new DeepSeekHarness({ profile: "sdk-minimal", patches: [patchPath], dshHome: join(root, "home"),
     processCwd: workspace, cwd: workspace, provider: "chordnote", model: settings.model, env,
-    initializeTimeoutMs: 30_000, requestTimeoutMs: settings.timeoutMs });
+    initializeTimeoutMs: 60_000, requestTimeoutMs: settings.timeoutMs });
   options.signal?.addEventListener("abort", abort, { once: true });
     const result = await harness.run(options.input);
     if (result.events.some(event => event.type === "turn/end" && (event.data as {reason?:{kind?:string}}).reason?.kind === "error")) throw new Error("Model turn failed");
     if (!ready) throw new Error("Policy unavailable");
     options.signal?.throwIfAborted();
-    return { message: result.finalResponse, runtime };
+    const start = result.events.findLastIndex(event => event.type === "user/message" && event.data.source.kind === "user");
+    const events = result.events.slice(Math.max(0, start)).filter(event =>
+      event.type === "user/message" ? event.data.source.kind === "user" : ["assistant/message", "tool/call", "tool/result"].includes(event.type));
+    return { message: result.finalResponse, runtime, events };
   } catch (error) {
+    if (budgetExceeded) throw new ProviderError("UPSTREAM_ERROR", "本轮上下文已达到长度上限，请缩小引用范围或开始新会话。");
     let detail = error instanceof Error ? error.message : "Runtime failed";
     for (const secret of [settings.apiKey, token, adminToken].filter(Boolean) as string[]) detail = detail.split(secret).join("[redacted]");
     options.onDiagnostic?.(detail);
