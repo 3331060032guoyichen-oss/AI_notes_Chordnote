@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 
 import { InterfaceSoundProvider } from "../components/interface-sound";
 
+import "katex/dist/katex.min.css";
 import "./globals.css";
 
 export const metadata: Metadata = {

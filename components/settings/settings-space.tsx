@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { AGENT_MANUAL, MANUAL_VERSION } from "../../lib/agent/manual";
 import type { Knowledge } from "../../types/knowledge";
 import { useInterfaceSound } from "../interface-sound";
+import { setLatexEnabled, useLatexEnabled } from "../latex-preference";
 import type { SettingsSection } from "./sections";
 
 /**
@@ -86,6 +87,7 @@ type SettingsSpaceProps = {
 
 export function SettingsSpace({ section }: SettingsSpaceProps) {
   const { enabled: soundEnabled, preference: soundPreference, toggle: toggleSound } = useInterfaceSound();
+  const latexEnabled = useLatexEnabled();
   const [bundleNote, setBundleNote] = useState("");
   const [studio, setStudio] = useState<Studio | null>(null);
   useEffect(() => {
@@ -167,6 +169,26 @@ export function SettingsSpace({ section }: SettingsSpaceProps) {
                 : "点击、保存、归档这些动作会有一声很轻的音效 —— 现场合成，不加载任何音频文件。"}
             </p>
             <p className="settings-note">语音输入与朗读尚未实现；这里只有界面音效。</p>
+            <div className="settings-section">
+              <div className="settings-section-title">数学公式</div>
+              <div className="toggle-row">
+                <span>LaTeX 渲染</span>
+                <button
+                  type="button"
+                  className={`sw${latexEnabled ? " on" : ""}`}
+                  role="switch"
+                  aria-checked={latexEnabled}
+                  aria-label="LaTeX 渲染"
+                  onClick={() => setLatexEnabled(!latexEnabled)}
+                >
+                  <i />
+                </button>
+              </div>
+              <p className="settings-note">
+                打开后，正文里的 $...$（行内）与 $$...$$（独立成行）会按 LaTeX 渲染。
+                把光标放进公式即可回到原始写法修改。
+              </p>
+            </div>
           </section>
         </>
       ) : null}

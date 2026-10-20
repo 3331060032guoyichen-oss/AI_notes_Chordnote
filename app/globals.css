@@ -2,6 +2,12 @@
   box-sizing: border-box;
 }
 
+/* 自绘光标：热点落在箭头尖端 / 圆环中心，落点与看到的位置一致。三套主题共用。 */
+:root {
+  --cursor-default: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 26 26'%3E%3Cpath d='M3 2V20L8 15L11.5 22L15 20.5L11.5 13.8L18 13.5Z' fill='%237c3aed' stroke='%23fffdf8' stroke-width='1.6' stroke-linejoin='round'/%3E%3C/svg%3E") 3 2, default;
+  --cursor-pointer: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22' viewBox='0 0 22 22'%3E%3Ccircle cx='11' cy='11' r='7' fill='none' stroke='%237c3aed' stroke-width='2.2'/%3E%3Ccircle cx='11' cy='11' r='2' fill='%237c3aed'/%3E%3C/svg%3E") 11 11, pointer;
+}
+
 /* ============================================================
    三套设计主题 —— 通过 <html data-studio="…"> 切换，见 components/settings-panel.tsx
    01 · Precision Darkroom（Linear/Vercel 精密暗室）
@@ -126,9 +132,17 @@ body {
 }
 
 body {
+  cursor: var(--cursor-default);
   min-height: 100dvh;
   background: var(--bg-page);
   transition: background-color 200ms ease, color 200ms ease;
+}
+
+a,
+summary,
+[role="button"],
+[role="switch"] {
+  cursor: var(--cursor-pointer);
 }
 
 button,
@@ -138,7 +152,7 @@ textarea {
 }
 
 button {
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 
 button:disabled {
@@ -1254,7 +1268,7 @@ textarea:focus-visible {
   border-bottom: 2px solid transparent;
   color: var(--muted);
   font-size: 12px;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
   white-space: nowrap;
 }
 
@@ -1358,7 +1372,7 @@ textarea:focus-visible {
   background: transparent;
   font-size: 12px;
   text-align: left;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 
 .tree-item-icon {
@@ -2656,7 +2670,7 @@ input::placeholder {
   color: var(--accent-strong);
   background: transparent;
   font: inherit;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 
 .inline-ref:not(.is-linked) {
@@ -2723,7 +2737,7 @@ input::placeholder {
   color: var(--ink);
   background: transparent;
   font-size: 11px;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 
 .inline-ref-card-actions button:hover:not(:disabled) {
@@ -2748,7 +2762,7 @@ input::placeholder {
 }
 
 .tag-button {
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 
 .tag-button:hover {
@@ -3026,7 +3040,7 @@ input::placeholder {
   background: var(--accent);
   font-size: 11.5px;
   font-weight: 600;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 
 .node-inspector-open:hover {
@@ -3046,7 +3060,7 @@ input::placeholder {
   color: var(--muted);
   background: transparent;
   font-size: 11.5px;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 
 .node-inspector-release:hover {
@@ -5517,7 +5531,7 @@ input::placeholder {
   flex: 1;
   height: 3px;
   accent-color: var(--accent);
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 
 .blk {
@@ -6528,15 +6542,19 @@ input::placeholder {
 .markdown-editor .md-h2 { font-size:24px; }
 .markdown-editor .md-h3 { font-size:20px; }
 .wiki-link, .wiki-link-source { color:var(--accent); text-decoration:underline; text-underline-offset:3px; }
-button.wiki-link { display:inline; border:0; background:none; padding:0; font:inherit; cursor:pointer; line-height:inherit; }
+button.wiki-link { display:inline; border:0; background:none; padding:0; font:inherit; cursor: var(--cursor-pointer); line-height:inherit; }
 .wiki-link.is-unresolved, .wiki-link-source.is-unresolved { text-decoration-style:dashed; opacity:.8; }
 .md-tag { color:var(--accent); }
 .md-bold { font-weight:700; }.md-italic { font-style:italic; }
 .md-highlight { background:color-mix(in srgb,#eac567 32%,transparent); }
 .md-code { font-family:monospace; background:color-mix(in srgb,var(--ink) 7%,transparent); }
+.markdown-editor .attachment-link { color:var(--accent); text-decoration:underline; text-underline-offset:3px; cursor:var(--cursor-pointer); }
+.markdown-editor .attachment-pdf-viewer { display:block; width:min(100%, 860px); height:min(72vh, 900px); margin:16px 0 24px; border:1px solid var(--line); border-radius:8px; background:#fff; }
+.markdown-editor .md-math { font-size:1.04em; }
+.markdown-editor .md-math-display { display:block; margin:.55em 0; padding:2px 0; text-align:center; overflow-x:auto; overflow-y:hidden; }
 .document-status { font-size:12px; color:var(--muted); min-height:24px; text-align:right; max-width:700px; margin:0 auto; }
 .document-properties { max-width:700px; margin:0 auto 20px; font-size:13px; color:var(--muted); }
-.document-properties summary { cursor:pointer; padding:6px 0; }
+.document-properties summary { cursor: var(--cursor-pointer); padding:6px 0; }
 .property-fields { padding:12px 0; display:grid; gap:8px; }
 .property-fields label { display:grid; grid-template-columns:90px minmax(0,1fr); align-items:center; gap:10px; }
 .property-fields input { width:100%; min-width:0; border:1px solid var(--line); border-radius:4px; background:transparent; color:var(--ink); padding:5px 8px; }
@@ -6552,7 +6570,7 @@ button.wiki-link { display:inline; border:0; background:none; padding:0; font:in
 .app-shell.chordnote-workspace.sidebar-collapsed { --left-col:0px; }
 .app-shell.chordnote-workspace.rail-collapsed { --right-col:0px; }
 .workspace-ribbon { grid-column:1; grid-row:1; display:flex; flex-direction:column; align-items:center; gap:6px; padding:8px; z-index:2; background:var(--paper); border-right:1px solid var(--line); }
-.workspace-ribbon button { width:40px; height:40px; display:grid; place-items:center; border:0; background:transparent; color:var(--ink); border-radius:6px; cursor:pointer; }
+.workspace-ribbon button { width:40px; height:40px; display:grid; place-items:center; border:0; background:transparent; color:var(--ink); border-radius:6px; cursor: var(--cursor-pointer); }
 .workspace-ribbon button:hover { background:var(--surface-raised); }
 .workspace-ribbon .ribbon-logo { font-size:23px; font-weight:700; margin-bottom:10px; color:var(--accent); }
 .workspace-ribbon .ribbon-settings { margin-top:auto; }
@@ -6567,15 +6585,15 @@ button.wiki-link { display:inline; border:0; background:none; padding:0; font:in
 .chordnote-workspace .tab-bar { min-width:0; overflow-x:auto; flex-shrink:0; }
 .document-tree { flex:1; overflow:auto; width:100%; min-height:0; padding:8px 10px; font-size:15px; }
 .document-tree details details { margin-left:12px; }
-.document-tree summary { min-height:35px; line-height:35px; cursor:pointer; white-space:nowrap; }
-.document-tree button { display:block; width:100%; min-height:35px; line-height:35px; padding:0 8px; border:0; background:none; color:var(--ink); text-align:left; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font:inherit; cursor:pointer; }
+.document-tree summary { min-height:35px; line-height:35px; cursor: var(--cursor-pointer); white-space:nowrap; }
+.document-tree button { display:block; width:100%; min-height:35px; line-height:35px; padding:0 8px; border:0; background:none; color:var(--ink); text-align:left; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font:inherit; cursor: var(--cursor-pointer); }
 .document-tree details details button { padding-left:16px; }
 .document-tree button:hover { background:var(--surface-raised); border-radius:4px; }
 .chordnote-workspace .sidebar-bottom { flex-shrink:0; margin-top:auto; padding:10px; }
 .chordnote-workspace .sidebar-settings-btn { width:auto; display:flex; gap:8px; align-items:center; padding:8px; }
 .agent-chat { height:100%; min-height:0; display:flex; flex-direction:column; }
 .agent-chat-head { height:56px; min-height:56px; display:flex; align-items:center; gap:10px; padding:0 16px; border-bottom:1px solid var(--line); }
-.agent-chat-head button { margin-left:auto; background:none; border:0; color:var(--ink); font-size:22px; cursor:pointer; }
+.agent-chat-head button { margin-left:auto; background:none; border:0; color:var(--ink); font-size:22px; cursor: var(--cursor-pointer); }
 .agent-chat-head .agent-new-session { font:inherit; font-size:13px; padding:6px 8px; border:1px solid var(--line); border-radius:var(--radius); white-space:nowrap; }
 .agent-chat-head .agent-new-session:disabled { opacity:.5; cursor:default; }
 .agent-chat-head .agent-new-session + button { margin-left:0; }
@@ -6609,7 +6627,7 @@ button.wiki-link { display:inline; border:0; background:none; padding:0; font:in
 .composer-model { min-width:0; }
 .composer-model select { max-width:220px; width:100%; padding:5px 12px; border:1px solid var(--line); border-radius:999px; background:transparent; color:var(--ink); font:inherit; }
 .composer-permission { position:relative; }
-.composer-permission > summary { display:flex; align-items:center; justify-content:center; width:28px; height:28px; border:1px solid var(--line); border-radius:50%; color:var(--ink); font-size:16px; line-height:1; cursor:pointer; list-style:none; }
+.composer-permission > summary { display:flex; align-items:center; justify-content:center; width:28px; height:28px; border:1px solid var(--line); border-radius:50%; color:var(--ink); font-size:16px; line-height:1; cursor: var(--cursor-pointer); list-style:none; }
 .composer-permission > summary::-webkit-details-marker { display:none; }
 .composer-permission[open] > summary { border-color:var(--accent); color:var(--accent-strong); }
 .permission-menu { position:absolute; bottom:calc(100% + 6px); left:0; z-index:5; width:190px; padding:6px; border:1px solid var(--line); border-radius:12px; background:var(--paper); box-shadow:0 10px 30px rgb(0 0 0 / 10%); }
@@ -6625,7 +6643,7 @@ button.wiki-link { display:inline; border:0; background:none; padding:0; font:in
 .document-search { width:min(640px,100%); max-height:70vh; overflow:auto; padding:16px; background:var(--paper); border:1px solid var(--line); border-radius:12px; }
 .search-top { display:flex; gap:10px; }.search-top input { min-width:0; flex:1; padding:10px; color:var(--ink); background:transparent; border:1px solid var(--line); }
 .search-results>div { display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--line); }
-.search-results button, .search-link-results button { border:0; background:none; color:var(--ink); padding:8px; text-align:left; cursor:pointer; }
+.search-results button, .search-link-results button { border:0; background:none; color:var(--ink); padding:8px; text-align:left; cursor: var(--cursor-pointer); }
 .search-link-results button { display:block; }
 .model-settings {
   width: min(760px, 100%);
@@ -6654,7 +6672,7 @@ button.wiki-link { display:inline; border:0; background:none; padding:0; font:in
   color: var(--muted);
   font: inherit;
   font-weight: 550;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
   transition: color 180ms ease;
 }
 
@@ -6722,7 +6740,7 @@ button.wiki-link { display:inline; border:0; background:none; padding:0; font:in
   font: inherit;
   font-size: 13px;
   font-weight: 600;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
   transition: background 180ms ease, color 180ms ease, opacity 180ms ease, transform 100ms ease;
 }
 
@@ -6776,7 +6794,7 @@ button.wiki-link { display:inline; border:0; background:none; padding:0; font:in
   touch-action: none;
   cursor: grab;
   user-select: none;
-  transition: filter 160ms ease, box-shadow 160ms ease, transform 120ms ease;
+  transition: filter 160ms ease, box-shadow 160ms ease;
 }
 
 .canvas-card:active,
@@ -6789,11 +6807,10 @@ button.wiki-link { display:inline; border:0; background:none; padding:0; font:in
   border-radius: 3px;
   background: #fff0a8;
   box-shadow: 0 12px 24px rgb(82 72 42 / .14), 0 2px 5px rgb(82 72 42 / .12);
-  transform: rotate(-.35deg);
 }
 
-.canvas-card:nth-of-type(3n) { background: #dcefdc; transform: rotate(.28deg); }
-.canvas-card:nth-of-type(4n) { background: #e4e4f5; transform: rotate(-.15deg); }
+.canvas-card:nth-of-type(3n) { background: #dcefdc; }
+.canvas-card:nth-of-type(4n) { background: #e4e4f5; }
 .canvas-card.is-note { background: #fffdf8; }
 .canvas-card.is-selected,
 .canvas-image.is-selected { box-shadow: 0 0 0 2px #7c3aed, 0 16px 34px rgb(65 57 43 / .2); }
@@ -6815,7 +6832,7 @@ button.wiki-link { display:inline; border:0; background:none; padding:0; font:in
   user-select: text;
 }
 .canvas-card textarea::placeholder { color: rgb(53 51 47 / .42); }
-.canvas-note-link { width: 100%; min-height: 104px; padding: 0; border: 0; background: transparent; color: #35332f; text-align: left; font-family: inherit; font-size: 15px; font-weight: 620; line-height: 1.5; cursor: pointer; }
+.canvas-note-link { width: 100%; min-height: 104px; padding: 0; border: 0; background: transparent; color: #35332f; text-align: left; font-family: inherit; font-size: 15px; font-weight: 620; line-height: 1.5; cursor: var(--cursor-pointer); }
 .canvas-image { border-radius: 3px; background: #fff; box-shadow: 0 14px 30px rgb(65 57 43 / .17), 0 2px 6px rgb(65 57 43 / .12); }
 .canvas-image img { display: block; width: 100%; height: 100%; border-radius: inherit; object-fit: cover; pointer-events: none; }
 
@@ -6829,7 +6846,7 @@ button.wiki-link { display:inline; border:0; background:none; padding:0; font:in
   background: #35332f;
   box-shadow: 0 8px 20px rgb(34 31 26 / .2);
 }
-.canvas-item-actions button { padding: 5px 9px; border: 0; background: transparent; color: #fffdf8; font-family: inherit; font-size: 11px; font-weight: 600; line-height: 1; cursor: pointer; }
+.canvas-item-actions button { padding: 5px 9px; border: 0; background: transparent; color: #fffdf8; font-family: inherit; font-size: 11px; font-weight: 600; line-height: 1; cursor: var(--cursor-pointer); }
 .canvas-connect-handle {
   position: absolute;
   z-index: 3;
@@ -6867,7 +6884,7 @@ button.wiki-link { display:inline; border:0; background:none; padding:0; font:in
 .canvas-hint { top: calc(100% - 42px); margin: 0; padding: 7px 9px; pointer-events: none; }
 .canvas-status { top: 18px; margin: 0; padding: 7px 9px; }
 .canvas-loading { top: 50%; margin: 0; padding: 9px 12px; }
-.canvas-archive-toggle { top: 54px; padding: 7px 9px; cursor: pointer; }
+.canvas-archive-toggle { top: 54px; padding: 7px 9px; cursor: var(--cursor-pointer); }
 .canvas-archive-panel {
   position: sticky;
   z-index: 6;
@@ -6884,7 +6901,7 @@ button.wiki-link { display:inline; border:0; background:none; padding:0; font:in
   box-shadow: 0 18px 44px rgb(65 57 43 / .2);
 }
 .canvas-archive-panel header { display: flex; align-items: center; justify-content: space-between; padding: 3px 5px 8px; }
-.canvas-archive-panel button { padding: 8px 5px; border: 0; background: transparent; color: inherit; text-align: left; cursor: pointer; }
+.canvas-archive-panel button { padding: 8px 5px; border: 0; background: transparent; color: inherit; text-align: left; cursor: var(--cursor-pointer); }
 .canvas-archive-panel button:hover { background: rgb(53 51 47 / .06); }
 @media (max-width:1100px) { .app-shell.chordnote-workspace { --left-col:190px; --right-col:290px; } }
 @media (max-width:760px) { .app-shell.chordnote-workspace { --left-col:min(160px,26vw); --right-col:min(270px,40vw); } .chordnote-workspace .workspace-content { padding:18px 10px; } .chordnote-workspace .breadcrumb { min-width:0; overflow:hidden; white-space:nowrap; } .chordnote-workspace .sidebar-bottom { padding:6px; } }
@@ -7164,7 +7181,7 @@ button.wiki-link { display:inline; border:0; background:none; padding:0; font:in
   color: #fff;
   background: var(--film-blue);
   font: 650 12px/1 "Geist", "Noto Sans SC", sans-serif;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
   transition: background-color 180ms ease, transform 180ms ease;
 }
 .landing-film-nav > button span,
@@ -7709,7 +7726,7 @@ button.wiki-link { display:inline; border:0; background:none; padding:0; font:in
   color: var(--zhiyin-caption);
   background: none;
   font: inherit;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 
 .agent-stage-burst:hover {

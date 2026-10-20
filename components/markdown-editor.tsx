@@ -1,12 +1,15 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import katex from "katex";
 import { EditorState, StateField, StateEffect } from "@codemirror/state";
 import { Decoration, EditorView, WidgetType, keymap, type DecorationSet } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { autocompletion, startCompletion } from "@codemirror/autocomplete";
 import { markdown } from "@codemirror/lang-markdown";
+import { findMathRanges } from "../lib/documents/latex";
 import { noteParser, noteSyntax, resolveReference, splitFrontmatter, type LinkCandidate } from "../lib/documents/markdown";
+import { isLatexEnabled, onLatexPreferenceChange } from "./latex-preference";
 
 class LinkWidget extends WidgetType {
   constructor(readonly target: string, readonly label: string, readonly resolved: boolean, readonly open: (target: string) => void) { super(); }
@@ -21,6 +24,64 @@ class LinkWidget extends WidgetType {
   }
   ignoreEvent() { return true; }
 }
+
+type AttachmentKind = "pdf" | "html";
+
+function attachmentKind(target: string): AttachmentKind | null {
+  const path = target.trim().split("#", 1)[0].toLocaleLowerCase();
+  if (/\.pdf$/.test(path)) return "pdf";
+  if (/\.(?:html?|xhtml)$/.test(path)) return "html";
+  return null;
+}
+
+function attachmentHref(target: string) {
+  return `/api/attachments/${encodeURIComponent(target.trim())}`;
+}
+
+class AttachmentLinkWidget extends WidgetType {
+  constructor(readonly target: string, readonly label: string) { super(); }
+  eq(other: AttachmentLinkWidget) { return other.target === this.target && other.label === this.label; }
+  toDOM() {
+    const link = document.createElement("a");
+    link.className = "attachment-link";
+    link.href = attachmentHref(this.target);
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.textContent = this.label;
+    link.title = `在浏览器中打开 ${this.target}`;
+    return link;
+  }
+  ignoreEvent() { return true; }
+}
+
+class PdfAttachmentWidget extends WidgetType {
+  constructor(readonly target: string) { super(); }
+  eq(other: PdfAttachmentWidget) { return other.target === this.target; }
+  toDOM() {
+    const frame = document.createElement("iframe");
+    frame.className = "attachment-pdf-viewer";
+    frame.src = attachmentHref(this.target);
+    frame.title = `${this.target} PDF 查看器`;
+    frame.loading = "lazy";
+    return frame;
+  }
+  ignoreEvent() { return true; }
+}
+
+async function uploadAttachment(file: File, editor: EditorView, position: number) {
+  const form = new FormData();
+  form.append("file", file, file.name);
+  const response = await fetch("/api/attachments", { method: "POST", body: form });
+  const payload = await response.json().catch(() => null) as { attachment?: { name?: string; kind?: AttachmentKind }; error?: { message?: string } } | null;
+  if (!response.ok || !payload?.attachment?.name || !payload.attachment.kind) throw new Error(payload?.error?.message ?? "附件保存失败");
+  const syntax = payload.attachment.kind === "pdf" ? `![[${payload.attachment.name}]]` : `[[${payload.attachment.name}]]`;
+  editor.dispatch({ changes: { from: position, to: position, insert: syntax }, selection: { anchor: position + syntax.length } });
+}
+
+function handleAttachment(file: File, editor: EditorView, position: number, readOnly: boolean) {
+  if (readOnly || (!/^(application\/pdf|text\/html|application\/xhtml\+xml)$/.test(file.type) && !/\.(?:pdf|html?|xhtml)$/i.test(file.name))) return;
+  void uploadAttachment(file, editor, position).catch(error => console.error(error instanceof Error ? error.message : "附件保存失败"));
+}
 class TaskWidget extends WidgetType {
   constructor(readonly checked: boolean, readonly from: number) { super(); }
   eq(other: TaskWidget) { return this.checked === other.checked && this.from === other.from; }
@@ -34,8 +95,19 @@ class TaskWidget extends WidgetType {
   ignoreEvent() { return true; }
 }
 
+class MathWidget extends WidgetType {
+  constructor(readonly expression: string, readonly display: boolean) { super(); }
+  eq(other: MathWidget) { return other.expression === this.expression && other.display === this.display; }
+  toDOM() {
+    const element = document.createElement(this.display ? "div" : "span");
+    element.className = this.display ? "md-math md-math-display" : "md-math";
+    element.innerHTML = katex.renderToString(this.expression, { displayMode: this.display, throwOnError: false, strict: "ignore" });
+    return element;
+  }
+}
+
 const rebuildPreview = StateEffect.define<void>();
-function preview(getLinks: () => readonly LinkCandidate[], open: (target: string) => void, focused:()=>boolean) {
+function preview(getLinks: () => readonly LinkCandidate[], open: (target: string) => void, focused: () => boolean, latex: () => boolean) {
   return StateField.define<DecorationSet>({
     create: build, update(value, tr) { return tr.docChanged || tr.selection || tr.effects.some(e => e.is(rebuildPreview)) ? build(tr.state) : value; },
     provide: field => EditorView.decorations.from(field),
@@ -44,11 +116,22 @@ function preview(getLinks: () => readonly LinkCandidate[], open: (target: string
     const text = state.doc.toString();
     const { body, offset } = splitFrontmatter(text);
     const decorations: { from: number; to: number; value: Decoration }[] = [];
-    const add = (from: number, to: number, value: Decoration) => decorations.push({ from, to, value });
+    const code: { from: number; to: number }[] = [];
+    if (latex()) noteParser.parse(body).iterate({ enter(node) {
+      if (node.name === "InlineCode" || node.name === "FencedCode" || node.name === "CodeBlock") code.push({ from: node.from, to: node.to });
+    } });
+    const math = latex() ? findMathRanges(body, code) : [];
+    const inMath = (from: number, to: number) => math.some(range => from < range.to && to > range.from);
+    const add = (from: number, to: number, value: Decoration) => { if (!inMath(from, to)) decorations.push({ from, to, value }); };
     if (offset) add(0, offset, Decoration.replace({ block: true, inclusive:false }));
     if (body.split("\n")[0] === "# ") {
       add(offset, offset + 2, Decoration.replace({}));
       add(offset, offset, Decoration.line({ class: "md-heading md-h1" }));
+    }
+    for (const range of math) {
+      const from = range.from + offset, to = range.to + offset;
+      const selected = focused() && state.selection.ranges.some(r => r.from <= to && r.to >= from);
+      if (!selected) decorations.push({ from, to, value: Decoration.replace({ widget: new MathWidget(range.expression, range.display) }) });
     }
     noteParser.parse(body).iterate({ enter(node) {
       const from = node.from + offset, to = node.to + offset;
@@ -64,6 +147,16 @@ function preview(getLinks: () => readonly LinkCandidate[], open: (target: string
       if (node.name === "WikiLink") {
         const [dest, ...aliases] = source.slice(2, -2).split("|");
         const target = dest.split("#")[0].trim();
+        const kind = attachmentKind(target);
+        if (kind) {
+          const label = aliases.join("|").trim() || target.split(/[\\/]/).at(-1) || target;
+          const embed = from > 0 && text[from - 1] === "!";
+          const widget = kind === "pdf" && embed
+            ? new PdfAttachmentWidget(target)
+            : new AttachmentLinkWidget(target, label);
+          add(embed ? from - 1 : from, to, Decoration.replace({ widget, block: kind === "pdf" && embed }));
+          return false;
+        }
         const reference = resolveReference(target, getLinks());
         const resolved = Boolean(reference);
         // Keep the stored syntax untouched, but display the destination's title in
@@ -95,6 +188,7 @@ export function MarkdownEditor({ value, onChange, candidates, onOpenLink, readOn
   const host = useRef<HTMLDivElement>(null), view = useRef<EditorView | null>(null);
   const callbacks = useRef({ onChange, onOpenLink }); callbacks.current = { onChange, onOpenLink };
   const linkCandidates = useRef(candidates); linkCandidates.current = candidates;
+  const latex = useRef(isLatexEnabled());
   const externalUpdate = useRef(false);
   const initial = useRef(value);
   useEffect(() => {
@@ -103,6 +197,22 @@ export function MarkdownEditor({ value, onChange, candidates, onOpenLink, readOn
       markdown({ extensions: [noteSyntax] }), history(), keymap.of([...defaultKeymap, ...historyKeymap]),
       EditorView.lineWrapping, EditorState.readOnly.of(readOnly), EditorView.editable.of(!readOnly),
       EditorView.contentAttributes.of({ "aria-label": label, spellcheck: "true" }),
+      EditorView.domEventHandlers({
+        paste: (event, editor) => {
+          const file = Array.from(event.clipboardData?.files ?? []).find(item => /^(application\/pdf|text\/html|application\/xhtml\+xml)$/.test(item.type) || /\.(?:pdf|html?|xhtml)$/i.test(item.name));
+          if (!file || readOnly) return false;
+          event.preventDefault();
+          handleAttachment(file, editor, editor.state.selection.main.head, readOnly);
+          return true;
+        },
+        drop: (event, editor) => {
+          const file = Array.from(event.dataTransfer?.files ?? []).find(item => /^(application\/pdf|text\/html|application\/xhtml\+xml)$/.test(item.type) || /\.(?:pdf|html?|xhtml)$/i.test(item.name));
+          if (!file || readOnly) return false;
+          event.preventDefault();
+          handleAttachment(file, editor, editor.posAtCoords({ x: event.clientX, y: event.clientY }) ?? editor.state.selection.main.head, readOnly);
+          return true;
+        },
+      }),
       autocompletion({ override: [context => {
         const match = context.matchBefore(/\[\[[^\]\n]*/);
         if (!match) return null;
@@ -112,7 +222,7 @@ export function MarkdownEditor({ value, onChange, candidates, onOpenLink, readOn
           v.dispatch({ changes: { from, to, insert: target + suffix }, selection: { anchor: from + target.length + 2 } });
         } })) };
       }] }),
-      preview(() => linkCandidates.current, target => callbacks.current.onOpenLink(target),()=>Boolean(view.current?.hasFocus)),
+      preview(() => linkCandidates.current, target => callbacks.current.onOpenLink(target),()=>Boolean(view.current?.hasFocus), () => latex.current),
       EditorState.transactionFilter.of(tr => {
         if (!tr.docChanged || readOnly || externalUpdate.current) return tr;
         const offset = splitFrontmatter(tr.newDoc.toString()).offset;
@@ -133,6 +243,10 @@ export function MarkdownEditor({ value, onChange, candidates, onOpenLink, readOn
     return () => { editor.destroy(); view.current = null; };
   }, [readOnly, label]);
   useEffect(() => { view.current?.dispatch({ effects: rebuildPreview.of() }); }, [candidates]);
+  useEffect(() => onLatexPreferenceChange(() => {
+    latex.current = isLatexEnabled();
+    view.current?.dispatch({ effects: rebuildPreview.of() });
+  }), []);
   useEffect(() => {
     initial.current = value;
     const editor = view.current;
