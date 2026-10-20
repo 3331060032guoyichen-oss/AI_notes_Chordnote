@@ -117,7 +117,7 @@ AI Notes 是面向大学生的生长式 AI 知识系统：把原始学习材料�
 
 | # | 目标 | 现状 | 缺口 |
 |---|---|---|---|
-| C1 | 首次滑动出现的边框（控灵敏度） | ✅ **已实现（形态已改）** | `components/landing-page.tsx`：完整滚动落地页；点击「进入编辑室」进入工作台，`localStorage(chordnote:entered)` 记住选择 |
+| C1 | 首次滑动出现的边框（控灵敏度） | ✅ **已实现（形态已改）** | `components/landing-page.tsx`：完整滚动落地页；点击「进入工作台」进入工作台。选择不写入 localStorage，每次刷新都从落地页开始 |
 | C2 | 边框内的欢迎标语与进入窗口 | ✅ **已实现** | 同文件：Hero 标语与主按钮 + 特点区 + 工作方式 + 收尾；Hero 右侧 Three.js 粒子场，底层 Canvas 星丛与 tsParticles 星尘 |
 
 ### D. 数据模型层面的长期欠账
