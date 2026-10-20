@@ -12,9 +12,16 @@ export async function listDocuments() {
 }
 export async function documentReferences() {
   const documents = await listDocuments();
-  return { documents, references: documents.flatMap(doc => parseWikiReferences(doc.markdown).map(ref => ({
-    ...ref, sourceId: doc.id, targetId: resolveReference(ref.target, documents)?.id ?? null,
-  }))) };
+  return { documents, references: documents.flatMap(doc => parseWikiReferences(doc.markdown).map(ref => {
+    // A Raw and a Knowledge page can intentionally share a title after promotion.
+    // Resolve an unqualified link within the source's own layer first so a Raw
+    // note keeps pointing at Raw and a Knowledge page keeps pointing at Knowledge.
+    // Explicit paths (for example `raw/inbox/<id>.md`) still fall back to the
+    // complete document set and remain the escape hatch for cross-layer links.
+    const sameLayer = documents.filter(candidate => candidate.kind === doc.kind);
+    const target = resolveReference(ref.target, sameLayer) ?? resolveReference(ref.target, documents);
+    return { ...ref, sourceId: doc.id, targetId: target?.id ?? null };
+  })) };
 }
 /** Explicit user action only. Unresolved targets create Raw, preserving the new-note boundary. */
 export async function createLinkedDocument(target: string) {

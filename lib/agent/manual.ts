@@ -96,7 +96,7 @@ export const AGENT_MANUAL: readonly AgentToolSpec[] = [
       reason: { type: "string" }, evidence: { type: "string" }, changes: { type: "object", properties: { content: { type: "string" } }, required: ["content"] },
     }, required: ["type", "reason", "changes"] } } }, required: ["operations"] } },
   { name: "draft_knowledge", label: "提出整理稿", access: "proposal",
-    description: "为已有 Raw 提出知识页草稿，不写知识库。先检索已有知识避免重复；原文不可修改。draftJson 是 OrganizeDraft JSON，含 title、summary、content（Markdown，保留 wikilink）、keyPoints/concepts/keywords 字符串数组、relatedKnowledge 空数组。",
+    description: "为已有 Raw 提出知识页草稿，不写知识库。先检索已有知识避免重复；原文不可修改。draftJson 是 OrganizeDraft JSON，含 title、summary、content（完整 Markdown，按 Schema 的「整理稿正文格式」组织，保留 [[wikilink]]）、keyPoints/concepts/keywords 字符串数组、relatedKnowledge 空数组。正文要有标题、要点、来源和可核实的概念关系；正式关系另用 propose_link 提议。",
     parameters: { type: "object", properties: { rawId: { type:"string", description:"已读取的原始记录 id" }, draftJson: { type:"string", description:"完整整理稿 JSON" } }, required:["rawId","draftJson"] } },
   { name: "runtime_info", label: "运行环境", description: "读取本次运行实际使用的模型、provider、工具与权限。", access: "auto", parameters: NO_PARAMETERS },
   { name: "read_raw", label: "读取原始记录", description: "按 id 读取原始记录。", access: "auto", parameters: { type: "object", properties: { id: { type: "string", description: "原始记录 id" } }, required: ["id"] } },
