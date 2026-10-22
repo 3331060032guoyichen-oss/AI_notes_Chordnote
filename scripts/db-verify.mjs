@@ -144,7 +144,7 @@ await q(
 
 let badTypeRejected = false;
 try {
-  await insertLink("dbv_link_bad", "dbv_note", "dbv_note_b", "supports");
+  await insertLink("dbv_link_bad", "dbv_note", "dbv_note_b", "not-a-link-type");
 } catch {
   badTypeRejected = true;
 }

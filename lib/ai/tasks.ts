@@ -6,7 +6,7 @@
  */
 
 import type { OrganizeDraft } from "../../types/organize";
-import { isRawCategory } from "../documents/structure";
+import { isRawCategory, isWikiCategory } from "../documents/structure";
 import {
   readModelSettings,
   resolveModelSettings,
@@ -29,16 +29,21 @@ function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
 }
 
+function isDocumentTitle(value: unknown): value is string {
+  if (!isNonEmptyString(value)) return false;
+  return !/^(?:#{1,6}|---|\.\.\.)$/.test(value.trim());
+}
+
 function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === "string");
 }
 
 export function isOrganizeDraft(value: unknown): value is OrganizeDraft {
   if (!isRecord(value)) return false;
-  if (value.rawCategory !== undefined && !isRawCategory(value.rawCategory)) return false;
+  if (!isRawCategory(value.rawCategory) || !isWikiCategory(value.wikiCategory)) return false;
 
   if (
-    !isNonEmptyString(value.title) ||
+    !isDocumentTitle(value.title) ||
     !isNonEmptyString(value.summary) ||
     !isNonEmptyString(value.content) ||
     !isStringArray(value.keyPoints) ||
@@ -65,7 +70,7 @@ export function parseOrganizeDraft(content: string): OrganizeDraft {
   }
 
   if (!isOrganizeDraft(parsed)) {
-    throw new ProviderError("UPSTREAM_INVALID_JSON", "Model returned an invalid draft shape.");
+    throw new ProviderError("UPSTREAM_INVALID_JSON", "Model draft must include valid Raw and Wiki categories and complete content.");
   }
 
   return parsed;
@@ -201,7 +206,7 @@ export async function createOrganizeDraft({
       {
         role: "system",
         content:
-          "You are an editorial assistant preparing a proposed organization of university study notes. Preserve the source's meaning, uncertainty, and point of view; do not add unsupported facts. Clearly mark interpretations as possibilities instead of facts. Write in the same language as rawText. Return only a valid JSON object with exactly these fields: title, summary, content, keyPoints, concepts, keywords, relatedKnowledge. title, summary, and content must be non-empty strings. keyPoints, concepts, and keywords must be arrays of strings. relatedKnowledge must be an array of objects with knowledgeId and reason strings. Each relation reason must be grounded in both provided items. Never invent knowledge IDs; use an empty relatedKnowledge array when no existing knowledge is provided. The complete Markdown content must start with one '# ' heading and then use these sections when evidence exists: '## 要点', '## 概念与关系', '## 来源', and '## 待确认'. Preserve every source [[wikilink]] and keep the source traceable with a citation such as '— 来源：[[原始记录标题]]（来源 id：...）'. Use [[页面标题]] or [[页面路径|显示名]] for links; do not treat repeated words as a formal relation. This is a proposal for the user to review, not a final decision.",
+          "You are an editorial assistant preparing a proposed organization of university study notes. Preserve the source's meaning, uncertainty, and point of view; do not add unsupported facts. Clearly mark interpretations as possibilities instead of facts. Write in the same language as rawText. Return only a valid JSON object with exactly these fields: rawCategory, wikiCategory, title, summary, content, keyPoints, concepts, keywords, relatedKnowledge. rawCategory must be one of articles, papers, books, media, data. wikiCategory must be one of index, entitles, concept, sources, synthesis, questions, overview. Choose sources for a page faithful to one source, concept for a cross-source concept, synthesis for multi-source analysis, entitles for an entity, questions for a saved answer, and index or overview only for structural pages; do not send every page to concept. title, summary, and content must be non-empty strings. keyPoints, concepts, and keywords must be arrays of strings. relatedKnowledge must be an array of objects with knowledgeId and reason strings. Each relation reason must be grounded in both provided items. Never invent knowledge IDs; use an empty relatedKnowledge array when no existing knowledge is provided. The complete Markdown content must start with one '# ' heading and then use these sections when evidence exists: '## 要点', '## 概念与关系', '## 来源', and '## 待确认'. Preserve every source [[wikilink]] and keep the source traceable with a citation such as '— 来源：[[原始记录标题]]（来源 id：...）'. Use [[页面标题]] or [[页面路径|显示名]] for links; do not treat repeated words as a formal relation. This is a proposal for the user to review, not a final decision.",
       },
       {
         role: "user",

@@ -51,7 +51,7 @@ All business tables carry `user_id text NOT NULL`. 所有时间列为 `timestamp
 | column | type | notes |
 |---|---|---|
 | `id` | text PK | `knowledge_<uuid>` |
-| `user_id` / `raw_id` | text NOT NULL | `raw_id → raw_notes.id ON DELETE RESTRICT`（知识页必须有出处）|
+| `user_id` / `raw_id` | text NOT NULL | `raw_id → raw_notes.id ON DELETE RESTRICT`（知识页必须有出处）。它只表示**主要来源**；一个 Raw 可以产出多张页，来源关系以 `note_sources` 为准 |
 | `title` / `summary` / `content` | text NOT NULL | |
 | `key_points` / `concepts` / `keywords` | jsonb NOT NULL DEFAULT `[]` | 用户确认后的结构化字段 |
 | `version` | integer NOT NULL DEFAULT 1 | 乐观并发用；每次更新 +1 |
@@ -73,8 +73,10 @@ All business tables carry `user_id text NOT NULL`. 所有时间列为 `timestamp
 
 ### `links` — 正式关系
 
-`id` · `user_id` · `source_note_id` / `target_note_id → notes.id ON DELETE RESTRICT` · `type`（CHECK: `related`）· `reason` · `origin`（CHECK `user|ai`）· `proposal_id` · `deleted_at` · `created_at`
+`id` · `user_id` · `source_note_id` / `target_note_id → notes.id ON DELETE RESTRICT` · `type`（CHECK: `related` / `supports` / `contradicts` / `example` / `prerequisite`）· `reason` · `evidence` · `origin`（CHECK `user|ai`）· `proposal_id` · `deleted_at` · `created_at`
 唯一索引 `(user_id, source_note_id, target_note_id, type)`
+
+**方向语义**：`related` 无方向，A→B 与 B→A 视为同一条；其余四种有方向，按方向去重，且建立时必须带 `evidence`。
 
 **中文注解 · 两条关键约束**：① 两端外键是 RESTRICT，删笔记不会静默清掉已确认的关系；② 唯一索引是**完整索引、不是部分索引**，所以"重建一条已软删的关系"必须**复活原行**（清空 `deleted_at`），不能插入新行。
 
@@ -162,7 +164,7 @@ All business tables carry `user_id text NOT NULL`. 所有时间列为 `timestamp
 ## 6. Versioning and Idempotency
 
 - `notes.version` 每次更新 +1；`PATCH` 可带 `version` 做乐观并发（不匹配 → 409，不写入）。**当前界面尚未发送 `version`**（不带则 last-write-wins）。
-- `POST /api/knowledge` 按 `raw_id` 幂等；`POST /api/relations` 按**无序对**幂等。
+- `POST /api/knowledge` 按 **（`raw_id`, 标题, 正文）** 幂等：同一份材料提交同一标题与同一正文返回已有页（`created: false`）；否则新建，标题重复时自动追加 1、2 编号。`POST /api/relations` 按**无序对**幂等。
 - `DELETE /api/raw` / `DELETE /api/relations/:id` 天然幂等：重复操作影响 0 行 → 404。
 - `idempotency_keys` 的唯一使用方是 `/api/proposals/:id/apply`：首次执行会记下 `(user_id, key)` 与响应，同键重放直接返回当时的响应，不会重复写正式数据。
 

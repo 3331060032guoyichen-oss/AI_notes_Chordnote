@@ -13,6 +13,7 @@ import {
 import {
   ACTOR_TYPES,
   AUDIT_RESULTS,
+  CONFIDENCE_LEVELS,
   CONTENT_ORIGINS,
   LINK_TYPES,
   PROPOSAL_KINDS,
@@ -88,6 +89,10 @@ export const notes = pgTable(
     keywords: jsonb("keywords").notNull().default(sql`'[]'::jsonb`),
     version: integer("version").notNull().default(1),
     origin: text("origin", { enum: CONTENT_ORIGINS }).notNull().default("user"),
+    /** 可信度由来源数量推导，见 lib/services/notes.ts。 */
+    confidence: text("confidence", { enum: CONFIDENCE_LEVELS }).notNull().default("medium"),
+    /** 超过这个时间仍未更新，体检会把它列为过期页。 */
+    staleAfter: timestamp("stale_after", { withTimezone: true }),
     // 归档：暂时收起，不隐藏
     archivedAt: timestamp("archived_at", { withTimezone: true }),
     // 墓碑：常规查询隐藏，可恢复（清空该列）；永久清除属独立流程，另行设计
@@ -99,6 +104,25 @@ export const notes = pgTable(
     userIdIdx: index("notes_user_id_idx").on(table.userId),
     rawIdIdx: index("notes_raw_id_idx").on(table.rawId),
     originCheck: inListCheck("notes_origin_check", "origin", CONTENT_ORIGINS),
+    confidenceCheck: inListCheck("notes_confidence_check", "confidence", CONFIDENCE_LEVELS),
+  }),
+);
+
+// ---- 知识页与来源的正式关联 ---------------------------------------------
+// `notes.raw_id` 继续保留为创建页面时的主来源，兼容旧接口；补充来源在此表中
+// 可查询、可回填，避免把它们只埋在正文的“来源”段落里。
+export const noteSources = pgTable(
+  "note_sources",
+  {
+    noteId: text("note_id").notNull().references(() => notes.id, { onDelete: "restrict" }),
+    rawId: text("raw_id").notNull().references(() => rawNotes.id, { onDelete: "restrict" }),
+    userId,
+    createdAt,
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.noteId, table.rawId] }),
+    userIdIdx: index("note_sources_user_id_idx").on(table.userId),
+    rawIdIdx: index("note_sources_raw_id_idx").on(table.rawId),
   }),
 );
 
@@ -181,6 +205,8 @@ export const links = pgTable(
       .references(() => notes.id, { onDelete: "restrict" }),
     type: text("type", { enum: LINK_TYPES }).notNull().default("related"),
     reason: text("reason").notNull(),
+    /** 支撑这条关系的原文片段；有方向的关系类型必须填写。 */
+    evidence: text("evidence"),
     origin: text("origin", { enum: CONTENT_ORIGINS }).notNull().default("user"),
     proposalId: text("proposal_id"),
     // 可恢复软删除：普通删除只打标记，常规查询隐藏（deleted_at is null）

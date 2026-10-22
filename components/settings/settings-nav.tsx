@@ -20,13 +20,13 @@ export function SettingsNav({ section, onSelect }: SettingsNavProps) {
               className={`tree-tool-item space-nav-item${section === item.id ? " is-active" : ""}`}
               type="button"
               data-sound="select"
+              aria-current={section === item.id ? "page" : undefined}
               onClick={() => onSelect(item.id)}
             >
               <span className="space-nav-label">
                 <span>{item.label}</span>
-                <small>{item.hint}</small>
               </span>
-              {item.state === "planned" ? <em className="space-nav-tag">未实现</em> : null}
+              {item.state === "planned" ? <em className="space-nav-tag">暂未开放</em> : null}
               {item.state === "readonly" ? <em className="space-nav-tag">只读</em> : null}
             </button>
           ))}

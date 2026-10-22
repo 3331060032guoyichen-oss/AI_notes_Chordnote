@@ -21,9 +21,18 @@ export type ContentOrigin = (typeof CONTENT_ORIGINS)[number];
 export const ACTOR_TYPES = ["user", "agent", "system"] as const;
 export type ActorType = (typeof ACTOR_TYPES)[number];
 
-/** 正式关系类型。当前代码只产生 related（见 app/api/relations/route.ts）；扩展需另开迁移。 */
-export const LINK_TYPES = ["related"] as const;
+/**
+ * 正式关系类型。
+ *
+ * `related` 是无方向的「相关」；其余四种有方向（A supports B 与 B supports A 是两回事）。
+ * 新增取值必须同步迁移里的 CHECK，见 drizzle/0010。
+ */
+export const LINK_TYPES = ["related", "supports", "contradicts", "example", "prerequisite"] as const;
 export type LinkType = (typeof LINK_TYPES)[number];
+
+/** 知识页可信度。由来源数量推导：≥2 个来源视为高，其余为中；low 预留给人工下调。 */
+export const CONFIDENCE_LEVELS = ["low", "medium", "high"] as const;
+export type ConfidenceLevel = (typeof CONFIDENCE_LEVELS)[number];
 
 /** 变更提议类型（proposals.kind） */
 export const PROPOSAL_KINDS = [

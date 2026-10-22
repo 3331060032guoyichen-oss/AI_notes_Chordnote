@@ -7,10 +7,11 @@ import { AgentMessage } from "../components/agent/agent-message";
 import { AgentStage } from "../components/agent/agent-stage";
 import { CanvasWorkspace } from "../components/canvas-workspace";
 import { DocumentSearch } from "../components/document-search";
-import { DocumentSession } from "../components/document-session";
+import { DocumentPropertiesPanel, DocumentSession } from "../components/document-session";
 import { GraphView } from "../components/graph-view";
 import { useInterfaceSound } from "../components/interface-sound";
 import { LandingPage } from "../components/landing-page";
+import { KnowledgeIndex } from "../components/knowledge/knowledge-index";
 import { MarkdownEditor } from "../components/markdown-editor";
 import { SchemaView } from "../components/schema-view";
 import type { SettingsSection } from "../components/settings/sections";
@@ -22,17 +23,17 @@ import {
 AppLogo,
 IconGraph,
 IconHarp,
-IconPen,IconSearch,
+IconClose,IconNote,IconPlus,IconPen,IconSearch,
 IconSettings
 } from "../components/ui/icons";
 import { WorkspaceTree } from "../components/workspace-tree";
 import { ReadmeView } from "../components/readme-view";
 import { makeMarkdown,readMarkdown,resolveReference,type LinkCandidate } from "../lib/documents/markdown";
 import { AGENT_PERMISSIONS, type AgentPermission } from "../lib/agent/manual";
-import { RAW_FOLDERS } from "../lib/documents/structure";
+import { RAW_FOLDERS, WIKI_FOLDERS } from "../lib/documents/structure";
 
 import { getPreview } from "../lib/text-preview";
-import type { AgentRunTrace,AgentStep } from "../types/agent";
+import type { AgentDraft,AgentRunTrace,AgentStep } from "../types/agent";
 import type { GraphEdge,GraphNode } from "../types/graph";
 import type { Knowledge } from "../types/knowledge";
 import type { OrganizeDraft } from "../types/organize";
@@ -59,15 +60,15 @@ type Tab =
   | { id: string; kind: "view"; viewKey: ViewKey; label: string }
   | { id: string; kind: "raw"; rawId: string; label: string }
   | { id: string; kind: "knowledge"; knowledgeId: string; label: string }
-  | { id: string; kind: "draft"; rawId: string; label: string };
+  | { id: string; kind: "draft"; draftId: string; rawId: string; label: string };
 
 const viewMeta: Record<ViewKey, { label: string; shortLabel: string }> = {
   "new-note": { label: "新建笔记", shortLabel: "新建" },
   "knowledge-index": { label: "知识页", shortLabel: "知识" },
   agent: { label: "Agent", shortLabel: "Agent" },
   schema: { label: "Schema", shortLabel: "Schema" },
-  readme: { label: "readme", shortLabel: "readme" },
-  canvas: { label: "canvas", shortLabel: "canvas" },
+  readme: { label: "使用指南", shortLabel: "指南" },
+  canvas: { label: "自由白板", shortLabel: "白板" },
 };
 
 const NEW_NOTE_TAB: Tab = { id: "view:new-note", kind: "view", viewKey: "new-note", label: "新建笔记" };
@@ -113,8 +114,8 @@ export default function Home() {
   const [archivedNotes, setArchivedNotes] = useState<Knowledge[]>([]);
   const [graph, setGraph] = useState<GraphData>({ nodes: [], edges: [] });
   const [selectedKnowledge, setSelectedKnowledge] = useState<Knowledge | null>(null);
-  const [draft, setDraft] = useState<OrganizeDraft | null>(null);
-  const [draftRawId, setDraftRawId] = useState<string | null>(null);
+  /** 以 Raw 为键保留本轮每一份整理稿；关闭某个标签不影响其余草稿。 */
+  const [drafts, setDrafts] = useState<Record<string, { rawId: string; value: OrganizeDraft }>>({});
   const [selectedRelationIds, setSelectedRelationIds] = useState<string[]>([]);
   const [graphRefresh, setGraphRefresh] = useState(0);
   const [aiMessage, setAiMessage] = useState("");
@@ -132,7 +133,7 @@ export default function Home() {
   const [gateBusy,setGateBusy]=useState<string|null>(null);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [mentionTarget, setMentionTarget] = useState<MentionItem | null>(null);
-  const [, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isCreatingRaw, setIsCreatingRaw] = useState(false);
   const [organizingRawId, setOrganizingRawId] = useState<string | null>(null);
@@ -299,7 +300,7 @@ export default function Home() {
   }, [graph.nodes, graph.edges, graphSearch]);
 
   useEffect(() => { const refresh = () => { setListRefresh(v => v + 1); setGraphRefresh(v => v + 1); }; window.addEventListener("chordnote-documents-changed",refresh); return () => window.removeEventListener("chordnote-documents-changed",refresh); }, []);
-  useEffect(() => { const key = (e: KeyboardEvent) => { if ((e.ctrlKey || e.metaKey) && (e.key === "p" || e.key === "k")) { e.preventDefault(); setSearchOpen(v => !v); } }; window.addEventListener("keydown", key); return () => window.removeEventListener("keydown",key); }, []);
+  useEffect(() => { const key = (e: KeyboardEvent) => { if (entered && !settingsOpen && (e.ctrlKey || e.metaKey) && (e.key === "p" || e.key === "k")) { e.preventDefault(); setSearchOpen(v => !v); } }; window.addEventListener("keydown", key); return () => window.removeEventListener("keydown",key); }, [entered, settingsOpen]);
   function clearFeedback() {
     setError("");
     setNotice("");
@@ -437,8 +438,8 @@ export default function Home() {
     openTab({ id: `knowledge:${knowledge.id}`, kind: "knowledge", knowledgeId: knowledge.id, label: getPreview(knowledge.title, 18) });
   }
 
-  function openDraftTab(rawId: string) {
-    openTab({ id: `draft:${rawId}`, kind: "draft", rawId, label: "审阅整理稿" });
+  function openDraftTab(draft: AgentDraft) {
+    openTab({ id: `draft:${draft.draftId}`, kind: "draft", draftId: draft.draftId, rawId: draft.rawId, label: `整理 · ${getPreview(draft.value.title, 14)}` });
   }
 
   /**
@@ -529,17 +530,18 @@ export default function Home() {
 
   async function handleOrganize(rawId: string) {
     clearFeedback();
-    setDraft(null);
-    setDraftRawId(rawId);
+    setDrafts(current => Object.fromEntries(Object.entries(current).filter(([, item]) => item.rawId !== rawId)));
     setSelectedRelationIds([]);
     setOrganizingRawId(rawId);
 
-    try { await runAgentOrganize({ question: agentPermission === "full" ? "请检索现有知识后整理这条原始记录，用 draft_knowledge 直接收录知识页并分类来源；保留 wikilink。" : "请检索现有知识后整理这条原始记录，用 draft_knowledge 提出待确认整理稿；保留 wikilink。",contextType:"raw",contextId:rawId }); }
+    try { await runAgentOrganize({ question: agentPermission === "full" ? "请检索现有知识后整理这条原始记录，按需产出来源摘要页与必要的实体/概念页，用 draft_knowledge 直接收录并分类来源；保留 wikilink。" : "请检索现有知识后整理这条原始记录，按需产出来源摘要页与必要的实体/概念页（可多次调用 draft_knowledge），提出待确认整理稿；保留 wikilink。",contextType:"raw",contextId:rawId }); }
     finally { setOrganizingRawId(null); }
   }
 
-  async function handleConfirm() {
-    if (!draft || !draftRawId) return;
+  async function handleConfirm(draftId: string) {
+    const entry = drafts[draftId];
+    if (!entry) return;
+    const { rawId, value: draft } = entry;
     clearFeedback();
     setIsConfirming(true);
 
@@ -547,7 +549,7 @@ export default function Home() {
       const response = await fetch("/api/knowledge", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rawId: draftRawId, draft, origin: "ai" }),
+        body: JSON.stringify({ rawId, draft, origin: "ai" }),
       });
       const payload = (await response.json()) as { knowledge?: Knowledge; raw?: Raw; created?: boolean; error?: { message?: string } };
       if (!response.ok || !payload.knowledge) throw new Error(payload.error?.message ?? "整理稿暂时无法收录。它仍保留在当前页面，请稍后重试。");
@@ -564,16 +566,15 @@ export default function Home() {
         if (!relationResponse.ok) throw new Error(relationPayload.error?.message ?? "知识页已收录，但交叉引用暂时没有保存。请稍后重试。");
       }
 
-      if (draftRawId) closeTab(`draft:${draftRawId}`);
+      closeTab(`draft:${draftId}`);
       if (payload.created) {
         setKnowledges((current) => [payload.knowledge!, ...current]);
         setNotice("整理稿已确认并收录为知识页。你可以继续修订，或查看它的交叉引用。");
         openKnowledgeTab(payload.knowledge);
       } else {
-        setNotice("这条原始记录已经收录，没有重复创建知识页。");
+        setNotice("内容与已有页面相同，没有重复创建。");
       }
-      setDraft(null);
-      setDraftRawId(null);
+      setDrafts(current => { const next = { ...current }; delete next[draftId]; return next; });
       setSelectedRelationIds([]);
       setGraphRefresh((current) => current + 1);
       play("success");
@@ -614,6 +615,26 @@ export default function Home() {
       play("success");
     } catch (archiveError) {
       setError(archiveError instanceof Error ? archiveError.message : "归档状态暂时没有保存。原有知识页没有改变。");
+    }
+  }
+
+  /** 用户可逐页把历史 concept 内容迁移到 Wiki 的真实类别；保留版本检查。 */
+  async function handleMoveKnowledgeCategory(knowledge: Knowledge, category: string) {
+    clearFeedback();
+    try {
+      const response = await fetch(`/api/knowledge/${knowledge.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: `wilki/${category}/${knowledge.id}.md`, version: knowledge.version }),
+      });
+      const payload = await response.json() as { knowledge?: Knowledge; error?: { message?: string } };
+      if (!response.ok || !payload.knowledge) throw new Error(payload.error?.message ?? "分类暂时没有保存。");
+      setKnowledges(current => current.map(note => note.id === knowledge.id ? payload.knowledge! : note));
+      setSelectedKnowledge(current => current?.id === knowledge.id ? payload.knowledge! : current);
+      setNotice(`已移入 Wiki/${category}。`);
+      setListRefresh(current => current + 1);
+    } catch (moveError) {
+      setError(moveError instanceof Error ? moveError.message : "分类暂时没有保存。");
     }
   }
 
@@ -662,7 +683,12 @@ export default function Home() {
       setProposalCards(current => [...new Map([...current, ...payload.trace!.steps.filter(s => s.kind === "gate" && s.proposalId)].map(s => [s.proposalId, s])).values()]);
       setAgentSessionId(payload.trace.sessionId);
       setConversation(current=>[...current,{role:"assistant" as const,text:payload.trace!.message}].slice(-40));
-      if (payload.trace.draft) { setDraft(payload.trace.draft.value); setDraftRawId(payload.trace.draft.rawId); openDraftTab(payload.trace.draft.rawId); }
+      // Full permission already applies draft_knowledge in the host. A review
+      // tab here would incorrectly present an applied change as "待确认".
+      if (agentPermission === "propose" && payload.trace.drafts.length) {
+        setDrafts(current => ({ ...current, ...Object.fromEntries(payload.trace!.drafts.map(item => [item.draftId, { rawId: item.rawId, value: item.value }])) }));
+        payload.trace.drafts.forEach(openDraftTab);
+      }
       const savedKnowledge = payload.trace.steps.findLast(step => step.tool === "draft_knowledge" && step.status === "done")?.payload?.knowledge as Knowledge | undefined;
       if (savedKnowledge) {
         setKnowledges(current => [savedKnowledge, ...current.filter(note => note.id !== savedKnowledge.id)]);
@@ -797,8 +823,8 @@ export default function Home() {
       ? { question, contextType: mentionTarget.kind, contextId: mentionTarget.id }
       : activeTab?.kind === "knowledge" && selectedKnowledge
         ? { question, contextType: "knowledge" as const, contextId: selectedKnowledge.id }
-        : activeTab?.kind === "draft" && draft
-          ? { question, contextType: "draft" as const, draftContext: `${draft.title}\n\n${draft.summary}\n\n${draft.content}` }
+        : activeTab?.kind === "draft" && drafts[activeTab.draftId]
+          ? { question, contextType: "draft" as const, draftContext: `${drafts[activeTab.draftId].value.title}\n\n${drafts[activeTab.draftId].value.summary}\n\n${drafts[activeTab.draftId].value.content}` }
           : activeTab?.kind === "raw"
             ? { question, contextType: "raw" as const, contextId: activeTab.rawId }
             : { question, contextType: "none" as const };
@@ -825,25 +851,42 @@ export default function Home() {
       onOpenLink={target => void openDocumentLink(target)} onChange={next => { setText(next); setNoteTitle(readMarkdown(next).properties.title); }} />
       <div className="document-status" role="status">{isSaving ? "保存中" : ""}</div></section>;
   }
-  function renderNewNote() { return renderCaptureForm(); }
+  function renderNewNote() {
+    return renderCaptureForm();
+  }
 
-  function renderDraftReview() {
-    if (!draft) return null;
+  function renderDraftReview(draftId: string) {
+    const entry = drafts[draftId];
+    if (!entry) return <EmptyState title="整理稿已经处理" body="这份整理稿已确认或暂不采用。" />;
+    const { rawId, value: draft } = entry;
+    const raw = raws.find(item => item.id === rawId);
+    const draftMarkdown = makeMarkdown(draft.title, draft.content, { source: raw?.path ?? rawId, description: draft.summary, tags: draft.keywords });
+    const update = (next: OrganizeDraft) => setDrafts(current => ({ ...current, [draftId]: { rawId, value: next } }));
+    const updateDraft = (next: string) => {
+      const parsed = readMarkdown(next);
+      // Keep the draft payload canonical: the review surface renders a
+      // frontmatter wrapper, but the draft itself must only retain the body.
+      // Otherwise editing the visible note could feed YAML back into the
+      // organizer and create a second nested frontmatter block on confirm.
+      update({ ...draft, title: parsed.properties.title || draft.title, content: parsed.body, summary: parsed.properties.description, keywords: parsed.properties.tags });
+    };
     return <section className="document-session">
-      <div className="review-header"><StatusPill tone="warning">待确认</StatusPill><label className="review-source-category">来源分类<select aria-label="来源分类" value={draft.rawCategory ?? "articles"} onChange={event => setDraft({ ...draft, rawCategory: event.target.value as OrganizeDraft["rawCategory"] })}>{RAW_FOLDERS.map(folder => <option key={folder} value={folder}>{folder}</option>)}</select></label></div>
-      <MarkdownEditor value={makeMarkdown(draft.title, draft.content, { description: draft.summary, tags: draft.keywords })} candidates={documentCandidates}
-        onOpenLink={target => void openDocumentLink(target)} onChange={next => {
-          const parsed = readMarkdown(next);
-          setDraft({ ...draft, title: parsed.properties.title, content: next, summary: parsed.properties.description, keywords: parsed.properties.tags });
-        }} />
+      <div className="review-header"><StatusPill tone="warning">待确认</StatusPill><label className="review-source-category">来源分类<select aria-label="来源分类" value={draft.rawCategory} onChange={event => update({ ...draft, rawCategory: event.target.value as OrganizeDraft["rawCategory"] })}>{RAW_FOLDERS.map(folder => <option key={folder} value={folder}>{folder}</option>)}</select></label><label className="review-source-category">Wiki 分类<select aria-label="Wiki 分类" value={draft.wikiCategory} onChange={event => update({ ...draft, wikiCategory: event.target.value as OrganizeDraft["wikiCategory"] })}>{WIKI_FOLDERS.map(folder => <option key={folder} value={folder}>{folder}</option>)}</select></label></div>
+      <DocumentPropertiesPanel markdown={draftMarkdown} onChange={updateDraft} category={draft.wikiCategory} sources={[raw?.path ?? rawId]} />
+      <MarkdownEditor value={draftMarkdown} candidates={documentCandidates}
+        onOpenLink={target => void openDocumentLink(target)} onChange={updateDraft} />
       {draft.relatedKnowledge.length > 0 ? <fieldset className="relation-suggestions"><legend>建议关联</legend>{draft.relatedKnowledge.map((suggestion) => <label className="relation-option" key={suggestion.knowledgeId}><input type="checkbox" checked={selectedRelationIds.includes(suggestion.knowledgeId)} onChange={(event) => setSelectedRelationIds((current) => event.target.checked ? [...current, suggestion.knowledgeId] : current.filter((id) => id !== suggestion.knowledgeId))} /><span><strong>{suggestion.knowledgeId}</strong><small>{suggestion.reason}</small></span></label>)}</fieldset> : null}
-      <div className="review-actions"><button className="button-dark" type="button" data-sound="press" onClick={() => void handleConfirm()} disabled={isConfirming}>{isConfirming ? "正在收录" : "确认并收录"}</button><button className="button-secondary" type="button" data-sound="select" onClick={() => { if (draftRawId) closeTab(`draft:${draftRawId}`); setDraft(null); setDraftRawId(null); setSelectedRelationIds([]); setNotice("整理稿暂未采用，没有创建知识页。"); }} disabled={isConfirming}>暂不采用</button></div>
+      <div className="review-actions"><button className="button-dark" type="button" data-sound="press" onClick={() => void handleConfirm(draftId)} disabled={isConfirming}>{isConfirming ? "正在收录" : "确认并收录"}</button><button className="button-secondary" type="button" data-sound="select" onClick={() => { closeTab(`draft:${draftId}`); setDrafts(current => { const next = { ...current }; delete next[draftId]; return next; }); setSelectedRelationIds([]); setNotice("整理稿暂未采用，没有创建知识页。"); }} disabled={isConfirming}>暂不采用</button></div>
     </section>;
   }
 
   function documentSaved(updated: Raw | Knowledge) {
-    if ("rawId" in updated) setKnowledges(current => current.map(item => item.id === updated.id ? updated : item));
-    else setRaws(current => current.map(item => item.id === updated.id ? updated : item));
+    if ("rawId" in updated) {
+      setKnowledges(current => current.map(item => item.id === updated.id ? updated : item));
+      setSelectedKnowledge(current => current?.id === updated.id ? updated : current);
+    } else {
+      setRaws(current => current.map(item => item.id === updated.id ? updated : item));
+    }
     setOpenTabs(current => current.map(tab => tab.id === `raw:${updated.id}` || tab.id === `knowledge:${updated.id}` ? { ...tab, label: updated.title || "未命名" } : tab));
     setGraphRefresh(current => current + 1);
   }
@@ -875,21 +918,7 @@ export default function Home() {
   }
 
   function renderKnowledgeIndex() {
-    return <>
-      <header className="workspace-heading compact-heading">
-        <div>
-          <h1>wiki</h1>
-        </div>
-        <StatusPill tone="accent">{knowledges.length} 篇</StatusPill>
-      </header>
-      <section className="content-section">
-        <EmptyState
-          title={knowledges.length > 0 ? "从左侧打开一篇知识页" : "还没有知识页"}
-          body={knowledges.length > 0 ? "知识页会在标签中打开，方便你在多篇内容之间切换。" : "先在 Home 留下一条原始记录，再确认整理稿，它就会出现在这里。"}
-          action={knowledges.length === 0 ? <button className="button-dark" type="button" data-sound="press" onClick={() => navigate("new-note")}>留下原话</button> : undefined}
-        />
-      </section>
-    </>;
+    return <KnowledgeIndex notes={knowledges} onOpen={openKnowledgeTab} onNewNote={() => navigate("new-note")} />;
   }
 
   function renderGraph() {
@@ -956,12 +985,13 @@ export default function Home() {
     const gateLabels = { pending: "待确认", accepted: "已应用", ignored: "已拒绝", stale: "内容已变化，请重新生成提议", failed: "应用失败，请重新生成提议" };
     const currentQuestionIndex = conversation.reduce((last, message, index) => message.role === "user" ? index : last, -1);
     return <div className="agent-chat">
-      <header className="agent-chat-head"><IconHarp /><span>Agent</span><button className="agent-new-session" disabled={isAgentRunning || sessionEnding} onClick={() => void endAgentSession()}>新会话</button><button onClick={hideRail} aria-label="关闭 Agent">×</button></header>
+      <header className="agent-chat-head"><IconHarp /><span className="agent-chat-identity"><b>知音</b><small>{isAgentRunning ? "工作中" : "静息中"}</small></span><button className="agent-new-session" disabled={isAgentRunning || sessionEnding} onClick={() => void endAgentSession()}>新会话</button><button onClick={hideRail} aria-label="关闭 Agent"><IconClose /></button></header>
       <div className="agent-chat-history" aria-live="polite" ref={agentHistoryRef}>
         <AgentStage mode={isAgentRunning ? "work" : "rest"} />
         {isAgentRunning ? <p role="status">正在处理…</p> : null}
         {aiMessage ? <p>{aiMessage}</p> : null}
         {conversation.map((message,i)=><div className="agent-conversation-message" data-current-agent-question={i === currentQuestionIndex ? "true" : undefined} key={i}><AgentMessage role={message.role} text={message.text} candidates={documentCandidates} onOpenLink={target => void openDocumentLink(target)} /></div>)}
+        {agentPermission === "propose" && agentTrace?.drafts.some(item => drafts[item.draftId]) ? <div className="agent-draft-list" aria-label="待确认整理稿">{agentTrace.drafts.filter(item => drafts[item.draftId]).map(item => <button className="text-button" type="button" key={item.draftId} onClick={() => openDraftTab(item)}>审阅：{item.value.title}</button>)}</div> : null}
         {agentTrace ? <details><summary>运行过程</summary><ol className="agent-step-list">{agentTrace.steps.map(renderAgentStep)}</ol></details> : null}
         {actionable.length > 0 ? <p className="muted-note agent-proposal-heading">待确认提议</p> : null}
         {actionable.length > 1 ? <button className="text-button" disabled={gateBusy !== null} onClick={() => void acceptAll(actionable)}>确认应用全部 {actionable.length} 项</button> : null}
@@ -992,7 +1022,7 @@ export default function Home() {
         />
         <div className="composer-actions">
           <details className="composer-permission">
-            <summary aria-label="AI 权限" title={`AI 权限：${AGENT_PERMISSIONS.find(item => item.id === agentPermission)?.label}`}>＋</summary>
+            <summary aria-label="AI 权限" title={`AI 权限：${AGENT_PERMISSIONS.find(item => item.id === agentPermission)?.label}`}><span aria-hidden="true">＋</span><span>{AGENT_PERMISSIONS.find(item => item.id === agentPermission)?.label}</span></summary>
             <div className="permission-menu" role="menu">
               {AGENT_PERMISSIONS.map(item => (
                 <button key={item.id} type="button" role="menuitemradio" aria-checked={agentPermission === item.id} className={agentPermission === item.id ? "is-active" : ""} onClick={event => { setAgentPermission(item.id); event.currentTarget.closest("details")?.removeAttribute("open"); }}>
@@ -1001,7 +1031,7 @@ export default function Home() {
               ))}
             </div>
           </details>
-          <div className="composer-send"><AgentModelSelect /><button type="submit" disabled={isAgentRunning || sessionEnding || !aiQuestion.trim()}>发送</button></div>
+          <div className="composer-send"><AgentModelSelect /><button type="submit" aria-label="发送消息" disabled={isAgentRunning || sessionEnding || !aiQuestion.trim()}>↑</button></div>
         </div>
       </form>
     </div>;
@@ -1011,7 +1041,7 @@ export default function Home() {
     switch (activeTab.kind) {
       case "raw": return renderRawTab(activeTab.rawId);
       case "knowledge": return renderKnowledgeTab(activeTab.knowledgeId);
-      case "draft": return renderDraftReview();
+      case "draft": return renderDraftReview(activeTab.draftId);
       case "view":
         switch (activeTab.viewKey) {
           case "new-note": return renderNewNote();
@@ -1058,12 +1088,12 @@ export default function Home() {
   return (
     <AppShell
       ribbon={<nav className="workspace-ribbon" aria-label="工作区入口">
-        <button className="ribbon-logo" aria-label="打开或关闭左侧栏" aria-expanded={sidebarOpen} onClick={() => setSidebarOpen(v => !v)}>C</button>
-        <button aria-label="查找笔记" title="查找笔记" onClick={() => setSearchOpen(true)}><IconSearch /></button>
-        <button aria-label="知识图谱" title="知识图谱" onClick={() => openSpace("graph")}><IconGraph /></button>
-        <button aria-label="白板 canvas" title="白板 canvas" onClick={() => navigate("canvas")}><IconPen /></button>
-        <button aria-label="Agent" title="Agent" onClick={toggleRail}><IconHarp /></button>
-        <button className="ribbon-settings" aria-label="打开设置" title="设置" onClick={() => openSpace("settings")}><IconSettings /></button>
+        <button className="ribbon-logo" aria-label="打开或关闭左侧栏" data-tooltip="笔记目录" aria-expanded={sidebarOpen} aria-controls="workspace-nav" onClick={() => setSidebarOpen(v => !v)}>C</button>
+        <button aria-label="查找笔记" data-tooltip="查找笔记 · Ctrl K" onClick={() => setSearchOpen(true)}><IconSearch /></button>
+        <button aria-label="知识图谱" data-tooltip="知识图谱" aria-pressed={activeSpace === "graph"} onClick={() => openSpace("graph")}><IconGraph /></button>
+        <button aria-label="白板 canvas" data-tooltip="自由白板" aria-pressed={activeSpace === "home" && activeTab.kind === "view" && activeTab.viewKey === "canvas"} onClick={() => navigate("canvas")}><IconPen /></button>
+        <button aria-label="Agent" data-tooltip="知音 · 整理助手" aria-expanded={railShow} aria-controls="context-rail" onClick={toggleRail}><IconHarp /></button>
+        <button className="ribbon-settings" aria-label="打开设置" data-tooltip="设置" aria-expanded={settingsOpen} onClick={() => openSpace("settings")}><IconSettings /></button>
       </nav>}
       sidebarOpen={sidebarOpen}
       railHidden={!railShow}
@@ -1077,7 +1107,9 @@ export default function Home() {
       }
       sidebar={
         <aside id="workspace-nav" className={`workspace-sidebar${mobileNavOpen ? " is-open" : ""}${sidebarOpen ? "" : " is-collapsed"}`}>
-          <WorkspaceTree raws={raws} notes={knowledges} archivedNotes={archivedNotes} rawLabel={rawLabel} onRaw={openRawTab} onNote={openKnowledgeTab} onView={navigate}
+          <div className="workspace-sidebar-head"><strong>Chordnote</strong><button type="button" aria-label="新建笔记" title="新建笔记" disabled={isCreatingRaw || isLoading} onClick={() => navigate("new-note")}><IconPlus /></button></div>
+          <button type="button" className="sidebar-search" onClick={() => setSearchOpen(true)}><IconSearch /><span>查找笔记</span><kbd>Ctrl K</kbd></button>
+          <WorkspaceTree raws={raws} notes={knowledges} archivedNotes={archivedNotes} activeId={activeTab.kind === "raw" ? activeTab.rawId : activeTab.kind === "knowledge" ? activeTab.knowledgeId : activeTab.kind === "view" ? activeTab.viewKey : undefined} rawLabel={rawLabel} onRaw={openRawTab} onNote={openKnowledgeTab} onView={navigate} onKnowledgeIndex={() => navigate("knowledge-index")}
             onRawMenu={(raw,x,y) => setContextMenu({ type:"raw", raw,x,y })} onNoteMenu={(knowledge,x,y) => setContextMenu({ type:"knowledge-title", knowledge,x,y })} />
         </aside>
       }
@@ -1086,19 +1118,30 @@ export default function Home() {
           <div className="workspace-topbar">
             <div className="breadcrumb"><span>Chordnote</span><span aria-hidden="true">/</span><strong>{breadcrumbLabel}</strong></div>
             <div className="topbar-actions">
+              <button type="button" className="topbar-new" aria-label="新建笔记" disabled={isCreatingRaw || isLoading} onClick={() => navigate("new-note")}><IconPlus /><span>新建笔记</span></button>
               {showInspector ? (
-                <button className={`rail-toggle${railShow ? " is-active" : ""}`} type="button" data-sound="select" aria-expanded={railShow} aria-controls="context-rail" onClick={toggleRail} aria-label="打开或关闭 Agent"><IconHarp /></button>
+                <button className={`rail-toggle${railShow ? " is-active" : ""}`} type="button" data-sound="select" aria-expanded={railShow} aria-controls="context-rail" onClick={toggleRail} aria-label="打开或关闭 Agent"><IconHarp /><span>知音</span></button>
               ) : null}
 
             </div>
           </div>
 
           {activeSpace === "home" || activeSpace === "knowledge" ? (
-            <div className="tab-bar" role="tablist">
+            <div className="tab-bar" role="tablist" aria-label="已打开的笔记">
               {visibleTabs.map((tab) => (
-                <div key={tab.id} className={`tab-chip${activeTabId === tab.id ? " is-active" : ""}`} role="tab" tabIndex={activeTabId === tab.id ? 0 : -1} data-sound="select" aria-selected={activeTabId === tab.id} onClick={() => { setActiveTabId(tab.id); setRailOpen(false); }} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setActiveTabId(tab.id); setRailOpen(false); } }}>
-                  <span>{tab.label}</span>
-                  <button type="button" data-sound="select" aria-label="关闭标签" onClick={(event) => { event.stopPropagation(); closeTab(tab.id); }}>×</button>
+                <div key={tab.id} className={`tab-chip${activeTabId === tab.id ? " is-active" : ""}`} role="tab" tabIndex={activeTabId === tab.id ? 0 : -1} data-sound="select" aria-selected={activeTabId === tab.id} onClick={() => { setActiveTabId(tab.id); setRailOpen(false); }} onKeyDown={(event) => {
+                  if (event.target !== event.currentTarget) return;
+                  if (event.key === "ArrowRight" || event.key === "ArrowLeft" || event.key === "Home" || event.key === "End") {
+                    event.preventDefault();
+                    const index = visibleTabs.findIndex(item => item.id === tab.id);
+                    const nextIndex = event.key === "Home" ? 0 : event.key === "End" ? visibleTabs.length - 1 : (index + (event.key === "ArrowRight" ? 1 : -1) + visibleTabs.length) % visibleTabs.length;
+                    setActiveTabId(visibleTabs[nextIndex].id); setRailOpen(false);
+                    (event.currentTarget.parentElement?.children[nextIndex] as HTMLElement)?.focus();
+                  }
+                  if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setActiveTabId(tab.id); setRailOpen(false); }
+                }}>
+                  <IconNote /><span>{tab.label}</span>
+                  <button type="button" data-sound="select" aria-label={`关闭标签：${tab.label}`} onClick={(event) => { event.stopPropagation(); closeTab(tab.id); }}><IconClose /></button>
                 </div>
               ))}
             </div>
@@ -1106,7 +1149,7 @@ export default function Home() {
 
           <div className="workspace-content">
             <div className="main-column">
-              {error ? <div className="feedback-banner error-message" role="alert">{error}</div> : null}
+              {error ? <div className="feedback-banner error-message" role="alert"><span>{error}</span><button type="button" aria-label="关闭错误提示" onClick={() => setError("")}><IconClose /></button></div> : null}
               {notice ? <div className="feedback-banner notice-message" aria-live="polite">{notice}</div> : null}
               {renderSpaceContent()}
             </div>
@@ -1124,7 +1167,7 @@ export default function Home() {
       mobileBottomNav={
         <nav className="mobile-bottom-nav" aria-label="移动端导航">
           {(["home", "knowledge", "graph", "agent", "settings"] as Space[]).map((space) => (
-            <button key={space} className={space === "settings" ? (settingsOpen ? "is-active" : "") : (activeSpace === space ? "is-active" : "")} type="button" data-sound="select" onClick={() => openSpace(space)}>
+            <button key={space} className={space === "settings" ? (settingsOpen ? "is-active" : "") : space === "agent" ? (railShow ? "is-active" : "") : (activeSpace === space ? "is-active" : "")} aria-current={space === activeSpace && space !== "agent" ? "page" : undefined} type="button" data-sound="select" onClick={() => openSpace(space)}>
               <span>{SPACE_META[space].shortLabel}</span>
             </button>
           ))}
@@ -1145,7 +1188,7 @@ export default function Home() {
             onClose={() => setSettingsOpen(false)}
           />
           {contextMenu?.type === "raw" ? <div className="raw-context-menu" style={{ left: contextMenu.x, top: contextMenu.y }} onClick={(event) => event.stopPropagation()}><div className="context-menu-label">原始记录</div><div className="context-menu-title">{getPreview(contextMenu.raw.text, 62)}</div><button type="button" data-sound="press" onClick={() => { openRawTab(contextMenu.raw); setContextMenu(null); }}>编辑原话</button><button type="button" data-sound="destructive" onClick={() => void handleDeleteRaw(contextMenu.raw)}>移除这条记录</button></div> : null}
-          {contextMenu?.type === "knowledge-title" ? <div className="raw-context-menu" style={{ left: contextMenu.x, top: contextMenu.y }} onClick={(event) => event.stopPropagation()}><div className="context-menu-label">修订标题</div><div className="context-menu-title">{getPreview(contextMenu.knowledge.title, 62)}</div><button type="button" data-sound="press" onClick={() => { openKnowledgeTab(contextMenu.knowledge); setContextMenu(null); }}>打开</button><button type="button" onClick={() => { void handleArchiveNote(contextMenu.knowledge,true); setContextMenu(null); }}>归档</button></div> : null}
+          {contextMenu?.type === "knowledge-title" ? <div className="raw-context-menu" style={{ left: contextMenu.x, top: contextMenu.y }} onClick={(event) => event.stopPropagation()}><div className="context-menu-label">修订标题</div><div className="context-menu-title">{getPreview(contextMenu.knowledge.title, 62)}</div><button type="button" data-sound="press" onClick={() => { openKnowledgeTab(contextMenu.knowledge); setContextMenu(null); }}>打开</button><details><summary>移动到 Wiki</summary>{WIKI_FOLDERS.map(category => <button type="button" key={category} disabled={contextMenu.knowledge.path?.split("/")[1] === category} onClick={() => { void handleMoveKnowledgeCategory(contextMenu.knowledge, category); setContextMenu(null); }}>{category}</button>)}</details><button type="button" onClick={() => { void handleArchiveNote(contextMenu.knowledge,true); setContextMenu(null); }}>归档</button></div> : null}
         </>
       }
     />

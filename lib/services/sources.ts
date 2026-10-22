@@ -89,7 +89,7 @@ export async function getSource(id: string): Promise<Raw | null> {
 }
 
 /** Change only source metadata; the original Markdown and text remain untouched. */
-export async function classifySourceInTx(tx: DbTransaction, id: string, category: RawCategory, actor?: Actor, expectedVersion?: number) {
+export async function classifySourceInTx(tx: DbTransaction, id: string, category: RawCategory, actor?: Actor, expectedVersion?: number, detail: Record<string, unknown> = {}) {
   if (!isRawCategory(category)) throw new Error("INVALID_RAW_CATEGORY");
   const ctx = getUserContext(actor);
   const current = (await tx.select().from(rawNotes).where(and(eq(rawNotes.id, id), eq(rawNotes.userId, ctx.userId), isNull(rawNotes.archivedAt))).limit(1).for("update"))[0];
@@ -101,7 +101,7 @@ export async function classifySourceInTx(tx: DbTransaction, id: string, category
   const [updated] = await tx.update(rawNotes).set({ path, version: current.version + 1, updatedAt: new Date() })
     .where(and(eq(rawNotes.id, id), eq(rawNotes.userId, ctx.userId))).returning();
   await tx.insert(auditLog).values({ id: `audit_${randomUUID()}`, userId: ctx.userId, actorType: ctx.actor.type, actorId: ctx.actor.id,
-    operation: "raw.classify", targetType: "raw", targetId: id, result: "ok", detail: { beforePath: current.path, afterPath: path, version: updated.version } });
+    operation: "raw.classify", targetType: "raw", targetId: id, result: "ok", detail: { beforePath: current.path, afterPath: path, version: updated.version, ...detail } });
   return toSource(updated);
 }
 

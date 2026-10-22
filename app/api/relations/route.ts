@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { LINK_TYPES, type LinkType } from "../../../lib/db/enums";
 import { createOrReviveLink, listLinks } from "../../../lib/services/links";
 import { getNote } from "../../../lib/services/notes";
 
@@ -10,6 +11,7 @@ type RelationRequestBody = {
   targetId?: unknown;
   type?: unknown;
   reason?: unknown;
+  evidence?: unknown;
 };
 
 function errorResponse(message: string, status: number, code: string) {
@@ -61,12 +63,19 @@ export async function POST(request: Request) {
     return errorResponse("同一张知识页无需与自己建立交叉引用。", 400, "SELF_RELATION");
   }
 
-  if (body.type !== "related") {
+  const type = body.type === undefined ? "related" : body.type;
+  if (typeof type !== "string" || !LINK_TYPES.includes(type as LinkType)) {
     return errorResponse("暂时无法识别这种关联方式，请重新选择。", 400, "RELATION_TYPE_INVALID");
   }
 
   if (typeof body.reason !== "string" || !body.reason.trim()) {
     return errorResponse("请说明两张知识页为何相关。", 400, "RELATION_REASON_REQUIRED");
+  }
+
+  // 有方向的关联必须带证据；related 可以不填。
+  const evidence = typeof body.evidence === "string" && body.evidence.trim() ? body.evidence.trim() : null;
+  if (type !== "related" && !evidence) {
+    return errorResponse("有方向的关联需要给出支撑它的原文证据。", 400, "RELATION_EVIDENCE_REQUIRED");
   }
 
   try {
@@ -87,6 +96,8 @@ export async function POST(request: Request) {
       sourceId: source.id,
       targetId: target.id,
       reason: body.reason.trim(),
+      type: type as LinkType,
+      evidence,
     });
 
     return NextResponse.json(result, { status: result.created ? 201 : 200 });
