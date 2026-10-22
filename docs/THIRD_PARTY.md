@@ -14,10 +14,9 @@
 | react-dom | https://react.dev | ^19.0.0 | 19.3.0 | MIT | React DOM 渲染 | |
 | @electric-sql/pglite | https://github.com/electric-sql/pglite | ^0.5.10 | 0.5.10 | Apache-2.0 | 本地嵌入式 PostgreSQL（WASM），知识库就存在它里面 | 必须留在 `next.config.ts` 的 `serverExternalPackages` 里 |
 | drizzle-orm | https://orm.drizzle.team | 0.45.4 | 0.45.4 | Apache-2.0 | ORM / 查询构造 | 版本精确锁定 |
-| three | https://threejs.org | 0.186.0 | 0.186.0 | MIT | 落地页 WebGL 场景 | 版本精确锁定；仅在落地页使用 |
-| @tsparticles/engine | https://github.com/tsparticles/tsparticles | ^4.4.0 | 4.4.0 | MIT | 落地页星尘粒子（引擎） | |
-| @tsparticles/react | https://github.com/tsparticles/tsparticles | ^4.4.0 | 4.4.0 | MIT | 落地页星尘粒子（React 封装） | 用于 `components/landing-stardust.tsx` |
-| @tsparticles/slim | https://github.com/tsparticles/tsparticles | ^4.4.0 | 4.4.0 | MIT | 落地页星尘粒子（精简特性包） | |
+| @tsparticles/engine | https://github.com/tsparticles/tsparticles | ^4.4.0 | 4.4.0 | MIT | 工作台背景星尘（引擎） | |
+| @tsparticles/react | https://github.com/tsparticles/tsparticles | ^4.4.0 | 4.4.0 | MIT | 工作台背景星尘（React 封装） | 用于 `components/landing-stardust.tsx` 的 `AppStardust` |
+| @tsparticles/slim | https://github.com/tsparticles/tsparticles | ^4.4.0 | 4.4.0 | MIT | 工作台背景星尘（精简特性包） | |
 | **d3-force** | https://github.com/d3/d3-force | **^3.0.0** | 3.0.0 | **ISC** | **知识网络的力导向布局计算** | **仅用力学计算，渲染由 `components/graph-view.tsx` 自绘 Canvas** |
 | @deepseek-ai/dsh-sdk-client、dsh-llm、dsh-tools（及同版 peers） | https://github.com/deepseek-ai/dsh | 0.2.1-rc.2 | 0.2.1-rc.2 | MIT | 统一多模型 Agent Harness | 本地受控工具循环；原生 shell / 文件工具保持禁用 |
 | @agentclientprotocol/sdk | https://github.com/agentclientprotocol/agent-client-protocol | 1.9.0 | 1.9.0 | Apache-2.0 | ACP 外部 Agent 协议客户端 | 外部进程不继承 Chordnote 密钥，只能通过受控 MCP 桥调用工具 |
@@ -54,7 +53,6 @@
 | @types/pg | ^8.23.1 | 8.23.1 | MIT | pg 类型（历史遗留，当前驱动是 PGlite，不直接用 `pg`） |
 | @types/react | ^19.0.0 | 19.3.0 | MIT | React 类型 |
 | @types/react-dom | ^19.0.0 | 19.3.0 | MIT | ReactDOM 类型 |
-| @types/three | 0.186.0 | 0.186.0 | MIT | three 类型 |
 | @tauri-apps/cli | 2.12.3 | 2.12.3 | MIT / Apache-2.0 | Tauri 2 开发、编译和 NSIS 打包命令 | 仅用于 Windows 桌面宿主；Node 服务仍由 Next.js Standalone 提供 |
 
 ### Windows 桌面宿主的 Rust 依赖

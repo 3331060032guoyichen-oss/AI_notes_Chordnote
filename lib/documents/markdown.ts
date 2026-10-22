@@ -40,7 +40,14 @@ export type WikiReference = { from: number; to: number; target: string; alias: s
 
 export function splitFrontmatter(markdown: string) {
   const match = markdown.match(/^\uFEFF?---\r?\n([\s\S]*?)\r?\n(?:---|\.\.\.)(?:\r?\n|$)/);
-  return { yaml: match?.[1] ?? "", body: markdown.slice(match?.[0].length ?? 0), offset: match?.[0].length ?? 0 };
+  if (!match) return { yaml: "", body: markdown, offset: 0 };
+  // \u5F00\u5934\u7684 --- \u4E5F\u53EF\u80FD\u53EA\u662F Markdown \u5206\u9694\u7EBF\u3002\u53EA\u6709\u4E2D\u95F4\u786E\u5B9E\u662F YAML \u6620\u5C04\u65F6\u624D\u5F53 frontmatter\uFF0C
+  // \u5426\u5219\u4FDD\u7559\u4E3A\u6B63\u6587\uFF0C\u907F\u514D\u628A `---\n\u6807\u9898\n---` \u8FD9\u7C7B\u624B\u5199\u5185\u5BB9\u6539\u5199\u574F\u3002
+  const candidate = parseDocument(match[1]);
+  const value: unknown = candidate.toJS({ maxAliasCount: 50 });
+  const isMapping = !candidate.errors.length && (value === null || (typeof value === "object" && !Array.isArray(value)));
+  if (!isMapping) return { yaml: "", body: markdown, offset: 0 };
+  return { yaml: match[1], body: markdown.slice(match[0].length), offset: match[0].length };
 }
 
 export function readMarkdown(markdown: string) {
@@ -50,7 +57,7 @@ export function readMarkdown(markdown: string) {
   const value: unknown = document.toJS({ maxAliasCount: 50 });
   if (value !== null && (typeof value !== "object" || Array.isArray(value))) throw new Error("属性必须是 YAML 对象。");
   const data = (value ?? {}) as Record<string, unknown>;
-  const heading = body.match(/^#\s+(.+?)\s*#*\s*$/m)?.[1] ?? "";
+  const heading = body.match(/^#(?!\#)\s*(.+?)\s*#*\s*$/m)?.[1] ?? "";
   const str = (key: string, fallback = "") => typeof data[key] === "string" ? data[key] as string : fallback;
   const tags = data.tags ?? data.keywords;
   return {
@@ -66,11 +73,18 @@ export function readMarkdown(markdown: string) {
 /** Edits the YAML AST so unknown fields and comments survive property changes. */
 export function patchProperties(markdown: string, patch: Partial<DocumentProperties>) {
   const { yaml, body } = splitFrontmatter(markdown);
-  const document = parseDocument(yaml);
+  let document = parseDocument(yaml);
   if (document.errors.length) throw new Error("属性格式有误，请先修复后保存。");
+  if (!document.contents) {
+    document = parseDocument("{}");
+    const contents = document.contents as { flow?: boolean } | null;
+    if (contents) contents.flow = false;
+  }
   for (const [key, value] of Object.entries(patch)) document.set(key, value);
   const nextBody = patch.title !== undefined
-    ? /^# [^\n]*$/m.test(body) ? body.replace(/^# [^\n]*$/m, () => `# ${patch.title}`) : `# ${patch.title}\n\n${body}`
+    ? /^#(?!\#)\s*[^\n]*$/m.test(body)
+      ? body.replace(/^#(?!\#)\s*[^\n]*$/m, () => `# ${patch.title}`)
+      : `# ${patch.title}\n\n${body}`
     : body;
   return `---\n${document.toString()}---\n${nextBody}`;
 }

@@ -29,7 +29,8 @@
     "active": true,
     "targets": ["nsis"],
     "resources": {
-      "../.desktop/runtime/": "runtime/"
+      "../.desktop/runtime/": "runtime/",
+      "../.desktop/demo/": "demo/"
     },
     "windows": {
       "bundleVCRuntime": true,

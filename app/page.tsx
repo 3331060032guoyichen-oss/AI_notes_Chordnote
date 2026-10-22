@@ -12,6 +12,8 @@ import { GraphView } from "../components/graph-view";
 import { useInterfaceSound } from "../components/interface-sound";
 import { LandingPage } from "../components/landing-page";
 import { KnowledgeIndex } from "../components/knowledge/knowledge-index";
+import { WikiIndexView } from "../components/knowledge/wiki-index";
+import { WikiLogView } from "../components/knowledge/wiki-log";
 import { MarkdownEditor } from "../components/markdown-editor";
 import { SchemaView } from "../components/schema-view";
 import type { SettingsSection } from "../components/settings/sections";
@@ -49,7 +51,7 @@ import type { Raw } from "../types/raw";
  */
 const AUTO_SAVE_DELAY_MS = 2_000;
 
-type ViewKey = "new-note" | "knowledge-index" | "agent" | "schema" | "readme" | "canvas";
+type ViewKey = "new-note" | "knowledge-index" | "wiki-index" | "wiki-log" | "agent" | "schema" | "readme" | "canvas";
 
 type GraphData = { nodes: GraphNode[]; edges: GraphEdge[] };
 type BootstrapPayload = { raws?: Raw[]; knowledges?: Knowledge[]; archivedKnowledges?: Knowledge[]; graph?: GraphData; proposals?: Proposal[] };
@@ -65,6 +67,8 @@ type Tab =
 const viewMeta: Record<ViewKey, { label: string; shortLabel: string }> = {
   "new-note": { label: "新建笔记", shortLabel: "新建" },
   "knowledge-index": { label: "知识页", shortLabel: "知识" },
+  "wiki-index": { label: "Wiki Index", shortLabel: "索引" },
+  "wiki-log": { label: "Wiki Log", shortLabel: "日志" },
   agent: { label: "Agent", shortLabel: "Agent" },
   schema: { label: "Schema", shortLabel: "Schema" },
   readme: { label: "使用指南", shortLabel: "指南" },
@@ -81,6 +85,7 @@ function tabSpace(tab: Tab): ContentSpace | null {
   if (tab.kind === "knowledge") return "knowledge";
   if (tab.kind === "view" && ["new-note", "schema", "readme", "canvas"].includes(tab.viewKey)) return "home";
   if (tab.kind === "view" && tab.viewKey === "knowledge-index") return "knowledge";
+  if (tab.kind === "view" && (tab.viewKey === "wiki-index" || tab.viewKey === "wiki-log")) return "knowledge";
   return null;
 }
 
@@ -199,6 +204,7 @@ export default function Home() {
     | { type: "knowledge-title"; knowledge: Knowledge; x: number; y: number }
     | null
   >(null);
+  const [deleteTarget, setDeleteTarget] = useState<Raw | null>(null);
 
   /** 主题在 Settings 之外也要生效：空间卸载后 `<html data-studio>` 已经写在 DOM 上，但启动时需要恢复一次。 */
   useEffect(() => {
@@ -249,6 +255,13 @@ export default function Home() {
       window.removeEventListener("blur", closeContextMenu);
     };
   }, [contextMenu]);
+
+  useEffect(() => {
+    if (!deleteTarget) return;
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") setDeleteTarget(null); };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [deleteTarget]);
 
   useEffect(() => {
     if (!railOpen) return;
@@ -510,7 +523,7 @@ export default function Home() {
 
   async function handleDeleteRaw(raw: Raw) {
     setContextMenu(null);
-    if (!window.confirm(`确定移除这条原始记录吗？\n\n${getPreview(raw.text, 100)}`)) return;
+    setDeleteTarget(null);
 
     clearFeedback();
     try {
@@ -872,7 +885,7 @@ export default function Home() {
     };
     return <section className="document-session">
       <div className="review-header"><StatusPill tone="warning">待确认</StatusPill><label className="review-source-category">来源分类<select aria-label="来源分类" value={draft.rawCategory} onChange={event => update({ ...draft, rawCategory: event.target.value as OrganizeDraft["rawCategory"] })}>{RAW_FOLDERS.map(folder => <option key={folder} value={folder}>{folder}</option>)}</select></label><label className="review-source-category">Wiki 分类<select aria-label="Wiki 分类" value={draft.wikiCategory} onChange={event => update({ ...draft, wikiCategory: event.target.value as OrganizeDraft["wikiCategory"] })}>{WIKI_FOLDERS.map(folder => <option key={folder} value={folder}>{folder}</option>)}</select></label></div>
-      <DocumentPropertiesPanel markdown={draftMarkdown} onChange={updateDraft} category={draft.wikiCategory} sources={[raw?.path ?? rawId]} />
+      <DocumentPropertiesPanel markdown={draftMarkdown} onChange={updateDraft} category={draft.wikiCategory} sources={[raw?.path ?? rawId]} candidates={documentCandidates} />
       <MarkdownEditor value={draftMarkdown} candidates={documentCandidates}
         onOpenLink={target => void openDocumentLink(target)} onChange={updateDraft} />
       {draft.relatedKnowledge.length > 0 ? <fieldset className="relation-suggestions"><legend>建议关联</legend>{draft.relatedKnowledge.map((suggestion) => <label className="relation-option" key={suggestion.knowledgeId}><input type="checkbox" checked={selectedRelationIds.includes(suggestion.knowledgeId)} onChange={(event) => setSelectedRelationIds((current) => event.target.checked ? [...current, suggestion.knowledgeId] : current.filter((id) => id !== suggestion.knowledgeId))} /><span><strong>{suggestion.knowledgeId}</strong><small>{suggestion.reason}</small></span></label>)}</fieldset> : null}
@@ -1046,6 +1059,8 @@ export default function Home() {
         switch (activeTab.viewKey) {
           case "new-note": return renderNewNote();
           case "knowledge-index": return renderKnowledgeIndex();
+          case "wiki-index": return <WikiIndexView notes={knowledges} onOpen={openKnowledgeTab} />;
+          case "wiki-log": return <WikiLogView />;
           case "agent": return null;
           case "schema": return <SchemaView />;
           case "readme": return <ReadmeView />;
@@ -1187,8 +1202,24 @@ export default function Home() {
             onRestoreNote={(note) => void handleArchiveNote(note, false)}
             onClose={() => setSettingsOpen(false)}
           />
-          {contextMenu?.type === "raw" ? <div className="raw-context-menu" style={{ left: contextMenu.x, top: contextMenu.y }} onClick={(event) => event.stopPropagation()}><div className="context-menu-label">原始记录</div><div className="context-menu-title">{getPreview(contextMenu.raw.text, 62)}</div><button type="button" data-sound="press" onClick={() => { openRawTab(contextMenu.raw); setContextMenu(null); }}>编辑原话</button><button type="button" data-sound="destructive" onClick={() => void handleDeleteRaw(contextMenu.raw)}>移除这条记录</button></div> : null}
+          {contextMenu?.type === "raw" ? <div className="raw-context-menu" style={{ left: contextMenu.x, top: contextMenu.y }} onClick={(event) => event.stopPropagation()}>
+            <div className="context-menu-label">原始记录</div>
+            <div className="context-menu-title">{getPreview(contextMenu.raw.text || contextMenu.raw.title || "未命名", 62)}</div>
+            <button type="button" data-sound="press" onClick={() => { openRawTab(contextMenu.raw); setContextMenu(null); }}>编辑原话</button>
+            <button type="button" data-sound="destructive" onClick={() => { setContextMenu(null); setDeleteTarget(contextMenu.raw); }}>移除这条记录</button>
+          </div> : null}
           {contextMenu?.type === "knowledge-title" ? <div className="raw-context-menu" style={{ left: contextMenu.x, top: contextMenu.y }} onClick={(event) => event.stopPropagation()}><div className="context-menu-label">修订标题</div><div className="context-menu-title">{getPreview(contextMenu.knowledge.title, 62)}</div><button type="button" data-sound="press" onClick={() => { openKnowledgeTab(contextMenu.knowledge); setContextMenu(null); }}>打开</button><details><summary>移动到 Wiki</summary>{WIKI_FOLDERS.map(category => <button type="button" key={category} disabled={contextMenu.knowledge.path?.split("/")[1] === category} onClick={() => { void handleMoveKnowledgeCategory(contextMenu.knowledge, category); setContextMenu(null); }}>{category}</button>)}</details><button type="button" onClick={() => { void handleArchiveNote(contextMenu.knowledge,true); setContextMenu(null); }}>归档</button></div> : null}
+          {deleteTarget ? <div className="confirm-backdrop" onClick={() => setDeleteTarget(null)}>
+            <div className="confirm-card" role="dialog" aria-modal="true" aria-labelledby="delete-raw-title" onClick={(event) => event.stopPropagation()}>
+              <h2 id="delete-raw-title">移除这条原始记录？</h2>
+              <p className="confirm-copy">{getPreview(deleteTarget.text || deleteTarget.title || "未命名", 100)}</p>
+              <p className="confirm-hint">它会归档到 Settings → Archive，之后仍可恢复。</p>
+              <div className="confirm-actions">
+                <button type="button" className="button-secondary" autoFocus onClick={() => setDeleteTarget(null)}>取消</button>
+                <button type="button" className="button-dark" onClick={() => void handleDeleteRaw(deleteTarget)}>确认移除</button>
+              </div>
+            </div>
+          </div> : null}
         </>
       }
     />

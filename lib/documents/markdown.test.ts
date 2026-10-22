@@ -20,6 +20,26 @@ test("legacy conversion adds one heading and retains metadata", () => {
   assert.equal(makeMarkdown("A", doc), doc);
   assert.equal(readMarkdown(makeMarkdown("A", "# 原文标题\n原文段落")).body,"# A\n\n# 原文标题\n原文段落");
 });
+test("a leading thematic break is body, not frontmatter", () => {
+  const md = "---\n# 我的标题\n\n正文\n---\n更多\n";
+  const parsed = readMarkdown(md);
+  assert.equal(parsed.offset, 0);
+  assert.equal(parsed.properties.title, "我的标题");
+  const next = patchProperties(md, { title: "新标题" });
+  assert.match(next, /^---\ntitle: 新标题\n---\n---\n# 新标题/);
+  assert.equal(readMarkdown(next).properties.title, "新标题");
+});
+
+test("a first-line heading without a space still becomes the title", () => {
+  assert.equal(readMarkdown("#demo 使用说明\n正文").properties.title, "demo 使用说明");
+});
+
+test("property edits add frontmatter when the note has none", () => {
+  const next = patchProperties("# 标题\n正文", { tags: ["x"] });
+  assert.equal(readMarkdown(next).properties.title, "标题");
+  assert.deepEqual(readMarkdown(next).properties.tags, ["x"]);
+});
+
 test("ambiguous titles stay unresolved; exact paths resolve", () => {
   const candidates = [{ id: "1", title: "A", path: "one/A.md" }, { id: "2", title: "A", path: "two/A.md" }];
   assert.equal(resolveReference("A", candidates), null);
