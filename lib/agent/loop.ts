@@ -379,6 +379,9 @@ async function executeToolCore(
 
   if (toolName === "read_note") {
     const noteId = asString(args.noteId);
+    // 长页面的正文一次读不完：offset 让模型接着上一次的位置读，
+    // 而不是拿着 4000 字符当全文（这正是"通读"落不了地的地方）。
+    const offset = Number.isInteger(args.offset) && (args.offset as number) >= 0 ? args.offset as number : 0;
 
     if (!noteId) {
       return {
@@ -414,13 +417,20 @@ async function executeToolCore(
 
     context.readVersions.set(note.id, note.version ?? 1);
     context.readIds.add(note.id);
+    const chunk = note.content.slice(offset, offset + READ_NOTE_CHAR_LIMIT);
+    const nextOffset = offset + chunk.length;
+    const truncated = nextOffset < note.content.length;
     return {
       step: recorder.next({
         tool: toolName,
         label: spec.label,
         kind: "auto",
         status: "done",
-        detail: `读完《${note.title}》的正文与概念。`,
+        detail: truncated
+          ? `读了《${note.title}》第 ${offset + 1}–${nextOffset} 字符（全文 ${note.content.length} 字符），还没读完。`
+          : offset > 0
+            ? `读完了《${note.title}》的剩余部分。`
+            : `读完《${note.title}》的正文与概念。`,
         proposalId: null,
         payload: { noteId: note.id, title: note.title },
       }),
@@ -429,7 +439,11 @@ async function executeToolCore(
         version: note.version,
         title: note.title,
         summary: note.summary,
-        content: note.content.slice(0, READ_NOTE_CHAR_LIMIT),
+        content: chunk,
+        offset,
+        total: note.content.length,
+        truncated,
+        ...(truncated ? { nextOffset } : {}),
         concepts: note.concepts,
         keywords: note.keywords,
       }),
