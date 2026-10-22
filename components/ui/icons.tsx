@@ -44,6 +44,14 @@ export function IconPlus() {
   return <svg {...TREE_ICON_PROPS}><path d="M12 5v14M5 12h14" /></svg>;
 }
 
+export function IconClose() {
+  return <svg {...RAIL_ICON_PROPS}><path d="m6 6 12 12M18 6 6 18" /></svg>;
+}
+
+export function IconFolder() {
+  return <svg {...TREE_ICON_PROPS}><path d="M3 7a2 2 0 0 1 2-2h5l2 3h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" /></svg>;
+}
+
 export function IconGraph() {
   return <svg {...TREE_ICON_PROPS}><circle cx="6" cy="17.5" r="2.5" /><circle cx="12" cy="6" r="2.5" /><circle cx="18" cy="15" r="2.5" /><path d="M8 15.6 10.6 8.5M14.3 7.6 16.4 12.9M8.4 16.9l7.2-1.5" /></svg>;
 }

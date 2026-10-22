@@ -1,0 +1,12 @@
+Mode: built-in image_gen, compositing edit with two user-provided screenshots.
+Output: Chordnote-双设计对照.png
+
+Use case: compositing.
+Create ONE polished landscape comparison image by merging these TWO PROVIDED REAL CHORDNOTE WEBSITE SCREENSHOTS. This is a composition/edit task, not a redesign of either website.
+Input image 1 is the warm cream-paper / electric-blue daytime screenshot. Input image 2 is the deep navy / starry nighttime screenshot.
+Intended use: a university project review video demonstrating the team's two actual visual designs. Output high resolution, approximately 16:9 landscape.
+
+Composition: elegant, restrained Swiss editorial two-column comparison, exactly equal visual weight. Background cleanly divided into cream grid on the left half and deep midnight navy grid on the right half with a fine vertical seam. Place the COMPLETE original first screenshot in the left column and COMPLETE original second screenshot in the right column, aligned, large and flat, each retaining its native aspect ratio, with narrow outer margins. Do not overlap screenshots. Do not crop their main headlines, illustrations or navigation. Both screenshots should occupy as much width as possible and be crisply readable. No fake monitors, phones, laptop mockups, 3D perspective, skew, floating cards, or ornate frames.
+Use a modest comparison title above: "Chordnote · 两种视觉设计". Left heading "01  暖纸 · 亮蓝" in original dark navy. Right heading "02  深蓝 · 星夜" in warm ivory. Keep all labels comfortably separated from the screenshots. Match the source's typographic discipline and grid. Under the screenshots, a very subtle short blue line on the left and muted purple line on the right is enough; no invented feature text.
+
+Critical invariants: PRESERVE original screenshot UI, exact logos, navigation labels, Chinese copy, colors, proportions and illustrations. Source 1 large headline is "一条笔记是音符，连起来才是和弦。" Source 2 headline is "清晰，克制，让内容成为主角。" Preserve each source's independent style; do not blend them into a single hybrid website or transfer the dark theme onto the light screenshot. Use screenshot content as intact compositing layers as faithfully as possible. Avoid reimagining or replacing the screenshot artwork. Remove only the thin browser scrollbar if possible without affecting content. No watermark.

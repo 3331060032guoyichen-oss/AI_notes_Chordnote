@@ -25,21 +25,21 @@ const STUDIOS: { id: Studio; name: string; en: string; desc: string; swatches: s
     id: "darkroom",
     name: "暗室星图",
     en: "夜间专注模式",
-    desc: "深色低眩光护眼界面，星图节点与重点脉络清晰醒目，适合夜间沉浸式推导公式、复盘错题与俯瞰全局知识网络。",
+    desc: "安静的深色底与星图，适合夜间专注、推导和思考。",
     swatches: ["#030712", "#7c3aed", "#e8edf7"],
   },
   {
     id: "editorial",
     name: "暖纸批注",
     en: "书页深读模式",
-    desc: "温润亚麻纸底搭配人文衬线排版，还原在书页空白处做批注、查索引的纸本阅读感，适合长时间阅读与撰写长文笔记。",
+    desc: "温润纸色与书页排版，适合慢慢阅读、批注与写作。",
     swatches: ["#f7f4ed", "#c8321e", "#161513"],
   },
   {
     id: "tactile",
     name: "实验工坊",
     en: "高效整理模式",
-    desc: "利落的工程网格与高对比度信号提示，步骤分明、反馈干脆，适合考前集中整理错题、密集梳理概念结构。",
+    desc: "利落网格与清晰的重点，适合集中整理、复盘与归纳。",
     swatches: ["#141619", "#ff5722", "#f3f4f6"],
   },
 ];
@@ -124,11 +124,11 @@ export function SettingsSpace({ section }: SettingsSpaceProps) {
 
       {section === "schedules" ? (
         <>
-          <SectionHeader title="定时任务" body="尚未实现。本轮不接入调度器，也不会生成任何假的运行记录。" />
+          <SectionHeader title="定时任务" body="定时整理与知识库体检暂未开放。" />
           <section className="content-section settings-panel-body">
             <div className="settings-empty">
               <b>没有可用的定时任务</b>
-              <p>规划中的能力包括：定期体检知识库、按计划重跑整理。它们依赖后台调度与任务落库，当前架构还没有这两样。</p>
+              <p>目前可以在与知音的对话中，手动发起一次整理。</p>
             </div>
           </section>
         </>
@@ -136,7 +136,7 @@ export function SettingsSpace({ section }: SettingsSpaceProps) {
 
       {section === "voice" ? (
         <>
-          <SectionHeader title="界面声音" body="操作音效是偏好，不是常用动作；开关只影响本机这次会话与之后的启动。" />
+          <SectionHeader title="声音与公式" body="设置轻柔的操作反馈，以及笔记中的数学公式显示。" />
           <section className="content-section settings-panel-body">
             <div className="toggle-row">
               <span>操作音效</span>
@@ -155,7 +155,7 @@ export function SettingsSpace({ section }: SettingsSpaceProps) {
             <p className="settings-note">
               {soundPreference === "unsupported"
                 ? "这台设备的浏览器不支持 Web Audio，声音不可用。"
-                : "点击、保存、归档这些动作会有一声很轻的音效 —— 现场合成，不加载任何音频文件。"}
+                : "为点击、保存和归档添加轻柔音效。选择会保存在当前设备。"}
             </p>
             <p className="settings-note">语音输入与朗读尚未实现；这里只有界面音效。</p>
             <div className="settings-section">
@@ -192,14 +192,12 @@ export function SettingsSpace({ section }: SettingsSpaceProps) {
                   key={item.id}
                   type="button"
                   className={`theme-card${studio === item.id ? " is-active" : ""}`}
+                  aria-pressed={studio === item.id}
                   onClick={() => selectStudio(item.id)}
                 >
-                  <span className="theme-swatches" aria-hidden="true">
-                    {item.swatches.map((color) => <i key={color} style={{ background: color }} />)}
-                  </span>
-                  <span className="theme-name">{item.name}</span>
+                  <span className="theme-preview" data-preview={item.id} aria-hidden="true"><i className="theme-preview-rail" /><i className="theme-preview-sidebar" /><span className="theme-preview-page"><b /><i /><i /><i /><em /></span></span>
+                  <span className="theme-name">{item.name}<span className="theme-selected" aria-hidden="true">{studio === item.id ? "✓" : ""}</span></span>
                   <span className="theme-en">{item.en}</span>
-                  <span className="theme-desc">{item.desc}</span>
                 </button>
               ))}
             </div>
@@ -211,7 +209,7 @@ export function SettingsSpace({ section }: SettingsSpaceProps) {
 
       {section === "data" ? (
         <>
-          <SectionHeader title="Data" body="导入、导出和了解 Chordnote 的本地数据保存位置。" />
+          <SectionHeader title="数据与备份" body="把知识带走，也让每一次记录都有备份。" />
           <section className="content-section settings-panel-body">
             <div className="settings-section">
               <div className="settings-section-title">知识包</div>
@@ -275,8 +273,7 @@ export function SettingsSpace({ section }: SettingsSpaceProps) {
             <div className="settings-section">
               <div className="settings-section-title">本地存储</div>
               <p className="settings-note">
-                知识库在本机 PGlite 里，模型配置在 data/settings.json。两者都不进 Git。
-                备份 = 导出知识包；换机器 = 在新机器导入。
+                记录与模型配置保存在当前设备。导出知识包即可备份笔记；换一台设备时，导入知识包就能继续使用。
               </p>
             </div>
           </section>

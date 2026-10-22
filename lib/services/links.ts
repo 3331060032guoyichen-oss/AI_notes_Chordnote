@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { and, desc, eq, isNull, or } from "drizzle-orm";
 
-import type { KnowledgeRelation } from "../../types/relation";
+import type { KnowledgeRelation, LinkType } from "../../types/relation";
 import { getUserContext } from "../auth/context";
 import { getDb, type DbTransaction } from "../db/client";
 import { auditLog, links } from "../db/schema";
@@ -22,9 +22,10 @@ function toRelation(row: LinkRow): KnowledgeRelation {
     id: row.id,
     sourceId: row.sourceNoteId,
     targetId: row.targetNoteId,
-    // 数据库 CHECK 限定只允许 'related'
-    type: "related",
+    // 数据库 CHECK 限定在 lib/db/enums.ts 的 LINK_TYPES 内
+    type: row.type,
     reason: row.reason,
+    evidence: row.evidence,
     createdAt: row.createdAt.toISOString(),
   };
 }
@@ -63,6 +64,9 @@ export type CreateLinkInput = {
   sourceId: string;
   targetId: string;
   reason: string;
+  /** 缺省 related。有方向的类型（supports 等）要求 evidence。 */
+  type?: LinkType;
+  evidence?: string | null;
 };
 
 /**
@@ -99,6 +103,8 @@ export async function createOrReviveLinkInTx(
 ): Promise<{ relation: KnowledgeRelation; created: boolean }> {
   const { userId } = getUserContext();
   const { proposalId = null, origin = "user" } = attribution;
+  const type = input.type ?? "related";
+  const evidence = input.evidence ?? null;
 
   const existing = (
     await tx
@@ -107,11 +113,14 @@ export async function createOrReviveLinkInTx(
       .where(
         and(
           eq(links.userId, userId),
-          eq(links.type, "related"),
-          or(
-            and(eq(links.sourceNoteId, input.sourceId), eq(links.targetNoteId, input.targetId)),
-            and(eq(links.sourceNoteId, input.targetId), eq(links.targetNoteId, input.sourceId)),
-          ),
+          eq(links.type, type),
+          // related 无方向：A→B 与 B→A 视为同一条。其余类型有方向，只查这一向。
+          type === "related"
+            ? or(
+                and(eq(links.sourceNoteId, input.sourceId), eq(links.targetNoteId, input.targetId)),
+                and(eq(links.sourceNoteId, input.targetId), eq(links.targetNoteId, input.sourceId)),
+              )
+            : and(eq(links.sourceNoteId, input.sourceId), eq(links.targetNoteId, input.targetId)),
         ),
       )
       .limit(1)
@@ -126,7 +135,7 @@ export async function createOrReviveLinkInTx(
     const revived = (
       await tx
         .update(links)
-        .set({ deletedAt: null, reason: input.reason, origin, proposalId })
+        .set({ deletedAt: null, reason: input.reason, evidence, origin, proposalId })
         .where(eq(links.id, existing.id))
         .returning()
     )[0];
@@ -142,8 +151,9 @@ export async function createOrReviveLinkInTx(
         userId,
         sourceNoteId: input.sourceId,
         targetNoteId: input.targetId,
-        type: "related",
+        type,
         reason: input.reason,
+        evidence,
         origin,
         proposalId,
       })

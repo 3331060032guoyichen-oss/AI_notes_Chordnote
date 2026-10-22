@@ -5,13 +5,15 @@ import { and, desc, eq, inArray, lt, or, type SQL } from "drizzle-orm";
 import type { Proposal } from "../../types/proposal";
 import { getUserContext, type Actor } from "../auth/context";
 import { getDb, type DbTransaction } from "../db/client";
-import type { ContentOrigin, ProposalKind, ProposalStatus, RiskLevel } from "../db/enums";
+import type { ContentOrigin, LinkType, ProposalKind, ProposalStatus, RiskLevel } from "../db/enums";
+import { LINK_TYPES } from "../db/enums";
 import { auditLog, idempotencyKeys, notes, proposals } from "../db/schema";
 import { createOrReviveLinkInTx } from "./links";
-import { updateNoteInTx } from "./notes";
+import { attachSourcesToNoteInTx, updateNoteInTx, type SourceAttachment } from "./notes";
 import { MAX_RAW_TEXT_LENGTH, createSourceInTx } from "./sources";
 import { applyPreferences } from "./agent-schema";
 import { validPreferences } from "../agent/preferences";
+import { isRawCategory, isWikiCategory } from "../documents/structure";
 
 // 变更提议（proposals）服务层。
 //
@@ -257,6 +259,15 @@ function assertLinkCreatePayload(payload: Record<string, unknown>): void {
   if (payload.sourceId === payload.targetId) {
     throw new ProposalError("PROPOSAL_PAYLOAD_INVALID", "同一张知识页无需与自己建立关联。");
   }
+
+  if (payload.type !== undefined && !LINK_TYPES.includes(payload.type as LinkType)) {
+    throw new ProposalError("PROPOSAL_PAYLOAD_INVALID", "无法识别这种关联类型。");
+  }
+
+  // 有方向的关系必须带证据，否则只是一句"感觉相关"。
+  if (payload.type !== undefined && payload.type !== "related" && !isNonEmptyString(payload.evidence)) {
+    throw new ProposalError("PROPOSAL_PAYLOAD_INVALID", "有方向的关联需要给出支撑它的原文证据。");
+  }
 }
 
 function assertSourceCreatePayload(payload: Record<string, unknown>): void {
@@ -292,6 +303,17 @@ function assertNoteUpdatePayload(payload: Record<string, unknown>): void {
 
   if (payload.summary !== undefined && payload.summary !== null && !isNonEmptyString(payload.summary)) {
     throw new ProposalError("PROPOSAL_PAYLOAD_INVALID", "摘要不能是空字符串。");
+  }
+
+  if (payload.wikiCategory !== undefined && !isWikiCategory(payload.wikiCategory)) {
+    throw new ProposalError("PROPOSAL_PAYLOAD_INVALID", "知识页分类无法识别。");
+  }
+
+  if (payload.sourceLinks !== undefined) {
+    if (!Array.isArray(payload.sourceLinks) || payload.sourceLinks.some((item) => !isRecord(item)
+      || !isNonEmptyString(item.rawId) || !isRawCategory(item.rawCategory))) {
+      throw new ProposalError("PROPOSAL_PAYLOAD_INVALID", "补充来源必须带有 Raw id 与有效的来源分类。");
+    }
   }
 }
 
@@ -502,11 +524,15 @@ async function applyKindEffect(
 
     const { relation, created } = await createOrReviveLinkInTx(
       tx,
-      { sourceId, targetId, reason },
+      {
+        sourceId, targetId, reason,
+        type: LINK_TYPES.includes(payload.type as LinkType) ? payload.type as LinkType : "related",
+        evidence: isNonEmptyString(payload.evidence) ? payload.evidence : null,
+      },
       { proposalId, origin: "ai" },
     );
 
-    return { linkId: relation.id, created, sourceId, targetId };
+    return { linkId: relation.id, created, sourceId, targetId, type: relation.type };
   }
 
   if (row.kind === "source_create") {
@@ -532,10 +558,18 @@ async function applyKindEffect(
       throw new ProposalError("PROPOSAL_PAYLOAD_INVALID", "这条提议缺少要写入的正文。");
     }
 
+    const wikiCategory = isWikiCategory(payload.wikiCategory) ? payload.wikiCategory : undefined;
+    const sourceLinks: SourceAttachment[] = Array.isArray(payload.sourceLinks)
+      ? payload.sourceLinks.filter(isRecord).map((item) => ({ rawId: String(item.rawId), rawCategory: item.rawCategory as SourceAttachment["rawCategory"] }))
+      : [];
     const result = await updateNoteInTx(
       tx,
       noteId,
-      isNonEmptyString(summary) ? { content, summary } : { content },
+      {
+        content,
+        ...(isNonEmptyString(summary) ? { summary } : {}),
+        ...(wikiCategory ? { path: `wilki/${wikiCategory}/${noteId}.md` } : {}),
+      },
       row.baseVersion ?? undefined,
       actor,
     );
@@ -555,10 +589,14 @@ async function applyKindEffect(
       );
     }
 
+    if (sourceLinks.length) await attachSourcesToNoteInTx(tx, noteId, sourceLinks, actor);
+
     return {
       noteId,
       version: result.knowledge.version,
       contentLength: result.knowledge.content.length,
+      ...(wikiCategory ? { wikiCategory } : {}),
+      ...(sourceLinks.length ? { sourceRawIds: sourceLinks.map(item => item.rawId) } : {}),
     };
   }
 

@@ -130,6 +130,8 @@ const main = async () => {
         title,
         summary: note.summary,
         content: note.text,
+        rawCategory: "articles",
+        wikiCategory: "sources",
         keyPoints: note.keyPoints ?? [],
         concepts: note.concepts ?? [],
         keywords: note.keywords ?? [],

@@ -58,6 +58,8 @@ const draft = (title) => ({
   title,
   summary: `${title} 摘要`,
   content: `${title} 正文`,
+  rawCategory: "articles",
+  wikiCategory: "sources",
   keyPoints: ["点"],
   concepts: ["概念"],
   keywords: ["关键词"],
@@ -166,6 +168,8 @@ try {
   check("Agent 拒绝过长单条消息", (await POST("/api/agent/organize", { question: "中".repeat(3000), contextType: "none" })).status === 400);
   check("Agent 拒绝未知会话", (await POST("/api/agent/organize", { question: "继续", contextType: "none", sessionId: "00000000-0000-0000-0000-000000000000" })).status === 404);
   const schema = await GET("/api/agent/schema");
+  const health = await GET("/api/knowledge/health");
+  check("知识库体检可读取", health.status === 200 && Array.isArray(health.body?.rules) && health.body.rules.some(rule => rule.rule === "dead-link") && typeof health.body?.totals?.knowledge === "number");
   check("Schema 返回 Markdown 与版本", schema.status === 200 && schema.body?.schema?.startsWith("# ") && typeof schema.body?.hash === "string");
   if (schema.status === 200) {
     const saved = await PATCH("/api/agent/schema", { schema: schema.body.schema, hash: schema.body.hash });
@@ -263,14 +267,24 @@ try {
   check("GET /api/raw 包含新建项", rawIds.includes(rawAId) && rawIds.includes(rawBId));
 
   // ---- knowledge --------------------------------------------------------
+  const uncategorized = draft("漏填类别");
+  delete uncategorized.wikiCategory;
+  const invalidCategory = await POST("/api/knowledge", { rawId: rawAId, draft: uncategorized, origin: "ai" });
+  check("POST /api/knowledge 漏填 Wiki 分类被拒绝", invalidCategory.status === 400 && invalidCategory.body?.error?.code === "INVALID_DRAFT");
   const p1 = await POST("/api/knowledge", { rawId: rawAId, draft: draft("回归知识页 A"), origin: "user" });
   const noteA = p1.body?.knowledge?.id;
   created.notes.push(noteA);
   check("POST /api/knowledge 提升 201", p1.status === 201 && p1.body?.created === true);
   check("POST /api/knowledge 初始 version=1", p1.body?.knowledge?.version === 1);
+  check("POST /api/knowledge 按所选二级目录落位", p1.body?.knowledge?.path === `wilki/sources/${noteA}.md` && p1.body?.raw?.path === `raw/articles/${rawAId}.md`);
 
   const p2 = await POST("/api/knowledge", { rawId: rawAId, draft: draft("回归知识页 A"), origin: "user" });
   check("POST /api/knowledge 幂等（200 同 id）", p2.status === 200 && p2.body?.created === false && p2.body?.knowledge?.id === noteA);
+
+  const p2b = await POST("/api/knowledge", { rawId: rawAId, draft: { ...draft("回归知识页 A"), content: "回归知识页 A 的第二个视角" }, origin: "user" });
+  const noteA2 = p2b.body?.knowledge?.id;
+  created.notes.push(noteA2);
+  check("POST /api/knowledge 同一来源可产出多页（标题自动编号）", p2b.status === 201 && p2b.body?.created === true && p2b.body?.knowledge?.title === "回归知识页 A1" && noteA2 !== noteA);
 
   const p3 = await POST("/api/knowledge", { rawId: rawBId, draft: draft("回归知识页 B"), origin: "user" });
   const noteB = p3.body?.knowledge?.id;
@@ -363,7 +377,7 @@ try {
   check("POST /api/relations 反向视为同一条", r3.status === 200 && r3.body?.relation?.id === linkId);
 
   const selfRel = await POST("/api/relations", { sourceId: noteA, targetId: noteA, type: "related", reason: "x" });
-  const badRel = await POST("/api/relations", { sourceId: noteA, targetId: noteB, type: "supports", reason: "x" });
+  const badRel = await POST("/api/relations", { sourceId: noteA, targetId: noteB, type: "not-a-type", reason: "x" });
   check("POST /api/relations 自环 400", selfRel.body?.error?.code === "SELF_RELATION");
   check("POST /api/relations 非法类型 400", badRel.body?.error?.code === "RELATION_TYPE_INVALID");
 
@@ -373,6 +387,12 @@ try {
   check("GET /api/relations 命中", (relList.body?.relations ?? []).some((r) => r.id === linkId));
   check("GET .../relations 命中 1 条", noteRels.body?.relations?.length === 1);
   check("GET .../backlinks 返回对端", (backlinks.body?.backlinks ?? []).some((k) => k.id === noteB));
+
+  // 有方向的关系需要证据；证据保存在关系上，不是只写在理由里。
+  const typedNoEvidence = await POST("/api/relations", { sourceId: noteA, targetId: noteB, type: "supports", reason: "缺证据" });
+  const typedRel = await POST("/api/relations", { sourceId: noteA, targetId: noteB, type: "supports", reason: "A 支撑 B", evidence: "两页都提到精度" });
+  check("有方向的关联缺证据 → 400", typedNoEvidence.body?.error?.code === "RELATION_EVIDENCE_REQUIRED");
+  check("有方向的关联带证据可建立", typedRel.status === 201 && typedRel.body?.relation?.type === "supports" && typedRel.body?.relation?.evidence === "两页都提到精度");
 
   const graph = await GET("/api/graph");
   check(

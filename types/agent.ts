@@ -40,6 +40,8 @@ export type AgentRunCounters = {
   autoCalls: number;
   /** 本次运行产生的、还等你确认的提议数。 */
   pendingProposals: number;
+  /** 可提议模式产生、尚待逐份确认的整理稿数。 */
+  pendingDrafts: number;
   /**
    * 模型试图调用未授权工具的次数。
    *
@@ -55,9 +57,23 @@ export type AgentRunCounters = {
   unauthorizedWrites: 0;
 };
 
+/**
+ * 一份待确认的整理稿。
+ *
+ * 一份材料可以产出多页（来源摘要页、实体页、概念页……），所以草稿的身份是
+ * `draftId` 而不是 `rawId`：同一轮里同一 Raw 可以有多份草稿并存。
+ */
+export type AgentDraft = {
+  draftId: string;
+  rawId: string;
+  value: import("./organize").OrganizeDraft;
+};
+
 export type AgentRunTrace = {
   sessionId?: string;
-  draft?: { rawId: string; value: import("./organize").OrganizeDraft };
+  draft?: AgentDraft;
+  /** 本轮全部整理稿。`draft` 仅保留给旧客户端，始终是最后一份。 */
+  drafts: AgentDraft[];
   runtime?: { engine: string; version: string; provider: string; model: string; tools: string[]; permissions: Record<string, unknown> };
   id: string;
   manualVersion: string;

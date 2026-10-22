@@ -29,3 +29,10 @@ test("代码区间里的公式不渲染", () => {
 test("同一行可以有多条行内公式", () => {
   assert.deepEqual(findMathRanges("$a$ 和 $b$").map((range) => range.expression), ["a", "b"]);
 });
+
+test("带 frontmatter 的公式范围使用文档绝对位置", () => {
+  const frontmatter = "---\ntitle: 振动\ntags: [物理]\n---\n";
+  const ranges = findMathRanges("# 振动\n\n$m\\ddot{x}+kx=0$", [], frontmatter.length);
+  assert.equal(ranges[0]?.from, frontmatter.length + 6);
+  assert.ok(ranges.every(range => range.from >= frontmatter.length));
+});

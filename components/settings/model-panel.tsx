@@ -135,7 +135,7 @@ export function ModelPanel() {
   }
 
   return <section className="model-settings">
-    <h1>模型提供与服务</h1>
+    <h1>模型与服务</h1>
     <div className="model-categories" role="tablist" aria-label="模型来源">
       {([[
         "local", "本地模型",
