@@ -196,6 +196,7 @@ type Tab =
 | `/api/knowledge/[id]` | GET / PATCH | 读取 / 部分更新，可选 `version` 做乐观并发（不匹配返回 409 `VERSION_CONFLICT`）；`{ archived }` 归档或恢复 |
 | `/api/knowledge/[id]/relations` | GET | 该知识页的关联 |
 | `/api/knowledge/[id]/backlinks` | GET | 反向链接，动态查询，不落表 |
+| `/api/knowledge/health` | GET | 知识库体检：孤立页、断链、重名、未整理来源、分类分布。只读，不落库 |
 | `/api/relations` | GET / POST | 关联列表 / 新建 |
 | `/api/relations/[id]` | DELETE | 软删除关联 |
 | `/api/graph` | GET | 实时生成 nodes / edges |
@@ -222,6 +223,7 @@ type Tab =
 ### 服务层与归属
 
 - 所有读写经由 `lib/services/`，路由不直接操作数据库。
+- 一个 Raw 可以产出多张知识页（来源摘要页、实体页、概念页……），关系记在 `note_sources`；`notes.raw_id` 只表示主要来源。`promoteFromSource` 按（rawId, 标题, 正文）幂等：同一标题同一正文视为重试返回已有页，否则新建，标题撞车时追加 1、2 编号。
 - 所有查询、更新、删除都必须带 `user_id` 条件，`pnpm verify:db` 在 SQL 层断言这一点。
 - 知识页更新用 `version` 做乐观并发，并写入 `note_revisions`。
 - `updated_at` 没有触发器，服务层每次更新必须显式写入，漏写不会报错。
@@ -234,7 +236,7 @@ jsonb 列直接传数组或对象，**不要手动 `JSON.stringify`**。Drizzle 
 
 - 枚举的唯一来源是 `lib/db/enums.ts`，数据库 CHECK、TS 类型、API 校验都从这里引用。
 - `origin`（`user | ai`）表示内容由谁产生；`actor_type` / `author_type`（`user | agent | system`）表示操作主体。两者不可混用，不要机械地把 `ai` 换成 `agent`。
-- `links.type` 目前只允许 `related`。
+- `links.type` 允许 `related`（无方向）与 `supports` / `contradicts` / `example` / `prerequisite`（有方向，必须带 `evidence`）。`related` 的无序对只保留一条；有方向的类型按方向去重。
 - `note_ai_metadata.status` 暂未加 CHECK，因为合法值尚未确定，该表也没有写入路径。
 
 ### 删除生命周期

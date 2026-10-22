@@ -64,6 +64,20 @@
       "when": 1792415302320,
       "tag": "0008_schema_preferences",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1792537200000,
+      "tag": "0009_note_sources",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1792670000000,
+      "tag": "0010_lifecycle_links",
+      "breakpoints": true
     }
   ]
 }

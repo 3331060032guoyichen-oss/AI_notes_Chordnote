@@ -120,7 +120,10 @@ function preview(getLinks: () => readonly LinkCandidate[], open: (target: string
     if (latex()) noteParser.parse(body).iterate({ enter(node) {
       if (node.name === "InlineCode" || node.name === "FencedCode" || node.name === "CodeBlock") code.push({ from: node.from, to: node.to });
     } });
-    const math = latex() ? findMathRanges(body, code) : [];
+    // CodeMirror decorations use absolute document positions. Math is parsed
+    // from the body, so shift the ranges past frontmatter before comparing it
+    // with headings/YAML or placing widgets.
+    const math = latex() ? findMathRanges(body, code, offset) : [];
     const inMath = (from: number, to: number) => math.some(range => from < range.to && to > range.from);
     const add = (from: number, to: number, value: Decoration) => { if (!inMath(from, to)) decorations.push({ from, to, value }); };
     if (offset) add(0, offset, Decoration.replace({ block: true, inclusive:false }));
@@ -129,7 +132,7 @@ function preview(getLinks: () => readonly LinkCandidate[], open: (target: string
       add(offset, offset, Decoration.line({ class: "md-heading md-h1" }));
     }
     for (const range of math) {
-      const from = range.from + offset, to = range.to + offset;
+      const from = range.from, to = range.to;
       const selected = focused() && state.selection.ranges.some(r => r.from <= to && r.to >= from);
       if (!selected) decorations.push({ from, to, value: Decoration.replace({ widget: new MathWidget(range.expression, range.display) }) });
     }

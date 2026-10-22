@@ -10,7 +10,7 @@
     "start": "next start",
     "lint": "eslint .",
     "test": "node scripts/regression.mjs",
-    "test:unit": "node --import ./scripts/ts-resolve.mjs --test lib/ai/provider.test.ts lib/ai/config.test.ts lib/agent/permission.test.ts lib/documents/latex.test.ts",
+    "test:unit": "node --import ./scripts/ts-resolve.mjs --test lib/ai/provider.test.ts lib/ai/config.test.ts lib/ai/tasks.test.ts lib/agent/permission.test.ts lib/documents/latex.test.ts",
     "test:agent": "node --experimental-transform-types --import ./scripts/ts-resolve.mjs --test --test-concurrency=1 lib/agent/context.test.ts lib/agent/runtime.test.ts lib/services/agent-context.test.ts",
     "test:vault": "node --experimental-transform-types --import ./scripts/ts-resolve.mjs --test lib/vault/vault.test.ts lib/vault/watcher.test.ts",
     "verify:db": "node scripts/db-verify.mjs",

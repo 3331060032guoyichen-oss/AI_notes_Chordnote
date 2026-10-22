@@ -50,15 +50,22 @@ test("preference replacement preserves rules outside its real H2 section", () =>
   assert.ok(replacePreferences("# Schema\n", "- 简洁", "p2").includes("## 用户偏好"));
 });
 
-test("directory snapshots retain titles, real categories and current organization state", () => {
+test("index groups documents by category and keeps ids for tool calls", () => {
   const source = { id: "source", title: "原始资料", path: "raw/inbox/source.md", content: "原文", kind: "raw" as const };
-  const before = JSON.parse(retrieveContext("资料", [{ ...source, organized: false }]).directory);
-  const after = JSON.parse(retrieveContext("资料", [{ ...source, organized: true }]).directory);
-  assert.equal(before.status, "未整理");
-  assert.equal(after.status, "已整理");
-  assert.equal(after.title, "原始资料");
-  assert.equal(before.category, "未整理笔记");
-  assert.equal(after.category, "articles");
-  assert.equal(after.layer, "Raw");
-  assert.equal(after.path, source.path);
+  const before = retrieveContext("资料", [{ ...source, organized: false }]).directory;
+  const after = retrieveContext("资料", [{ ...source, organized: true }]).directory;
+  assert.ok(before.includes("未整理（1）"));
+  assert.ok(before.includes("source｜原始资料｜raw/inbox/source.md"));
+  assert.ok(after.includes("articles（1）"));
+  assert.ok(after.includes("Raw 共 1 条"));
+  assert.ok(!after.includes("未整理（1）"));
+});
+
+test("index caps each category and labels search hits by layer", () => {
+  const docs = Array.from({ length: 8 }, (_, i) => ({
+    id: `knowledge_${i}`, title: `页面${i}`, path: `wilki/concept/knowledge_${i}.md`, content: "共同关键词", kind: "knowledge" as const,
+  }));
+  const index = retrieveContext("共同关键词", docs);
+  assert.equal(index.directory.split("\n").filter(line => line.startsWith("- knowledge_")).length, 6);
+  assert.ok(index.hits.length > 0 && index.hits.every(hit => hit.kind === "knowledge"));
 });

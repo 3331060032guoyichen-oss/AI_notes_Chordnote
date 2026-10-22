@@ -109,9 +109,79 @@ function createParticle(randomProgress: boolean): Particle {
 }
 
 export function AgentStage({ mode }: { mode: AgentStageMode }) {
+  const stageRef = useRef<HTMLDivElement | null>(null);
+  const frameRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const burstRef = useRef(0);
   const work = mode === "work";
+
+  useEffect(() => {
+    const stage = stageRef.current;
+    const frame = frameRef.current;
+    if (!stage || !frame) return;
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
+    let raf = 0, last = 0;
+    let x = 0, y = 0, vx = 0, vy = 0, targetX = 0, targetY = 0;
+    const paint = () => {
+      stage.style.setProperty("--gaze-x", `${(x * 4).toFixed(3)}px`);
+      stage.style.setProperty("--gaze-y", `${(y * 2.5).toFixed(3)}px`);
+      stage.style.setProperty("--gaze-tilt", `${(x * 1.8).toFixed(3)}deg`);
+      stage.style.setProperty("--eye-x", `${(x * 2).toFixed(3)}px`);
+      stage.style.setProperty("--eye-y", `${(y * 1.2).toFixed(3)}px`);
+    };
+    const tick = (now: number) => {
+      raf = 0;
+      const dt = Math.min((now - last) / 1000 || 1 / 60, 1 / 30);
+      last = now;
+      vx += ((targetX - x) * 110 - vx * 17) * dt;
+      vy += ((targetY - y) * 110 - vy * 17) * dt;
+      x += vx * dt;
+      y += vy * dt;
+      if (Math.abs(targetX - x) + Math.abs(targetY - y) + Math.abs(vx) + Math.abs(vy) < .002) {
+        x = targetX; y = targetY; vx = 0; vy = 0; paint(); return;
+      }
+      paint();
+      raf = requestAnimationFrame(tick);
+    };
+    const start = () => {
+      if (raf || reduced.matches || document.hidden) return;
+      last = performance.now();
+      raf = requestAnimationFrame(tick);
+    };
+    const move = (event: PointerEvent) => {
+      if (event.pointerType === "touch" || reduced.matches) return;
+      const rect = frame.getBoundingClientRect();
+      targetX = Math.max(-1, Math.min(1, (event.clientX - rect.left) / rect.width * 2 - 1));
+      targetY = Math.max(-1, Math.min(1, (event.clientY - rect.top) / rect.height * 2 - 1));
+      stage.dataset.attentive = "true";
+      start();
+    };
+    const leave = () => {
+      targetX = 0; targetY = 0;
+      delete stage.dataset.attentive;
+      start();
+    };
+    const reset = () => {
+      cancelAnimationFrame(raf); raf = 0;
+      x = 0; y = 0; vx = 0; vy = 0; targetX = 0; targetY = 0;
+      delete stage.dataset.attentive;
+      paint();
+    };
+    const onVisibility = () => { if (document.hidden) reset(); };
+    frame.addEventListener("pointermove", move, { passive: true });
+    frame.addEventListener("pointerleave", leave);
+    frame.addEventListener("pointercancel", leave);
+    reduced.addEventListener("change", reset);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      reset();
+      frame.removeEventListener("pointermove", move);
+      frame.removeEventListener("pointerleave", leave);
+      frame.removeEventListener("pointercancel", leave);
+      reduced.removeEventListener("change", reset);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -119,7 +189,9 @@ export function AgentStage({ mode }: { mode: AgentStageMode }) {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const motionPreference = window.matchMedia("(prefers-reduced-motion: reduce)");
+    let reduced = motionPreference.matches;
+    let visible = true;
     const particles: Particle[] = [];
     const quietStars: QuietStar[] = [];
     if (work) for (let i = 0; i < 145; i += 1) particles.push(createParticle(true));
@@ -392,7 +464,7 @@ export function AgentStage({ mode }: { mode: AgentStageMode }) {
     };
 
     const start = () => {
-      if (raf || reduced) return;
+      if (raf || reduced || !visible || document.hidden) return;
       last = performance.now();
       raf = requestAnimationFrame(frame);
     };
@@ -402,7 +474,14 @@ export function AgentStage({ mode }: { mode: AgentStageMode }) {
       raf = 0;
     };
     const onVisibility = () => {
+      if (stageRef.current) stageRef.current.dataset.visible = String(visible && !document.hidden);
       if (document.hidden) stop();
+      else start();
+    };
+    const onMotionPreference = () => {
+      reduced = motionPreference.matches;
+      stop();
+      if (reduced) drawStatic();
       else start();
     };
 
@@ -410,30 +489,33 @@ export function AgentStage({ mode }: { mode: AgentStageMode }) {
     observer.observe(canvas);
     // 长对话里舞台会被滚出视口；滚出去就停掉绘制，回来再继续。
     const visibility = new IntersectionObserver((entries) => {
-      if (entries[0]?.isIntersecting) start();
-      else stop();
+      visible = Boolean(entries[0]?.isIntersecting);
+      if (stageRef.current) stageRef.current.dataset.visible = String(visible && !document.hidden);
+      if (visible) start(); else stop();
     }, { threshold: 0.05 });
     visibility.observe(canvas);
     resize();
     if (!reduced) start();
     document.addEventListener("visibilitychange", onVisibility);
+    motionPreference.addEventListener("change", onMotionPreference);
 
     return () => {
       stop();
       observer.disconnect();
       visibility.disconnect();
       document.removeEventListener("visibilitychange", onVisibility);
+      motionPreference.removeEventListener("change", onMotionPreference);
     };
   }, [work]);
 
   return (
-    <div className={`agent-stage${work ? " is-work" : " is-rest"}`}>
+    <div ref={stageRef} className={`agent-stage${work ? " is-work" : " is-rest"}`}>
       <header className="agent-stage-title">
         <b>{work ? "工作中 · 拨弦引星" : "静息中 · 抚琴守望"}</b>
         <small>{work ? "ZHIYIN IN OPERATION" : "ZHIYIN AT REST"}</small>
       </header>
 
-      <div className="agent-stage-frame">
+      <div ref={frameRef} className="agent-stage-frame">
         <canvas ref={canvasRef} className="agent-stage-canvas" aria-hidden="true" />
         {work ? (
           <button
@@ -488,13 +570,18 @@ export function AgentStage({ mode }: { mode: AgentStageMode }) {
             <polygon points="235,202 302,228 345,420 265,420" fill="var(--zhiyin-red-robe)" stroke="#151926" strokeWidth="2" strokeLinejoin="round" />
           </g>
 
-          <g className="agent-stage-head">
+          <g className="agent-stage-gaze"><g className="agent-stage-head">
             <rect x="220" y="116" width="30" height="26" fill="var(--zhiyin-hat)" stroke="var(--zhiyin-gold)" strokeWidth="2.2" />
             <line x1="208" y1="130" x2="262" y2="130" stroke="var(--zhiyin-gold)" strokeWidth="3.2" strokeLinecap="round" />
             <circle cx="235" cy="168" r="26" fill="var(--zhiyin-skin)" />
-            <line x1="228" y1="164" x2="237" y2="164" stroke="#151821" strokeWidth="3" strokeLinecap="round" />
-            <line x1="243" y1="164" x2="252" y2="164" stroke="#151821" strokeWidth="3" strokeLinecap="round" />
-          </g>
+            <g className="agent-stage-expression">
+              <g className="agent-stage-eyes" fill="none" stroke="#151821" strokeWidth="2.7" strokeLinecap="round">
+                <path d={work ? "M 222 164 L 230 164" : "M 222 165 Q 226 162 230 165"} />
+                <path d={work ? "M 240 164 L 248 164" : "M 240 165 Q 244 162 248 165"} />
+              </g>
+              <path className="agent-stage-smile" d="M 231 177 Q 235 181 239 177" fill="none" stroke="#151821" strokeWidth="1.6" strokeLinecap="round" />
+            </g>
+          </g></g>
 
           <g className="agent-stage-qin">
             <polygon points="118,325 362,310 372,352 128,365" fill="#131826" stroke="var(--zhiyin-gold)" strokeWidth="3" strokeLinejoin="round" />

@@ -10,24 +10,24 @@ type LandingPageProps = {
 const CHAPTERS = [
   {
     eyebrow: "01 / LONG-TERM MEMORY",
-    title: "Chordnote --",
-    subtitle: "你的长期AI知识架构师",
+    title: "从记录开始。",
+    subtitle: "和理解一起生长。",
     body: "让零散记录不再停在文件夹里，而是逐渐长成一张能陪你四年的知识网络。",
   },
   {
     eyebrow: "02 / FROM NOTE TO CHORD",
     title: "一条笔记是音符，\n连起来才是和弦。",
-    body: "Chordnote 的核心使命是打破传统笔记“只存不连”与通用 AI“无记忆、易幻觉”的瓶颈，让 AI 扮演“知识架构师”——帮助大学生将零散的学习记录升维为贯穿大学四年的体系化知识网络。",
+    body: "课堂笔记、阅读摘录、突然冒出的灵感。知音帮你提炼其中的概念，找到跨越课程的联系，让每一次记录都成为下一次理解的起点。",
   },
   {
     eyebrow: "03 / LLM WIKI × OBSIDIAN",
     title: "工作流有规则，\n知识网络有记忆。",
-    body: "基于 Andrej Karpathy 提出的 LLM Wiki 架构与 Obsidian 双向链接知识图谱：我们为 Chordnote 增添了一份 Schema，不仅规范了 Agent 的 workflow，还可以根据用户的偏好不断更新完善。",
+    body: "原始记录始终保留。知音依据你的整理规则提出知识页与关联，默认由你审阅后收录；双向链接让每一份理解都有迹可循。",
   },
   {
     eyebrow: "04 / DESIGN ORIGIN",
     title: "清晰，克制，\n让内容成为主角。",
-    body: "设计灵感来源于瑞士国际主义平面设计和 Lenny Rachitsky 的苹果设计理念。",
+    body: "把空间留给思考，把层次交给文字。用熟悉的文档、清晰的目录和安静的反馈，让注意力回到正在写下的这一行。",
   },
 ] as const;
 
@@ -101,13 +101,12 @@ export function LandingPage({ onEnter }: LandingPageProps) {
       </header>
 
       <section id="landing-top" className="landing-film-opening" aria-label="Chordnote 入口">
-        <p className="landing-film-coordinate" aria-hidden="true">X 000.00<br />Y 000.00</p>
-        <p className="landing-film-hand landing-film-hand--left" aria-hidden="true">LONG-TERM MEMORY</p>
+        <p className="landing-film-coordinate" aria-hidden="true">记录 / 理解 / 连接</p>
+        <p className="landing-film-hand landing-film-hand--left" aria-hidden="true">NOTES BECOME CHORDS</p>
         <h1 className="landing-film-opening-title">
-          <span>Chordnote --</span>
-          <strong>你的长期AI<br />知识架构师</strong>
+          <span>Chordnote<span className="landing-film-title-dot">.</span></span>
+          <strong>你的长期 AI<br />知识架构师</strong>
         </h1>
-        <p className="landing-film-hand landing-film-hand--right" aria-hidden="true">NOT JUST STORAGE ↗</p>
         <a className="landing-film-scroll-cue" href="#landing-story">
           <span>向下滚动</span><i aria-hidden="true">↓</i>
         </a>
@@ -169,7 +168,7 @@ export function LandingPage({ onEnter }: LandingPageProps) {
 
       <footer className="landing-film-footer">
         <span>Chordnote · 和弦</span>
-        <span>AI 只提议；你确认后，才写入知识网络。</span>
+        <span>原话始终保留，知识由你做主。</span>
       </footer>
     </main>
   );

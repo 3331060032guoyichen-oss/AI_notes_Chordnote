@@ -5,7 +5,7 @@ export type MathRange = TextRange & { expression: string; display: boolean };
  * 找出 `$...$` 与 `$$...$$`。skip 是代码区间：代码里的美元符号不参与渲染。
  * 行内公式按常见约定要求首尾不是空白，所以 `$5 and $6` 不会被当成公式。
  */
-export function findMathRanges(text: string, skip: readonly TextRange[] = []): MathRange[] {
+export function findMathRanges(text: string, skip: readonly TextRange[] = [], baseOffset = 0): MathRange[] {
   const skipped = (index: number) => skip.some((range) => index >= range.from && index < range.to);
   const ranges: MathRange[] = [];
 
@@ -20,7 +20,7 @@ export function findMathRanges(text: string, skip: readonly TextRange[] = []): M
       const close = text.indexOf("$$", index + 2);
       const expression = close > index + 1 ? text.slice(index + 2, close) : "";
       if (expression.trim()) {
-        ranges.push({ from: index, to: close + 2, expression, display: true });
+        ranges.push({ from: index + baseOffset, to: close + 2 + baseOffset, expression, display: true });
         index = close + 1;
       }
       continue;
@@ -43,7 +43,7 @@ export function findMathRanges(text: string, skip: readonly TextRange[] = []): M
     }
     if (close < 0) continue;
 
-    ranges.push({ from: index, to: close + 1, expression: text.slice(index + 1, close), display: false });
+    ranges.push({ from: index + baseOffset, to: close + 1 + baseOffset, expression: text.slice(index + 1, close), display: false });
     index = close;
   }
 

@@ -1,14 +1,16 @@
 import { desc,eq } from "drizzle-orm";
 
+import type { Raw } from "../../types/raw";
 import { getUserContext } from "../auth/context";
 import { getDb } from "../db/client";
-import { noteRevisions,notes,rawNotes } from "../db/schema";
+import { noteRevisions,notes,noteSources,rawNotes } from "../db/schema";
+import { rawCategory } from "../documents/structure";
 import { knowledgeMarkdown,rawMarkdown } from "../documents/compat";
 import { parseWikiReferences,patchProperties,readMarkdown,safeDocumentPath } from "../documents/markdown";
 import { createZip,type ZipEntry } from "../zip";
 import { readCanvas,saveCanvas,validCanvas,type CanvasDocument } from "./canvases";
 import { createOrReviveLink,listLinks } from "./links";
-import { listArchivedNotes,listNotes,promoteFromSource,setNoteArchived,updateNote } from "./notes";
+import { attachSourcesToNote,listArchivedNotes,listNotes,promoteFromSource,setNoteArchived,updateNote } from "./notes";
 import { archiveSource,createSource,listArchivedSources,listSources,updateSource } from "./sources";
 
 // 知识包（Bundle）—— "数据是你的"这条承诺的兑现方式。
@@ -33,7 +35,7 @@ export type BundleSource = {
 };
 
 export type BundleNote = {
-  markdown?: string; path?: string; id?: string; sourceId?: string; archived?: boolean;
+  markdown?: string; path?: string; id?: string; sourceId?: string; sourceIds?: string[]; archived?: boolean;
   title: string;
   summary: string;
   content: string;
@@ -90,13 +92,14 @@ export async function exportBundle(): Promise<KnowledgeBundle> {
   const { db } = await getDb();
   const { userId } = getUserContext();
 
-  const [rawRows, noteRows, linkRows, revisionRows] = await Promise.all([
+  const [rawRows, noteRows, sourceRows, linkRows, revisionRows] = await Promise.all([
     db
       .select()
       .from(rawNotes)
       .where(eq(rawNotes.userId, userId))
       .orderBy(desc(rawNotes.createdAt)),
     db.select().from(notes).where(eq(notes.userId, userId)).orderBy(desc(notes.updatedAt)),
+    db.select({ noteId: noteSources.noteId, rawId: noteSources.rawId }).from(noteSources).where(eq(noteSources.userId, userId)),
     listLinks(),
     db
       .select()
@@ -108,6 +111,8 @@ export async function exportBundle(): Promise<KnowledgeBundle> {
   const canvas = await readCanvas();
   const titleById = new Map(noteRows.map((row) => [row.id, row.title]));
   const rawTitleById = new Map(rawRows.map((row) => [row.id, row.title]));
+  const sourceIdsByNote = new Map<string, string[]>();
+  for (const row of sourceRows) sourceIdsByNote.set(row.noteId, [...(sourceIdsByNote.get(row.noteId) ?? []), row.rawId]);
 
   return {
     format: BUNDLE_FORMAT,
@@ -128,7 +133,7 @@ export async function exportBundle(): Promise<KnowledgeBundle> {
       archived: row.archivedAt !== null,
     })),
     notes: noteRows.map((row) => ({
-      id: row.id, sourceId: row.rawId, markdown: knowledgeMarkdown(row), path: row.path ?? `wilki/concept/${row.id}.md`, archived: row.archivedAt !== null,
+      id: row.id, sourceId: row.rawId, sourceIds: [...new Set([row.rawId, ...(sourceIdsByNote.get(row.id) ?? [])])], markdown: knowledgeMarkdown(row), path: row.path ?? `wilki/concept/${row.id}.md`, archived: row.archivedAt !== null,
       title: row.title,
       summary: row.summary,
       content: row.content,
@@ -348,6 +353,7 @@ export async function importBundle(
   const sourceMap = new Map<string, string>();
   const noteMap = new Map<string, string>();
   const sourcesByTitle = new Map(existingSources.map(s=>[s.title,s.id]));
+  const sourcesById = new Map(existingSources.map(source => [source.id, source]));
   const notesByTitle = new Map(existingNotes.map(n=>[n.title,n.id]));
   const paths = new Map([...existingSources.map(s=>({id:s.id,path:s.path,kind:"raw"})),...existingNotes.map(n=>({id:n.id,path:n.path,kind:"knowledge"}))].filter(d=>d.path).map(d=>[d.path!.toLowerCase(),d]));
   const importedNotes: {id:string;markdown:string}[]=[];
@@ -368,6 +374,7 @@ export async function importBundle(
     const created=plan.dryRun ? {id:"planned-raw-"+result.sources.created} : await createSource(text,title||null);
     if(!plan.dryRun && typeof source.markdown === "string") await updateSource(created.id,text,{markdown:source.markdown,path});
     if(!plan.dryRun && source.archived===true) await archiveSource(created.id);
+    if(!plan.dryRun) { const createdRaw = created as Raw; sourcesById.set(createdRaw.id, { ...createdRaw, path: path ?? createdRaw.path }); }
     if(source.id)sourceMap.set(source.id,created.id);
     sourcesByTitle.set(title,created.id);
     if(path)paths.set(path.toLowerCase(),{id:created.id,path,kind:"raw"});
@@ -385,6 +392,15 @@ export async function importBundle(
     if(!sourceId)sourceId=sourcesByTitle.get(asString(note.sourceTitle));
     if(!sourceId && !plan.dryRun){sourceId=(await createSource(content,asString(note.sourceTitle)||title)).id;result.sources.created++;}
     const promoted=plan.dryRun ? {created:true,knowledge:{id:"planned-note-"+result.notes.created}} : await promoteFromSource({rawId:sourceId!,title,summary:asString(note.summary)||"（导入的知识页未带摘要）",content,keyPoints:toStringArray(note.keyPoints),concepts:toStringArray(note.concepts),keywords:toStringArray(note.keywords),origin:"user"});
+    if (!plan.dryRun && Array.isArray(note.sourceIds)) {
+      const attachments = [...new Set(note.sourceIds.map(id => sourceMap.get(id)).filter((id): id is string => Boolean(id)))]
+        .filter(id => id !== sourceId)
+        .flatMap(id => {
+          const source = sourcesById.get(id);
+          return source ? [{ rawId: id, rawCategory: rawCategory(source.path) }] : [];
+        });
+      if (attachments.length) await attachSourcesToNote(promoted.knowledge.id, attachments);
+    }
     if(promoted.created){
       if(!plan.dryRun && note.markdown !== undefined){
         let markdown=note.markdown;

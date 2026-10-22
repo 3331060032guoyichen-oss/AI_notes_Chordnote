@@ -5,6 +5,51 @@ import { patchProperties, readMarkdown, type LinkCandidate, type DocumentPropert
 import type { Raw } from "../types/raw";
 import type { Knowledge } from "../types/knowledge";
 
+function PropertyGlyph({ kind }: { kind: "type" | "date" | "tag" | "source" | "text" }) {
+  return <span className={`property-glyph property-glyph-${kind}`} aria-hidden="true">{
+    kind === "date" ? "□" : kind === "tag" ? "◇" : kind === "source" ? "≡" : kind === "type" ? "☰" : "—"
+  }</span>;
+}
+
+export function DocumentPropertiesPanel({ markdown, onChange, category, createdAt, updatedAt, sources = [] }: {
+  markdown: string;
+  onChange?: (markdown: string) => void;
+  category?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  sources?: string[];
+}) {
+  let properties: DocumentProperties;
+  try { properties = readMarkdown(markdown).properties; }
+  catch { return null; }
+  const edit = (patch: Partial<DocumentProperties>) => onChange?.(patchProperties(markdown, patch));
+  const removeTag = (tag: string) => edit({ tags: properties.tags.filter(item => item !== tag) });
+  const appendTags = (value: string) => {
+    const additions = value.split(/[,，]/).map(item => item.trim()).filter(Boolean);
+    if (additions.length) edit({ tags: [...new Set([...properties.tags, ...additions])] });
+  };
+  const sourceList = sources.length ? sources : properties.source ? [properties.source] : [];
+  const dateValue = (value?: string) => value ? value.slice(0, 10) : "";
+  return <section className="document-properties" aria-label="笔记属性">
+    <h2>笔记属性</h2>
+    <div className="property-fields">
+      {category ? <div className="property-row"><span className="property-name"><PropertyGlyph kind="type" />type</span><span className="property-value">{category}</span></div> : null}
+      {properties.source ? <label className="property-row"><span className="property-name"><PropertyGlyph kind="source" />source</span><input value={properties.source} onChange={event => edit({ source: event.target.value })} readOnly={!onChange} /></label> : null}
+      {properties.created || createdAt ? <label className="property-row"><span className="property-name"><PropertyGlyph kind="date" />created</span><input type="date" value={dateValue(properties.created || createdAt)} onChange={event => edit({ created: event.target.value })} readOnly={!onChange} /></label> : null}
+      {updatedAt ? <div className="property-row"><span className="property-name"><PropertyGlyph kind="date" />updated</span><span className="property-value">{dateValue(updatedAt)}</span></div> : null}
+      <div className="property-row property-tags-row"><span className="property-name"><PropertyGlyph kind="tag" />tags</span><div className="property-tags">
+        {properties.tags.map(tag => <span className="property-tag" key={tag}>{tag}{onChange ? <button type="button" aria-label={`移除标签 ${tag}`} onClick={() => removeTag(tag)}>×</button> : null}</span>)}
+        {onChange ? <input aria-label="添加标签" placeholder={properties.tags.length ? "+" : "添加标签"} onKeyDown={event => {
+          if (event.key !== "Enter" && event.key !== "," && event.key !== "，") return;
+          event.preventDefault(); appendTags(event.currentTarget.value); event.currentTarget.value = "";
+        }} onBlur={event => { appendTags(event.currentTarget.value); event.currentTarget.value = ""; }} /> : null}
+      </div></div>
+      {sourceList.length ? <div className="property-row"><span className="property-name"><PropertyGlyph kind="source" />sources</span><span className="property-value property-sources">{sourceList.join("\n")}</span></div> : null}
+      {properties.description ? <label className="property-row"><span className="property-name"><PropertyGlyph kind="text" />description</span><textarea value={properties.description} onChange={event => edit({ description: event.target.value })} readOnly={!onChange} rows={2} /></label> : null}
+    </div>
+  </section>;
+}
+
 export function DocumentSession({ document, kind, candidates, onOpenLink, onSaved }: {
   document: Raw | Knowledge; kind: "raw" | "knowledge"; candidates: readonly LinkCandidate[];
   onOpenLink: (target: string) => void; onSaved: (document: Raw | Knowledge) => void;
@@ -12,7 +57,6 @@ export function DocumentSession({ document, kind, candidates, onOpenLink, onSave
   const storageKey = `chordnote.edit.${kind}.${document.id}`;
   const [value, setValue] = useState(document.markdown ?? "");
   const [status, setStatus] = useState("");
-  const [expanded, setExpanded] = useState(false);
   const local = useRef(value), saved = useRef(value), version = useRef(document.version), busy = useRef(false);
   const callback = useRef(onSaved); callback.current = onSaved;
   const external = document.markdown ?? "";
@@ -61,15 +105,12 @@ export function DocumentSession({ document, kind, candidates, onOpenLink, onSave
     }, 700);
     return () => { disposed = true; clearTimeout(timer); };
   }, [value, kind, document.id, storageKey]);
-  let properties: DocumentProperties | null = null;
-  try { properties = readMarkdown(value).properties; } catch { /* Save displays YAML validation errors. */ }
   return <section className="document-session">
-    {kind === "knowledge" && properties ? <details className="document-properties" open={expanded} onToggle={event => setExpanded(event.currentTarget.open)}>
-      <summary>属性</summary>
-      <div className="property-fields">{(["title", "source", "created", "description", "tags"] as const).map(key => <label key={key}><span>{key}</span><input type={key === "created" ? "date" : "text"}
-        value={key === "tags" ? properties!.tags.join(", ") : properties![key]}
-        onChange={event => change(patchProperties(local.current, { [key]: key === "tags" ? event.target.value.split(/[,，]/).map(s => s.trim()).filter(Boolean) : event.target.value }))} /></label>)}</div>
-    </details> : null}
+    <DocumentPropertiesPanel markdown={value} onChange={change}
+      category={document.path?.replace(/\\/g, "/").split("/")[1]}
+      createdAt={(document as Knowledge).createdAt ?? (document as Raw).createdAt}
+      updatedAt={kind === "knowledge" ? (document as Knowledge).updatedAt : undefined}
+      sources={kind === "knowledge" ? (document as Knowledge).sourceRawIds : []} />
     <MarkdownEditor value={value} onChange={change} candidates={candidates} sourcePath={document.path} onOpenLink={onOpenLink} />
     <div className="document-status" role="status">{status}</div>
   </section>;

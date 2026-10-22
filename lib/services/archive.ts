@@ -3,7 +3,7 @@ import { and, eq, or, count, sql, isNotNull } from "drizzle-orm";
 import { getDb } from "../db/client";
 import { getUserContext } from "../auth/context";
 import { requireUserActor } from "../auth/authorize";
-import { auditLog, notes, rawNotes, noteRevisions, proposals, links, noteAiMetadata } from "../db/schema";
+import { auditLog, notes, rawNotes, noteRevisions, proposals, links, noteAiMetadata, noteSources } from "../db/schema";
 import { listArchivedNotes } from "./notes";
 import { listArchivedSources } from "./sources";
 
@@ -64,7 +64,7 @@ export async function purgeArchived(kind: "raw"|"knowledge"|"relation", id: stri
     if (!row.archivedAt) return { status:"not_archived" as const };
     if (!consent) return { status:"consent_required" as const };
     if (kind === "raw") {
-      const dependents = await tx.select({id:notes.id}).from(notes).where(and(eq(notes.userId,userId),eq(notes.rawId,id)));
+      const dependents = await tx.select({id:noteSources.noteId}).from(noteSources).where(and(eq(noteSources.userId,userId),eq(noteSources.rawId,id)));
       if (dependents.length) return { status:"referenced" as const };
     } else {
       // Explicit, user-reviewed removals. No cascading history/relationship deletion.
@@ -72,6 +72,7 @@ export async function purgeArchived(kind: "raw"|"knowledge"|"relation", id: stri
       await tx.delete(proposals).where(and(eq(proposals.userId,userId),proposalReferences(id)));
       await tx.delete(noteRevisions).where(and(eq(noteRevisions.userId,userId),eq(noteRevisions.noteId,id)));
       await tx.delete(noteAiMetadata).where(and(eq(noteAiMetadata.userId,userId),eq(noteAiMetadata.noteId,id)));
+      await tx.delete(noteSources).where(and(eq(noteSources.userId,userId),eq(noteSources.noteId,id)));
     }
     await tx.delete(table).where(and(eq(table.userId,userId),eq(table.id,id)));
     await tx.insert(auditLog).values({id:`audit_${randomUUID()}`,userId,actorType:"user",actorId:userId,operation:`${kind === "raw" ? "raw" : "note"}.purge`,targetType:kind,targetId:id,result:"ok",detail:{reason,path:row.path,title:row.title}});

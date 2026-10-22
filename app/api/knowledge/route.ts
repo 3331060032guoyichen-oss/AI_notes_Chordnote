@@ -81,6 +81,7 @@ export async function POST(request: Request) {
     const result = await promoteFromSource({
       rawId: raw.id,
       rawCategory: body.draft.rawCategory,
+      wikiCategory: body.draft.wikiCategory,
       title: body.draft.title,
       summary: body.draft.summary,
       content: body.draft.content,
