@@ -144,12 +144,13 @@ export const AGENT_MANUAL: readonly AgentToolSpec[] = [
     name: "read_note",
     label: "比对脉络",
     hint: "定位知识衔接薄弱点",
-    description: "读取指定知识页的正文与概念，用于判断它与材料的真实关系。只能读用户已确认的知识页。",
+    description: "读取指定知识页的正文与概念，用于判断它与材料的真实关系。只能读用户已确认的知识页。正文一次最多回传 4000 字符；结果里 truncated 为 true 时，用返回的 nextOffset 继续读，直到 truncated 为 false 才算通读。",
     access: "auto",
     parameters: {
       type: "object",
       properties: {
         noteId: { type: "string", description: "知识页 id，必须来自 search_notes 的返回结果。" },
+        offset: { type: "number", description: "从正文第几个字符开始读，缺省 0。用上一次返回的 nextOffset 继续。" },
       },
       required: ["noteId"],
     },
