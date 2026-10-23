@@ -685,6 +685,7 @@ export async function runOrganizeAgent(input: AgentRunInput): Promise<AgentRunTr
   const session = beginSession(getUserContext().userId, input.sessionId);
   const permission = input.permission ?? "propose";
   let completed = false;
+  let failure: string | undefined;
   let steps: AgentStep[] = [];
   let audit: Record<string, unknown> = { permission, steps: [] };
   try {
@@ -806,12 +807,14 @@ export async function runOrganizeAgent(input: AgentRunInput): Promise<AgentRunTr
     ...(draftList.length ? { draft: draftList[draftList.length - 1] } : {}),
   };
   } catch (error) {
+    failure = error instanceof Error ? error.message : "运行失败";
+    audit = { ...audit, steps: trail(steps) };
     throw error;
   } finally {
     if (!completed) session.finish();
-    // 失败的整理不写审计：错误原因只通过本轮 API 返回给对话框，避免 Wiki Log 被失败记录污染。
-    if (completed) {
-      try { await logAgentEvent("agent.query", session.id, audit); } catch { /* 审计写失败不能盖住运行结果 */ }
-    }
+    // 失败和中断也要留痕：否则待确认提议会变成没有来源的孤儿。
+    try {
+      await logAgentEvent(completed ? "agent.query" : "agent.run.failed", session.id, completed ? audit : { ...audit, error: failure });
+    } catch { /* 审计写失败不能盖住运行结果 */ }
   }
 }
