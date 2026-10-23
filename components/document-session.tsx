@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { MarkdownEditor } from "./markdown-editor";
 import { patchProperties, readMarkdown, type LinkCandidate, type DocumentProperties } from "../lib/documents/markdown";
+import { isRawCategory, isWikiCategory } from "../lib/documents/structure";
 import type { Raw } from "../types/raw";
 import type { Knowledge } from "../types/knowledge";
 
@@ -11,13 +12,14 @@ function PropertyGlyph({ kind }: { kind: "type" | "date" | "tag" | "source" | "t
   }</span>;
 }
 
-export function DocumentPropertiesPanel({ markdown, onChange, category, createdAt, updatedAt, sources = [] }: {
+export function DocumentPropertiesPanel({ markdown, onChange, category, createdAt, updatedAt, sources = [], candidates = [] }: {
   markdown: string;
   onChange?: (markdown: string) => void;
   category?: string;
   createdAt?: string;
   updatedAt?: string;
   sources?: string[];
+  candidates?: readonly LinkCandidate[];
 }) {
   let properties: DocumentProperties;
   try { properties = readMarkdown(markdown).properties; }
@@ -28,13 +30,19 @@ export function DocumentPropertiesPanel({ markdown, onChange, category, createdA
     const additions = value.split(/[,，]/).map(item => item.trim()).filter(Boolean);
     if (additions.length) edit({ tags: [...new Set([...properties.tags, ...additions])] });
   };
-  const sourceList = sources.length ? sources : properties.source ? [properties.source] : [];
+  const sourceLabel = (id: string) => {
+    const hit = candidates.find(item => item.id === id || item.path === id);
+    if (hit?.title) return hit.title;
+    const name = id.replace(/\.md$/i, "").split("/").pop() ?? id;
+    return /^(raw|knowledge)_[0-9a-f-]{36}$/i.test(name) ? "原始记录" : name;
+  };
+  const sourceList = [...new Set((sources.length ? sources : properties.source ? [properties.source] : []).map(sourceLabel))];
   const dateValue = (value?: string) => value ? value.slice(0, 10) : "";
   return <section className="document-properties" aria-label="笔记属性">
     <h2>笔记属性</h2>
     <div className="property-fields">
       {category ? <div className="property-row"><span className="property-name"><PropertyGlyph kind="type" />type</span><span className="property-value">{category}</span></div> : null}
-      {properties.source ? <label className="property-row"><span className="property-name"><PropertyGlyph kind="source" />source</span><input value={properties.source} onChange={event => edit({ source: event.target.value })} readOnly={!onChange} /></label> : null}
+      {properties.source ? <div className="property-row"><span className="property-name"><PropertyGlyph kind="source" />source</span><span className="property-value">{sourceLabel(properties.source)}</span></div> : null}
       {properties.created || createdAt ? <label className="property-row"><span className="property-name"><PropertyGlyph kind="date" />created</span><input type="date" value={dateValue(properties.created || createdAt)} onChange={event => edit({ created: event.target.value })} readOnly={!onChange} /></label> : null}
       {updatedAt ? <div className="property-row"><span className="property-name"><PropertyGlyph kind="date" />updated</span><span className="property-value">{dateValue(updatedAt)}</span></div> : null}
       <div className="property-row property-tags-row"><span className="property-name"><PropertyGlyph kind="tag" />tags</span><div className="property-tags">
@@ -105,9 +113,13 @@ export function DocumentSession({ document, kind, candidates, onOpenLink, onSave
     }, 700);
     return () => { disposed = true; clearTimeout(timer); };
   }, [value, kind, document.id, storageKey]);
+  const folder = document.path?.replace(/\\/g, "/").split("/")[1];
+  const category = kind === "raw"
+    ? (isRawCategory(folder) ? folder : "未整理")
+    : (isWikiCategory(folder) ? folder : undefined);
   return <section className="document-session">
-    <DocumentPropertiesPanel markdown={value} onChange={change}
-      category={document.path?.replace(/\\/g, "/").split("/")[1]}
+    <DocumentPropertiesPanel markdown={value} onChange={change} candidates={candidates}
+      category={category}
       createdAt={(document as Knowledge).createdAt ?? (document as Raw).createdAt}
       updatedAt={kind === "knowledge" ? (document as Knowledge).updatedAt : undefined}
       sources={kind === "knowledge" ? (document as Knowledge).sourceRawIds : []} />

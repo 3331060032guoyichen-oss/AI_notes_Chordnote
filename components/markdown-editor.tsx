@@ -229,8 +229,23 @@ export function MarkdownEditor({ value, onChange, candidates, onOpenLink, source
       preview(() => linkCandidates.current, target => callbacks.current.onOpenLink(target),()=>Boolean(view.current?.hasFocus), () => latex.current, () => currentPath.current),
       EditorState.transactionFilter.of(tr => {
         if (!tr.docChanged || readOnly || externalUpdate.current) return tr;
+        const previousOffset = splitFrontmatter(tr.startState.doc.toString()).offset;
+        // frontmatter 由笔记属性面板管理；第一个标题之前的空白也不允许从正文写入，
+        // 否则在标题上方按回车会多出一行可编辑内容，把标题挤下去。
+        const previousBody = tr.startState.doc.toString().slice(previousOffset);
+        const firstNonSpace = previousBody.search(/\S/);
+        const firstContent = firstNonSpace >= 0 ? previousBody.slice(firstNonSpace) : "";
+        if (previousOffset > 0 && /^#(?!\#)/.test(firstContent)) {
+          const headingPos = previousOffset + firstNonSpace;
+          let touchesHeading = false;
+          tr.changes.iterChangedRanges((from) => { if (from <= headingPos) touchesHeading = true; });
+          if (touchesHeading) return [];
+        }
         const offset = splitFrontmatter(tr.newDoc.toString()).offset;
-        if (tr.newDoc.lineAt(offset).text.startsWith("# ")) return tr;
+        const firstLine = tr.newDoc.lineAt(offset).text;
+        // 只给“以文字开头”的首行补 #。已经是标题、分隔线、引用或表格时保持原样，
+        // 否则会在每次输入时重复插入，把 `---` 或 `#demo` 改成 `# ---`、`# #demo`。
+        if (!firstLine.trim() || firstLine.startsWith("#") || !/^[\p{L}\p{N}]/u.test(firstLine)) return tr;
         return [tr, { changes: { from: offset, insert: "# " }, sequential: true }];
       }),
       EditorView.updateListener.of(update => {

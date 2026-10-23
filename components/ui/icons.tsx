@@ -32,6 +32,16 @@ export function IconSource() {
   return <svg {...TREE_ICON_PROPS}><path d="M4 6h16M4 12h16M4 18h10" /></svg>;
 }
 
+/** Wiki/index：带项目符号的内容索引。 */
+export function IconIndex() {
+  return <svg {...TREE_ICON_PROPS}><path d="M8 6h12M8 12h12M8 18h8" /><path d="M4 6h.01M4 12h.01M4 18h.01" /></svg>;
+}
+
+/** Wiki/log：带节点的时间线，和「按时间倒序」的日志语义一致。 */
+export function IconLog() {
+  return <svg {...TREE_ICON_PROPS}><path d="M6 4v16" /><circle cx="6" cy="7" r="1.6" /><circle cx="6" cy="12" r="1.6" /><circle cx="6" cy="17" r="1.6" /><path d="M10 7h9M10 12h9M10 17h6" /></svg>;
+}
+
 export function IconSearch() {
   return <svg {...RAIL_ICON_PROPS}><circle cx="10.5" cy="10.5" r="6.5" /><path d="m16 16 5 5" /></svg>;
 }

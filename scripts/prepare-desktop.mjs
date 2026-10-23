@@ -4,7 +4,8 @@
  */
 import { access, copyFile, cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { execFile } from "node:child_process";
-import { dirname, join } from "node:path";
+import { createConnection } from "node:net";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
@@ -35,6 +36,16 @@ async function exists(path) {
   }
 }
 
+function portAlive(port = 3000, host = "127.0.0.1") {
+  return new Promise((done) => {
+    const socket = createConnection({ port, host });
+    const finish = (alive) => { socket.destroy(); done(alive); };
+    socket.once("connect", () => finish(true));
+    socket.once("error", () => finish(false));
+    socket.setTimeout(800, () => finish(false));
+  });
+}
+
 async function cleanPreviousRuntime() {
   if (!(await exists(runtime))) return;
 
@@ -58,6 +69,26 @@ if (await exists(publicAssets)) {
   await cp(publicAssets, join(runtime, "public"), { recursive: true, force: true });
 }
 await cp(migrations, join(runtime, "drizzle"), { recursive: true, force: true });
+
+// 可选的演示数据库：只在显式设置 CHORDNOTE_DESKTOP_DEMO_DB 时打包，
+// 避免把开发机上的私人数据默认带进安装包。源目录必须在停止 dev server 后复制。
+const demoRoot = join(desktopRoot, "demo");
+const demoSource = process.env.CHORDNOTE_DESKTOP_DEMO_DB ? resolve(process.env.CHORDNOTE_DESKTOP_DEMO_DB) : null;
+await rm(demoRoot, { recursive: true, force: true });
+await mkdir(join(demoRoot, "db"), { recursive: true });
+if (demoSource) {
+  await requirePath(join(demoSource, "PG_VERSION"), "演示数据库 PG_VERSION");
+  if (await portAlive()) {
+    throw new Error("演示数据库仍被 dev server 占用。请先停止 `pnpm dev`，再重新构建。");
+  }
+  await cp(demoSource, join(demoRoot, "db"), { recursive: true, dereference: true, force: true });
+  await rm(join(demoRoot, "db", "postmaster.pid"), { force: true });
+  const schema = join(root, "data", "Schema.md");
+  if (await exists(schema)) await copyFile(schema, join(demoRoot, "Schema.md"));
+  console.log(`Demo database staged from ${demoSource}`);
+} else {
+  console.log("No CHORDNOTE_DESKTOP_DEMO_DB set; packaging an empty demo folder.");
+}
 
 const nodeDestination = join(runtime, process.platform === "win32" ? "node.exe" : "node");
 await copyFile(process.execPath, nodeDestination);
