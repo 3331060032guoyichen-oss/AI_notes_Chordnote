@@ -125,7 +125,7 @@
 
 首屏沿用同一材料语言：品牌标记、导航与卡片使用同一组冷色信号；区块以半透明深色面与 1px 弱边线分层，粒子与星尘从纸后透出。主按钮是紫→粉渐变胶囊，次按钮是玻璃描边；页面顶部有固定细噪点、极光光斑、流星与透视网格地面。
 
-**首屏现状（2026-10-18 核对）**：`landing-crystal-scene.tsx` 已删除。首屏由三层组成：`landing-particle-field.tsx`（Three.js 发光粒子球壳、嵌套线框与光环，位于 Hero 右侧）、`landing-constellation.tsx`（Canvas 2D 星丛：4 个簇心、24 个节点、极淡连线）、`landing-stardust.tsx`（tsParticles 星尘，首屏与工作台共用配方）。整体沿用深色底、冷色极光与低透明度星尘，不再有水晶或静物图。
+**首屏现状（2026-10-22 核对）**：首屏由 `landing-page.tsx` 的 `.landing-film` 叙事与 `landing-knowledge-scene.tsx` 的内联 SVG 场景组成；`landing-stardust.tsx` 的 `AppStardust` 仅用于工作台背景。旧的 Three.js 粒子场、Canvas 星丛与视频 pilot 已移除。
 
 形状固定为三档：面板 12px、按钮 8px、状态标签 6px。首屏主按钮是渐变胶囊（`border-radius: 999px`，紫→粉），次按钮为玻璃描边；工作台内按钮仍按 8px 圆角。
 

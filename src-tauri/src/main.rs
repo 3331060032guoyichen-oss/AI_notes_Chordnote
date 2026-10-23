@@ -1,7 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::{
-    fs::{create_dir_all, OpenOptions},
+    fs::{self, create_dir_all, OpenOptions},
     io::{Error, ErrorKind, Read, Write},
     net::{SocketAddr, TcpStream},
     path::{Path, PathBuf},
@@ -96,6 +96,7 @@ fn start_production_service(app: &App) -> DesktopResult<ServiceState> {
     create_dir_all(&logs_dir)?;
 
     let log_path = logs_dir.join("desktop.log");
+    seed_demo_data(app, &db_dir, &app_data, &log_path)?;
     let runtime_dir = app.path().resolve("runtime", BaseDirectory::Resource)?;
     let node_path = runtime_dir.join("node.exe");
     let server_path = runtime_dir.join("server.js");
@@ -152,6 +153,48 @@ fn desktop_log_path(app: &App) -> DesktopResult<PathBuf> {
     let logs_dir = app.path().local_data_dir()?.join("Chordnote").join("logs");
     create_dir_all(&logs_dir)?;
     Ok(logs_dir.join("desktop.log"))
+}
+
+/// 首次启动时把安装包里的演示库复制到本机数据目录。
+/// 只在本机库为空时执行，不会覆盖用户已有的数据。
+fn seed_demo_data(app: &App, db_dir: &Path, settings_dir: &Path, log_path: &Path) -> DesktopResult<()> {
+    let demo_root = app.path().resolve("demo", BaseDirectory::Resource)?;
+    if !demo_root.exists() {
+        return Ok(());
+    }
+
+    let demo_db = demo_root.join("db");
+    if demo_db.join("PG_VERSION").exists() && is_dir_empty(db_dir)? {
+        copy_dir(&demo_db, db_dir)?;
+        append_log(log_path, "Seeded packaged demo knowledge base.");
+    }
+
+    let demo_schema = demo_root.join("Schema.md");
+    let target_schema = settings_dir.join("Schema.md");
+    if demo_schema.exists() && !target_schema.exists() {
+        fs::copy(&demo_schema, &target_schema)?;
+        append_log(log_path, "Installed packaged demo Schema.md.");
+    }
+
+    Ok(())
+}
+
+fn is_dir_empty(path: &Path) -> std::io::Result<bool> {
+    Ok(fs::read_dir(path)?.next().is_none())
+}
+
+fn copy_dir(from: &Path, to: &Path) -> std::io::Result<()> {
+    create_dir_all(to)?;
+    for entry in fs::read_dir(from)? {
+        let entry = entry?;
+        let target = to.join(entry.file_name());
+        if entry.file_type()?.is_dir() {
+            copy_dir(&entry.path(), &target)?;
+        } else {
+            fs::copy(entry.path(), target)?;
+        }
+    }
+    Ok(())
 }
 
 fn ensure_port_available() -> DesktopResult<()> {

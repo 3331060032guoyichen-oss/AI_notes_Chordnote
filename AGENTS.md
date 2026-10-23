@@ -35,7 +35,6 @@ Raw（原始记录）→ Draft（AI 整理草稿）→ 用户确认或本轮完�
 - 持久化：`drizzle-orm` + `@electric-sql/pglite`，数据目录 `data/pglite`
 - 知识图谱：`d3-force` 只做力学计算，渲染为自绘 Canvas
 - 背景星尘：`@tsparticles/*`
-- 首屏粒子：`three`，仅用于 `components/landing-particle-field.tsx`，不要用于图谱或其他地方
 - Windows 桌面壳：Tauri 2（`src-tauri/`），只负责窗口生命周期与启动/停止本机 Next.js standalone 服务（127.0.0.1:3210）；Next.js 以 `output: "standalone"` 打包进安装包
 
 **未安装，不要引入：**
@@ -97,9 +96,8 @@ components/
   canvas-workspace.tsx 本地版本化自由白板（便签、笔迹、图片与连线）
   ui/                 共享内联图标
   landing-page.tsx            完整落地页（首次进入时出现）
-  landing-constellation.tsx   首屏星座
-  landing-particle-field.tsx  首屏 Three.js 粒子场
-  landing-stardust.tsx        星尘配方（首屏与工作台共用）
+  landing-knowledge-scene.tsx 首屏内联 SVG 场景
+  landing-stardust.tsx        星尘配方（工作台背景）
   interface-sound.tsx         Web Audio 实时合成音效，偏好存 localStorage
   graph-view.tsx              知识图谱（d3-force + Canvas）
 lib/
@@ -148,7 +146,7 @@ type Tab =
   | { kind: "draft"; rawId: string; ... }                  // Draft 审阅
 ```
 
-- 最左侧 Ribbon 始终可见，顺序固定为 logo（开合左树）、查找、图谱、白板、Agent，底部固定设置图标。左树顺序固定为 `Raw`、`Wiki`、`未整理笔记`、`Schema`、`Readme`。现有知识页路径继续兼容 `wilki/` 前缀。
+- 最左侧 Ribbon 始终可见，顺序固定为 logo（开合左树）、查找、图谱、白板、Agent，底部固定设置图标。左树顺序固定为 `Raw`、`Wiki`、`未整理笔记`、`Schema`、`Readme`。现有知识页路径继续兼容 `wilki/` 前缀。`Wiki` 下的 `index` 与 `log` 是只读视图入口：`index` 打开 Wiki Index，`log` 打开 Wiki Log；它们不是可展开目录，内容分别来自知识列表/图谱与 `audit_log`。
 - `Schema` 使用 Markdown 编辑器；默认内容在 `lib/agent/Schema.md`，用户保存到模型配置同目录的 `Schema.md`，下次 Agent 运行读取。`lib/agent/manual.ts` 保留宿主边界与工具权限，编辑 Schema 不改变工具授权。
 - 右栏固定为可收起的 Agent 对话与模型选择。不得恢复 Knowledge 的常驻出链/入链/未链接提及面板；这些查询走命令搜索或 Agent `@mention`。
 - 工作区使用 Ribbon + 可折叠左右 panel + 中央编辑器的 CSS grid。开面板必须压缩中央区域，不能覆盖正文。
@@ -202,6 +200,7 @@ type Tab =
 | `/api/graph` | GET | 实时生成 nodes / edges |
 | `/api/assistant` | POST | AI 问答，服务端按 contextType + contextId 重新读取内容 |
 | `/api/assistant/propose` | POST | 针对知识页生成改写提议（`note_update`），只落 pending 提议，不写正文 |
+| `/api/audit` | GET | 只读操作日志，供 Wiki Log 使用；按用户隔离，`limit` 1–200 |
 | `/api/agent/organize` | POST | Agent 工具循环，返回步骤与待确认提议 |
 | `/api/agent/schema` | GET / PATCH | 读取 / 保存 Markdown Schema，hash 乐观并发；工具权限仍由宿主控制 |
 | `/api/bootstrap` | GET | 一次读取工作区启动所需的 Raw、Knowledge、图谱和提议，避免 PGlite 并发冷启动 |

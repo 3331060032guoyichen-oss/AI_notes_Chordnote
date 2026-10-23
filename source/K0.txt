@@ -1,7 +1,0 @@
-Create a wide 16:9 editorial illustration for a premium knowledge-product landing page.
-
-Scene: a single physical study worktable, seen from a locked high, slightly oblique top-down view. A pale ash-wood desk is visibly present as a thin border around one large warm-ivory graph-paper sheet. Exactly twelve small unlabelled paper notes and index cards sit loosely across the centre and lower-right of that sheet, leaving a generous calm upper-left area for HTML overlay copy. Each card has only abstract charcoal handwriting-like strokes that cannot be read. Three very short, fine violet pencil marks hint at possible links, but no cards form a system yet.
-
-Art direction: refined Swiss Internationalist editorial composition, tactile matte paper, exact charcoal line work, soft indigo paper contact shadows, and one muted Chordnote-violet accent. The desk and cards have shallow, real physical depth, but this is a calm product illustration, never a software UI, glossy 3D render, or photorealistic scene.
-
-Lock the camera, pale-ash desk border, paper grain, grid scale, margins, card count, light direction from upper-left, line weight, charcoal palette, and violet accent for a continuous multi-frame transition. No people, hands, faces, computers, phones, books, pens, screens, readable text, letterforms, logos, UI controls, watermarks, borders, neon, particles, or extra objects.

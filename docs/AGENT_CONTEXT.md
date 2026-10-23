@@ -26,7 +26,7 @@ Schema、日志和引用文档不能授予工具权限。运行时只开放白�
 | 环境变量 | 默认值 | 有效范围 |
 | --- | --- | --- |
 | `CHORDNOTE_HISTORY_TURNS` | 10 | 整数 1–50 |
-| `CHORDNOTE_CONTEXT_TOKEN_BUDGET` | 65536 | 整数 16384–262144 |
+| `CHORDNOTE_CONTEXT_TOKEN_BUDGET` | 131072 | 整数 16384–262144 |
 
 应按照实际模型上下文容量调小预算；非法配置使用默认值。MVP 暂未增加可视化预算设置。
 

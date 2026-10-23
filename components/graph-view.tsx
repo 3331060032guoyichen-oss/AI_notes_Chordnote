@@ -78,6 +78,32 @@ const LABEL_FONT =
 /** 拖完那一下焦点脉冲的时长（毫秒）。用来代替"松手弹一张大卡片"。 */
 const PULSE_MS = 900;
 
+/**
+ * 连接度既影响节点尺寸，也用一套稳定的语义颜色表达。
+ *
+ * 阈值刻意压低：学生的个人知识库通常规模不大，等到 10 条链接才变色，
+ * 图里几乎不会出现真正的“枢纽”。四档让 0、1–2、3–4、5+ 都有可读差异。
+ */
+type DegreeTier = "isolated" | "trace" | "connected" | "hub";
+
+const DEGREE_LEGEND: ReadonlyArray<{ tier: DegreeTier; label: string; range: string }> = [
+  { tier: "isolated", label: "独立", range: "0 条" },
+  { tier: "trace", label: "线索", range: "1–2 条" },
+  { tier: "connected", label: "连接", range: "3–4 条" },
+  { tier: "hub", label: "枢纽", range: "5+ 条" },
+];
+
+function degreeTierFor(degree: number): DegreeTier {
+  if (degree <= 0) return "isolated";
+  if (degree <= 2) return "trace";
+  if (degree <= 4) return "connected";
+  return "hub";
+}
+
+function degreeLabelFor(degree: number): string {
+  return DEGREE_LEGEND.find((item) => item.tier === degreeTierFor(degree))?.label ?? "线索";
+}
+
 /** 从 :root 读设计令牌，让 Canvas 跟着主题走（换主题不必改这里）。 */
 function readToken(el: Element, name: string, fallback: string): string {
   const value = getComputedStyle(el).getPropertyValue(name).trim();
@@ -181,6 +207,15 @@ export function GraphView({ nodes, edges, params, onOpenNote, onPinnedChange }: 
   const reducedMotion = useMemo(() => {
     if (typeof window === "undefined" || !window.matchMedia) return false;
     return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  }, []);
+
+  // 常规模式有 rAF 会在下一帧重读颜色；静态模式没有动画循环，主题切换时要主动重画。
+  // 图例本身用 CSS 变量会自动更新，这里只负责让 Canvas 同步。
+  useEffect(() => {
+    const root = document.documentElement;
+    const observer = new MutationObserver(() => drawRef.current());
+    observer.observe(root, { attributes: true, attributeFilter: ["data-studio"] });
+    return () => observer.disconnect();
   }, []);
 
   const applyView = useCallback((k: number, x: number, y: number) => {
@@ -287,6 +322,12 @@ export function GraphView({ nodes, edges, params, onOpenNote, onPinnedChange }: 
       ink: token("--ink", "#e8edf7"),
       line: token("--line-strong", "rgb(148 163 184 / 32%)"),
       accent: token("--accent", "#7c3aed"),
+      degree: {
+        isolated: token("--graph-degree-isolated", "#64748b"),
+        trace: token("--graph-degree-trace", "#8b5cf6"),
+        connected: token("--graph-degree-connected", "#38bdf8"),
+        hub: token("--graph-degree-hub", "#2dd4bf"),
+      } satisfies Record<DegreeTier, string>,
     });
 
     // ---- 绘制 ----
@@ -350,7 +391,9 @@ export function GraphView({ nodes, edges, params, onOpenNote, onPinnedChange }: 
             const fade = Math.sin(phase * Math.PI) * (1 - tail * 0.22);
             if (fade <= 0) continue;
             ctx.globalAlpha = fade * 0.9;
-            ctx.fillStyle = hot ? t.accent : t.ink;
+            // 脉冲沿较高连接度的一端取色，浏览时能自然把视线带向枢纽。
+            const signal = s.degree >= g.degree ? s : g;
+            ctx.fillStyle = hot ? t.accent : t.degree[degreeTierFor(signal.degree)];
             ctx.beginPath();
             ctx.arc(s.x + dx * phase, s.y + dy * phase, 1.9 - tail * 0.3, 0, Math.PI * 2);
             ctx.fill();
@@ -362,13 +405,15 @@ export function GraphView({ nodes, edges, params, onOpenNote, onPinnedChange }: 
       // 3) 节点
       for (const n of simNodes) {
         const dim = neighbors !== null && !neighbors.has(n.id);
+        const tier = degreeTierFor(n.degree);
+        const nodeColor = t.degree[tier];
         ctx.globalAlpha = dim ? 0.28 : 1;
 
         // 光晕：让节点在深色底上有"发亮"的层次；静置时有极轻的呼吸
         const halo = reducedMotion ? 1 : 1 + 0.06 * Math.sin(now * 1.1 + n.phase);
         const glow = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, n.radius * 3.4 * halo);
-        glow.addColorStop(0, `${t.accent}55`);
-        glow.addColorStop(1, `${t.accent}00`);
+        glow.addColorStop(0, `${nodeColor}55`);
+        glow.addColorStop(1, `${nodeColor}00`);
         ctx.fillStyle = glow;
         ctx.beginPath();
         ctx.arc(n.x, n.y, n.radius * 3.4 * halo, 0, Math.PI * 2);
@@ -376,8 +421,19 @@ export function GraphView({ nodes, edges, params, onOpenNote, onPinnedChange }: 
 
         ctx.beginPath();
         ctx.arc(n.x, n.y, n.radius, 0, Math.PI * 2);
-        ctx.fillStyle = t.accent;
+        ctx.fillStyle = nodeColor;
         ctx.fill();
+
+        // 枢纽多一圈细环。它不改变节点的可点击面积，只让高连接度在密集图里更容易扫到。
+        if (tier === "hub") {
+          ctx.beginPath();
+          ctx.arc(n.x, n.y, n.radius + 3.5 / k, 0, Math.PI * 2);
+          ctx.lineWidth = 1 / k;
+          ctx.strokeStyle = nodeColor;
+          ctx.globalAlpha = dim ? 0.18 : 0.8;
+          ctx.stroke();
+          ctx.globalAlpha = dim ? 0.28 : 1;
+        }
 
         if (hovered && hovered.id === n.id) {
           ctx.lineWidth = 2 / k;
@@ -390,7 +446,7 @@ export function GraphView({ nodes, edges, params, onOpenNote, onPinnedChange }: 
           ctx.beginPath();
           ctx.arc(n.x, n.y, n.radius + 4 + 1.5 / k, 0, Math.PI * 2);
           ctx.lineWidth = 1 / k;
-          ctx.strokeStyle = t.accent;
+          ctx.strokeStyle = nodeColor;
           ctx.globalAlpha = dim ? 0.22 : 0.8;
           ctx.stroke();
           ctx.globalAlpha = dim ? 0.28 : 1;
@@ -405,7 +461,7 @@ export function GraphView({ nodes, edges, params, onOpenNote, onPinnedChange }: 
             ctx.beginPath();
             ctx.arc(n.x, n.y, n.radius + 6 + progress * 16, 0, Math.PI * 2);
             ctx.lineWidth = 1.6 / k;
-            ctx.strokeStyle = t.accent;
+            ctx.strokeStyle = nodeColor;
             ctx.globalAlpha = (1 - progress) * 0.85;
             ctx.stroke();
             ctx.globalAlpha = dim ? 0.28 : 1;
@@ -794,12 +850,22 @@ export function GraphView({ nodes, edges, params, onOpenNote, onPinnedChange }: 
       <canvas className="graph-canvas" ref={canvasRef} aria-label="知识页网络图" role="img" />
       {selectedNode ? <div className="node-inspector" role="status">
         <span className="node-inspector-title">{selectedNode.title}</span>
-        <span className="node-inspector-meta">已关联 {selectedNode.degree} 篇笔记{pinnedIds.includes(selectedNode.id) ? " · 已固定" : ""}</span>
+        <span className="node-inspector-meta">{degreeLabelFor(selectedNode.degree)} · 已关联 {selectedNode.degree} 篇笔记{pinnedIds.includes(selectedNode.id) ? " · 已固定" : ""}</span>
         <span className="node-inspector-actions">
           <button className="node-inspector-open" type="button" onClick={() => onOpenNoteRef.current(selectedNode.id)}>阅读这篇知识页 →</button>
           {pinnedIds.includes(selectedNode.id) ? <button className="node-inspector-release" type="button" onClick={() => releasePin(selectedNode.id)}>解除固定</button> : null}
         </span>
       </div> : null}
+      <div className="graph-degree-legend" aria-label="节点连接度图例：独立为 0 条链接，线索为 1 到 2 条链接，连接为 3 到 4 条链接，枢纽为 5 条及以上链接">
+        <span className="graph-degree-legend-title">连接度</span>
+        {DEGREE_LEGEND.map((item) => (
+          <span className="graph-degree-item" key={item.tier}>
+            <i className={`graph-degree-swatch graph-degree-${item.tier}`} aria-hidden="true" />
+            <span>{item.label}</span>
+            <small>{item.range}</small>
+          </span>
+        ))}
+      </div>
       <div className="graph-hud">
         <span className="graph-hud-hint">
           {reducedMotion

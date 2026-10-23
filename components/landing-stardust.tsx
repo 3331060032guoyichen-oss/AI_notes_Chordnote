@@ -6,7 +6,7 @@ import { loadSlim } from "@tsparticles/slim";
 import type { Engine, ISourceOptions } from "@tsparticles/engine";
 
 /**
- * 五彩星尘 —— 基于 tsParticles 的背景层。首屏与工作台共用这一份配方。
+ * 五彩星尘 —— 基于 tsParticles 的工作台背景层。
  *
  * 规范要点：
  *   - 颜色只用极光色系，绝无纯红/纯绿
@@ -14,10 +14,8 @@ import type { Engine, ISourceOptions } from "@tsparticles/engine";
  *   - 总数压在 80 以内，粒子多了就成了"下雪"，不是星尘
  *   - detectsOn: "window"，canvas 自身 pointer-events: none，不挡按钮
  *
- * 两处用的差别只在 `StardustTuning` 里三个数：
- *   - 首屏（`LANDING_TUNING`）：鼠标 150px 引力 + 极淡连线，是欢迎页的一部分；
- *   - 工作台（`APP_TUNING`）：**关掉鼠标交互**（那边一直在写字、拖图谱，
- *     光点跟着光标反而是干扰），粒子更少、更暗、更慢 —— 它是背景，不是主角。
+ * 工作台（`APP_TUNING`）关掉鼠标交互（那边一直在写字、拖图谱，
+ * 光点跟着光标反而是干扰），粒子更少、更暗、更慢 —— 它是背景，不是主角。
  */
 
 const AURORA_COLORS = ["#2DD4BF", "#A5F3FC", "#C4B5FD", "#6EE7B7", "#FFFFFF"];
@@ -31,24 +29,6 @@ type StardustTuning = {
   linkOpacity: number | null;
   speed: [number, number];
   fps: number;
-};
-
-const LANDING_TUNING: StardustTuning = {
-  interactive: true,
-  count: 70,
-  opacity: [0.2, 0.8],
-  linkOpacity: 0.06,
-  speed: [0.15, 0.5],
-  fps: 60,
-};
-
-const LANDING_MOBILE_TUNING: StardustTuning = {
-  interactive: false,
-  count: 28,
-  opacity: [0.2, 0.8],
-  linkOpacity: null,
-  speed: [0.25, 0.25],
-  fps: 60,
 };
 
 const APP_TUNING: StardustTuning = {
@@ -146,30 +126,7 @@ function registerEngine(engine: Engine) {
   return loadSlim(engine);
 }
 
-/** 首屏的星尘（`app/globals.css` 的 `.landing-stardust` 定位）。 */
-export function LandingStardust() {
-  const register = useCallback(registerEngine, []);
-  const isNarrow = useNarrowViewport();
-  const options = useMemo(() => buildOptions(LANDING_TUNING), []);
-  const mobileOptions = useMemo(() => buildOptions(LANDING_MOBILE_TUNING), []);
-
-  return (
-    <ParticlesProvider init={register}>
-      <StardustCanvas
-        id="landing-stardust"
-        className="landing-stardust"
-        options={isNarrow ? mobileOptions : options}
-      />
-    </ParticlesProvider>
-  );
-}
-
-/**
- * 工作台背景的星尘（`app/globals.css` 的 `.app-stardust` 定位）。
- *
- * 用同一个 `ParticlesProvider` 配方、另一组参数；两处不会同时挂载
- * （首屏一进编辑室就卸载），所以不会出现两个引擎抢着跑。
- */
+/** 工作台背景的星尘（`app/globals.css` 的 `.app-stardust` 定位）。 */
 export function AppStardust() {
   const register = useCallback(registerEngine, []);
   const isNarrow = useNarrowViewport();

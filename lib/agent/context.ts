@@ -1,4 +1,4 @@
-import { rawCategory, wikiCategory } from "../documents/structure";
+import { rawCategory, wikiCategory, RAW_FOLDER_HINTS, WIKI_FOLDER_HINTS } from "../documents/structure";
 
 /** Conservative UTF-8 byte budget: a byte is an upper bound for byte-tokenizers.
  * This intentionally overcounts Chinese text instead of risking an overflowing request.
@@ -6,8 +6,8 @@ import { rawCategory, wikiCategory } from "../documents/structure";
 export const MESSAGE_BUDGET = 8_000;
 export const HISTORY_BUDGET = 32_000;
 export function contextBudget() {
-  const value = Number(process.env.CHORDNOTE_CONTEXT_TOKEN_BUDGET ?? 65_536);
-  return Number.isInteger(value) && value >= 16_384 && value <= 262_144 ? value : 65_536;
+  const value = Number(process.env.CHORDNOTE_CONTEXT_TOKEN_BUDGET ?? 131_072);
+  return Number.isInteger(value) && value >= 16_384 && value <= 262_144 ? value : 131_072;
 }
 export const estimateTokens = (text: string) => new TextEncoder().encode(text).length;
 export function clipContext(text: string, budget: number): string {
@@ -52,7 +52,7 @@ export function buildIndex(documents: ContextDocument[]): string {
     wikiGroups.set(category, [...(wikiGroups.get(category) ?? []), doc]);
   }
   for (const [category, docs] of wikiGroups) {
-    lines.push(`${category}（${docs.length}）`);
+    lines.push(`${category}（${docs.length}）：${WIKI_FOLDER_HINTS[category as keyof typeof WIKI_FOLDER_HINTS] ?? ""}`);
     for (const doc of docs.slice(0, INDEX_PER_CATEGORY)) lines.push(`- ${doc.id}｜${doc.title || "未命名"}｜${doc.path}`);
   }
 
@@ -63,7 +63,7 @@ export function buildIndex(documents: ContextDocument[]): string {
     rawGroups.set(category, [...(rawGroups.get(category) ?? []), doc]);
   }
   for (const [category, docs] of rawGroups) {
-    lines.push(`${category}（${docs.length}）`);
+    lines.push(`${category}（${docs.length}）：${RAW_FOLDER_HINTS[category as keyof typeof RAW_FOLDER_HINTS] ?? ""}`);
     for (const doc of docs.slice(0, INDEX_PER_CATEGORY)) lines.push(`- ${doc.id}｜${doc.title || "未命名"}｜${doc.path}`);
   }
   if (unorganized.length) {

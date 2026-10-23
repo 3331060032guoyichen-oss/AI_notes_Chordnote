@@ -137,6 +137,7 @@ All business tables carry `user_id text NOT NULL`. 所有时间列为 `timestamp
 | `POST /api/assistant/propose` | `{ knowledgeId, question? }` | `200 { proposal }` | 编辑助理对一张知识页提出**改写正文**的提议（`note_update`），只落 `pending`，不写正文 |
 | `POST /api/agent/organize` | `{ question, contextType, contextId?, draftContext?, sessionId? }` | `200 { trace }` | Agent 工具循环，返回 `trace.sessionId`；服务端保留最近完整对话轮次，写操作只创建 pending 提议 |
 | `POST /api/agent/session` | `{ sessionId }` | `200 { ended: true }` | 追加结束日志并清除当前用户会话；忙碌返回 409，不存在或失效返回 404 |
+| `GET /api/audit` | `?limit=1–200` | `200 { events }` | 只读操作日志，供 Wiki Log 使用；按用户隔离，默认 50 条 |
 | `GET /api/proposals` | `?status=&targetNoteId=` | `200 { proposals }` | 提议列表 |
 | `POST /api/proposals` | 提议内容 | `201 { proposal }` | 提交提议 |
 | `POST /api/proposals/:id/approve` `reject` `apply` | — | `200` | 决议与执行；`apply` 需要已 `approved`，支持 `Idempotency-Key`；目标版本变了 → 提议推进到 `stale` |
